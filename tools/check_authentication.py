@@ -213,8 +213,24 @@ def main():
             check(request('/api/admin/me', token=token)[0] == 403, 'HTTP ordinary user has no staff profile')
             check(request('/api/admin/characters', token=token)[0] == 403, 'HTTP ordinary user cannot search characters')
             check(request('/api/admin/characters/' + character, token=token)[0] == 403, 'HTTP ordinary user cannot inspect characters')
+            check(request('/api/admin/diagnostics')[0] == 401, 'anonymous diagnostics denied')
+            check(request('/api/admin/diagnostics', token=token)[0] == 403, 'HTTP ordinary user cannot read diagnostics')
             sql(f"INSERT INTO auth.account_roles VALUES('{account}','admin');", database=name)
             check(request('/api/admin/me', token=token)[1]['roles'] == ['admin'], 'HTTP staff profile lists role')
+            # Diagnostics (docs/DIAGNOSTICS.md): counters start with this host process (restarted above).
+            check(request('/api/accounts/login', 'POST', {'username': 'web_first', 'password': 'wrong password'})[0] == 401, 'HTTP wrong password after restart')
+            check(request('/api/accounts/login', 'POST', {'username': 'web_second', 'password': password})[0] == 200, 'HTTP login after restart')
+            status, diagnostics, _ = request('/api/admin/diagnostics', token=token)
+            check(status == 200 and {'startedAt', 'uptimeSeconds', 'process', 'sessions', 'databases', 'logins', 'errors', 'unansweredOpcodes'} <= set(diagnostics),
+                  'staff diagnostics fields')
+            check(diagnostics['logins']['web'] == {'succeeded': 1, 'failed': 1, 'refused': 0}, 'diagnostics count web sign-ins')
+            check(set(diagnostics['logins']) == {'web', 'nativeLogin', 'nativeGame'}, 'diagnostics sign-in entry points')
+            check(sorted(d['name'] for d in diagnostics['databases']) == ['Aion', 'Auth']
+                  and all(d['reachable'] and d['latencyMs'] >= 0 and d['database'] == name for d in diagnostics['databases']), 'diagnostics database ping')
+            check(diagnostics['sessions'] == {'login': 0, 'game': 0, 'characters': 0} and diagnostics['unansweredOpcodes'] == [], 'diagnostics without native ports')
+            check(diagnostics['process']['workingSetMb'] > 0 and diagnostics['process']['threads'] > 0 and diagnostics['uptimeSeconds'] >= 0, 'diagnostics process figures')
+            check(isinstance(diagnostics['errors'], list), 'diagnostics error counts')
+            check(not any(secret in json.dumps(diagnostics) for secret in credentials.values()), 'diagnostics show no database credentials')
             check(request('/api/admin/commands', 'POST', command, token)[0] == 200, 'HTTP admin changes level')
             check(request('/api/characters/' + character, token=token)[1]['progress']['level'] == 8, 'HTTP level persisted')
             sql("""
