@@ -45,6 +45,28 @@ class ServerEnvTests(unittest.TestCase):
         self.assertIn('Aion__Https__CertificateFile', env)
         self.assertNotIn('Aion__ChatDevelopmentLogins', env)
         self.assertNotIn('Aion__NcGuard__RewriteHosts', env)
+        # Rates and rules are written only when given: the host's defaults apply.
+        self.assertFalse([key for key in env if key.startswith(('Aion__Rates__', 'Aion__Rules__')) or key == 'Aion__Native__MaxPlayers'])
+
+    def test_rates_and_rules(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            server_data(root / 'data')
+            env = server_env.environment(self.args(root, rates_profile='accelerated', exp_rate=None, quest_exp_rate=None,
+                                                   kinah_rate=4.0, drop_rate=None, max_players=10, respawn_seconds=15, pvp='off'),
+                                         {'aion_app': 'a', 'aion_auth': 'b'})
+        self.assertEqual(env['Aion__Rates__Profile'], 'accelerated')
+        self.assertEqual(env['Aion__Rates__Kinah'], 4.0)
+        self.assertNotIn('Aion__Rates__Experience', env)
+        self.assertEqual(env['Aion__Native__MaxPlayers'], 10)
+        self.assertEqual(env['Aion__Rules__RespawnSeconds'], 15)
+        self.assertEqual(env['Aion__Rules__Pvp'], 'false')
+
+    def test_rate_checks(self):
+        for argv in (['--exp-rate', '-1'], ['--drop-rate', '101'], ['--rates-profile', 'fast'], ['--respawn-seconds', '2'],
+                     ['--max-players', '-3'], ['--pvp', 'maybe']):
+            with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+                server_env.main(['--public-address', '203.0.113.5', '--data', '.', '--state', '.', '--proxy', *argv])
 
     def test_proxy_and_missing_data(self):
         with tempfile.TemporaryDirectory() as temp:

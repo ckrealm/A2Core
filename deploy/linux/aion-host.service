@@ -12,6 +12,8 @@ User=aion
 Group=aion
 WorkingDirectory=/opt/aion/host
 EnvironmentFile=/etc/aion/aion.env
+# Optional owner settings (rates, PvP, player cap) that install.sh/update.sh never rewrite; read last, so they win.
+EnvironmentFile=-/etc/aion/game.env
 ExecStart=/usr/bin/dotnet /opt/aion/host/Aion.Host.dll
 Restart=on-failure
 RestartSec=5

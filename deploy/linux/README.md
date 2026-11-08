@@ -88,6 +88,39 @@ sudo tar -xf ~/aion-wardrobe.tar -C /var/lib/aion/data --no-same-owner && sudo c
 sudo deploy/linux/update.sh      # rewrites aion.env with Aion__WardrobePath and restarts
 ```
 
+## Rates and rules
+
+Defaults are official-like: experience, quest experience, Kinah and drop rates 1, PvP on, monsters respawn 30 s after a
+kill, no player cap beyond 200 connections per port. To change them, put the keys you want in `/etc/aion/game.env`
+(install.sh and update.sh rewrite `aion.env` but never touch this file; the service reads it last) and restart:
+
+```bash
+sudo tee /etc/aion/game.env >/dev/null <<'ENV'
+# official (all 1) or accelerated (experience 5, Kinah 3, drops 3); an explicit rate overrides the profile's
+Aion__Rates__Profile=accelerated
+Aion__Rates__Experience=4
+# refuse logins beyond 10 players (0 or unset: no cap)
+Aion__Native__MaxPlayers=10
+# no duels, no arena queue, no player damage
+Aion__Rules__Pvp=false
+# monster respawn after a kill, 5-3600
+Aion__Rules__RespawnSeconds=15
+ENV
+sudo chown root:aion /etc/aion/game.env && sudo chmod 640 /etc/aion/game.env
+sudo systemctl restart aion-host
+journalctl -u aion-host | grep "World rates"   # the effective rates, logged at startup
+```
+
+The other keys are `Aion__Rates__Kinah`, `Aion__Rates__Drop` and `Aion__Rates__QuestExperience` (default: the experience
+rate). Rates are 0-100; an invalid value stops the host at startup with the reason. Scheduled events from the dashboard
+multiply on top (each event rate is held to 0.1-10, the product is not, and loot is capped at 100 table rolls per kill).
+Kinah rate applies to Kinah in monster drops, quest rewards, Kinah chests, reward boxes, dungeon, boss and cube rewards, achievements and
+collections; not to selling to merchants, trades, mail or staff grants. `tools/server_env.py` takes the same settings
+as options (`--rates-profile`, `--exp-rate`, `--quest-exp-rate`, `--kinah-rate`, `--drop-rate`, `--max-players`,
+`--respawn-seconds`, `--pvp on|off`) for a hand-made environment file. Comments go on their own lines (systemd reads
+`#` after a value as part of it). The party size is not configurable: it stays 4. The server sends it to the client
+(PartyInfo LimitMember, a CANDIDATE field), and nothing recorded shows how the client's party window copes with another size.
+
 ## Updating
 
 Changes are made and tested on the development PC, committed and pushed to the private GitHub

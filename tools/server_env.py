@@ -3,7 +3,7 @@
 Reads the database credentials made by `postgres_dev.py setup` (AION_PG_HOME) and the
 server data directory unpacked from `pack_server_data.py`, and prints KEY=VALUE lines:
 database connections, bind/public addresses, HTTPS, the native ports, chat, the platform
-bootstrap and the NCGuard sink. Contains passwords: write it to a file only root and the
+bootstrap, the NCGuard sink and, when given, the rates and host rules. Contains passwords: write it to a file only root and the
 service account can read.
 """
 import argparse
@@ -101,7 +101,41 @@ def environment(args, credentials):
     env['Aion__Web__StaffPath'] = getattr(args, 'staff_path', None) or '/' + ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(16))
     for index, map_id in enumerate(args.preload):
         env[f'Aion__Native__PreloadMaps__{index}'] = map_id
+    env.update(gameplay(args))
     return env
+
+
+# Rates and host switches (OURS: the server owner's choice). Each is written only when given, so the host's defaults
+# (official rates, PvP on, 30 s respawn, no player cap) apply otherwise.
+GAMEPLAY = {
+    'rates_profile': 'Aion__Rates__Profile',
+    'exp_rate': 'Aion__Rates__Experience',
+    'quest_exp_rate': 'Aion__Rates__QuestExperience',
+    'kinah_rate': 'Aion__Rates__Kinah',
+    'drop_rate': 'Aion__Rates__Drop',
+    'max_players': 'Aion__Native__MaxPlayers',
+    'respawn_seconds': 'Aion__Rules__RespawnSeconds',
+    'pvp': 'Aion__Rules__Pvp',
+}
+
+
+def gameplay(args):
+    env = {}
+    for name, key in GAMEPLAY.items():
+        value = getattr(args, name, None)
+        if value is None:
+            continue
+        if name == 'pvp':
+            value = 'true' if value == 'on' else 'false'
+        env[key] = value
+    return env
+
+
+def rate(text):
+    value = float(text)
+    if not 0 <= value <= 100:
+        raise argparse.ArgumentTypeError('a rate must be between 0 and 100')
+    return value
 
 
 def main(argv=None):
@@ -118,6 +152,16 @@ def main(argv=None):
     parser.add_argument('--staff-path', help='staff dashboard address, e.g. /k3x9... (default: a new random one)')
     parser.add_argument('--max-connections', type=int, default=200, help='per native port')
     parser.add_argument('--preload', type=int, nargs='*', default=[1000], help='maps loaded at startup')
+    rates = parser.add_argument_group('rates and rules (unset: the host defaults)')
+    rates.add_argument('--rates-profile', choices=['official', 'accelerated'],
+                       help='official: all rates 1; accelerated: experience 5, Kinah 3, drops 3 (explicit rates override)')
+    rates.add_argument('--exp-rate', type=rate, help='kill experience multiplier')
+    rates.add_argument('--quest-exp-rate', type=rate, help='quest experience multiplier (default: the experience rate)')
+    rates.add_argument('--kinah-rate', type=rate, help='Kinah gained from quests, drops, chests and rewards')
+    rates.add_argument('--drop-rate', type=rate, help='loot table rolls per kill')
+    rates.add_argument('--max-players', type=int, help='refuse logins beyond this many players (0: no cap)')
+    rates.add_argument('--respawn-seconds', type=int, help='monster respawn after a kill (5-3600, default 30)')
+    rates.add_argument('--pvp', choices=['on', 'off'], help='duels, arenas and Abyss player damage (default on)')
     parser.add_argument('--geolocation', default='59.9139,10.7522,NO', metavar='LAT,LON,CC',
                         help="server location for the region screen ('off' to omit)")
     args = parser.parse_args(argv)
@@ -129,6 +173,10 @@ def main(argv=None):
         parser.error('--public-address must be a non-loopback IPv4 address')
     if args.certificate and not args.key:
         parser.error('--certificate needs --key')
+    if args.max_players is not None and args.max_players < 0:
+        parser.error('--max-players must be 0 or more')
+    if args.respawn_seconds is not None and not 5 <= args.respawn_seconds <= 3600:
+        parser.error('--respawn-seconds must be between 5 and 3600')
     if args.staff_path is not None and (len(args.staff_path) < 9 or not args.staff_path.startswith('/')
                                         or not all(c.isalnum() or c in '-_' for c in args.staff_path[1:])):
         parser.error('--staff-path must be / followed by at least 8 letters, digits, - or _')
