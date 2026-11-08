@@ -61,6 +61,8 @@ Certificate choices for the account site (port 8780), exactly one:
 What install.sh does:
 
 1. Installs `dotnet-sdk-10.0`, `postgresql`, `python3`, `openssl`, `nodejs`, `npm` (and `certbot` with `--domain`).
+   The web build needs Node.js ^20.19 or >=22.12: an installed Node that new (e.g. NodeSource's, which Ubuntu 24.04
+   needs, as its own is 18; `deploy/windows/wsl-install.sh` sets it up) is kept and `nodejs`/`npm` are not installed.
 2. Creates the `aion` service account and `/var/lib/aion` (state, data, database), `/etc/aion`
    (configuration, certificate), `/opt/aion` (published host, database tools).
 3. Unpacks the data archive into `/var/lib/aion/data`.
@@ -70,7 +72,8 @@ What install.sh does:
    `credentials.json`), applies migrations, imports the catalogue, installs starter profiles,
    class skills and the equipment rules (`tools/equipment_rules.py`). Later runs apply new migrations only.
 6. Writes `/etc/aion/aion.env` (`tools/server_env.py`; mode 640, contains database passwords).
-7. Installs and starts `aion-postgres.service` and `aion-host.service`.
+7. Installs and starts `aion-postgres.service` and `aion-host.service`, and enables the nightly `aion-backup.timer`
+   (`backup.sh` and `restore.sh` in `/opt/aion/bin`; see "Backups").
 
 ## Dashboard icons and 3D preview
 
@@ -137,18 +140,45 @@ address, `User root`, a dedicated key `~/.ssh/id_ed25519_aion` whose public half
 A2Core Launcher and copies the exe and its version file to `/var/lib/aion/downloads`; `-Status` shows the
 services and the last log lines.
 
-It backs up the database (`/var/lib/aion/backups`, newest 10 kept), pulls, then repeats install.sh
+It backs up the database (`/var/lib/aion/backups/before-update-*.dump`, newest 10 kept), pulls, then repeats install.sh
 with the options of the last install: rebuilds the host, applies new migrations, restarts.
 New server data (re-extracted terrain etc.): copy a new archive and run install.sh with `--data`.
 
-Restore a backup if an update goes wrong:
+Restore a backup if an update goes wrong: `sudo /opt/aion/bin/restore.sh --yes /var/lib/aion/backups/<file>.dump`
+(see "Backups").
+
+## Backups
+
+`aion-backup.timer` runs `/opt/aion/bin/backup.sh` (from `deploy/linux/backup.sh`) every night at 04:30 (plus up to
+15 minutes; `Persistent`, so a night missed while the machine was off runs at the next boot). It writes
+`/var/lib/aion/backups/nightly-<UTC time>.dump` with `postgres_dev.py backup` (pg_dump, custom format), checks it with
+`postgres_dev.py verify-backup` (a restore into a disposable database that is dropped again) and then keeps the newest
+14 `nightly-*` files. A backup that fails the check is deleted and nothing is pruned. update.sh's `before-update-*`
+and the dashboard's `aion-*` backups in the same folder have their own retention (the dashboard's: none).
 
 ```bash
-sudo systemctl stop aion-host
-sudo runuser -u aion -- env AION_PG_HOME=/var/lib/aion/postgres /usr/lib/postgresql/*/bin/pg_restore --clean --if-exists -h 127.0.0.1 -p 55432 -U aion_admin -d aion /var/lib/aion/backups/<file>.dump
+systemctl list-timers aion-backup.timer
+sudo systemctl start aion-backup && journalctl -u aion-backup -n 20     # back up now
+echo 'AION_BACKUP_KEEP=30' | sudo tee /etc/aion/backup.env             # settings: AION_BACKUP_KEEP, AION_BACKUP_VERIFY=0
+sudo systemctl disable --now aion-backup.timer                          # no nightly backups
+sudo /opt/aion/bin/backup.sh --keep 30                                  # by hand (as root or aion)
 ```
 
-(pg_restore asks for the aion_admin password from `/var/lib/aion/postgres/credentials.json`.)
+The unit may write only to `/var/lib/aion/backups`; keep copies elsewhere (another disk or machine) with your own job.
+
+Restore:
+
+```bash
+sudo /opt/aion/bin/restore.sh --check /var/lib/aion/backups/<file>.dump   # restore test; the live database is untouched
+sudo /opt/aion/bin/restore.sh --yes /var/lib/aion/backups/<file>.dump     # replace the live database
+sudo /opt/aion/bin/restore.sh --list-old                                  # databases kept by earlier restores
+sudo /opt/aion/bin/restore.sh --yes --drop-old aion_pre_restore_<time>
+```
+
+Every run first restores the file into a disposable database; without `--yes` (and without `--check`) it then
+refuses. `--yes` writes a safety backup of the live database (`before-restore-<time>.dump`), stops aion-host,
+restores into a new database and only then renames the live one to `aion_pre_restore_<time>` (kept) and the new one to
+`aion`, and starts aion-host again.
 
 ## Getting the code onto the server
 
