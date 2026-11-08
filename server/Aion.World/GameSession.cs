@@ -2030,6 +2030,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
             GamePackets.SkillStart(skill, actionUid, request.Yaw, request.Location, request.TargetKey, actorKey: playerKey, cooldown: cooldown),
         };
         replies.InsertRange(1, dismount);   // a cast takes the player off its ride before the skill starts
+        if (targets?.ContainsKey(request.TargetKey) == true) lastAttack = (request.TargetKey, now);   // what playerbots assist (GameSession.Bots.cs)
         replies.AddRange(CombatReplies(skill, request, now));
         return replies;
     }

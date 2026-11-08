@@ -87,6 +87,8 @@ var rates = (builder.Configuration.GetSection("Aion:Rates").Get<Aion.World.Rates
 var rules = (builder.Configuration.GetSection("Aion:Rules").Get<Aion.World.WorldRules>() ?? Aion.World.WorldRules.Default).Validated();
 builder.Services.AddSingleton(rates);
 builder.Services.AddSingleton(rules);
+// Playerbots (OURS, docs/PLAYERBOTS.md): Aion:Bots (Enabled, PlayersMayUse, MaxPerAccount, MaxTotal, JoinParty, TeleportBeyond).
+var bots = (builder.Configuration.GetSection("Aion:Bots").Get<Aion.World.BotOptions>() ?? new Aion.World.BotOptions()).Validated();
 if (native.LoginPort is not null || native.GamePort is not null)
 {
     if (!native.Development && !accountsReady)
@@ -118,9 +120,16 @@ if (native.LoginPort is not null || native.GamePort is not null)
         return new Aion.World.BuilderCommands(provider.GetRequiredService<Aion.World.WorldPresence>(), provider.GetRequiredService<Aion.World.GmPolicy>(),
             (actor, command, result) => log.LogInformation("GM {Command} by {Actor}: {Result}", command, actor, result), Aion.World.GameData.Embedded);
     });
+    if (bots.Enabled && native.GamePort is not null)
+    {
+        builder.Services.AddSingleton(provider => new Aion.World.PlayerBots(Aion.World.GameData.Embedded, bots, provider.GetRequiredService<Aion.World.SharedWorld>(),
+            presence: provider.GetRequiredService<Aion.World.WorldPresence>()));
+        builder.Services.AddHostedService<PlayerBotsService>();
+    }
     builder.Services.AddSingleton<IChatCommandHandler>(provider =>
         new Aion.World.GmCommands(provider.GetRequiredService<Aion.World.WorldPresence>(), provider.GetRequiredService<Aion.World.BuilderCommands>())
         {
+            Bots = provider.GetService<Aion.World.PlayerBots>(),
             // "//report <text>" opens a ticket for the staff dashboard (accounts only).
             Report = provider.GetService<IStaffTools>() is { } staffTools ? async (sender, name, text, ct) =>
             {

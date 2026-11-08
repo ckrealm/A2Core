@@ -84,6 +84,9 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
     /// </summary>
     public Func<ChatIdentity, string, string, CancellationToken, Task<string>>? Report { get; init; }
 
+    /// <summary>"//bot ..." (docs/PLAYERBOTS.md): staff, or every player with Aion:Bots:PlayersMayUse. Null: no playerbots on this host.</summary>
+    public PlayerBots? Bots { get; init; }
+
     public async Task<string> HandleAsync(ChatIdentity sender, string userName, string content, CancellationToken ct)
     {
         var text = content.Trim();
@@ -101,10 +104,14 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
         if (actor is null) return "Enter the world first.";
         try
         {
+            if (line.StartsWith("bot", StringComparison.OrdinalIgnoreCase) && (line.Length == 3 || char.IsWhiteSpace(line[3])))
+                return await BotAsync(actor.Session, line[3..].Trim(), ct);
             if (line.Length == 0 || line.Equals("help", StringComparison.OrdinalIgnoreCase))
                 return await builder.AllowedAsync(actor.Session, ct)
                     ? "Builder commands (in chat: //<command>; console: s <command>): " + string.Join(", ", BuilderCommands.Supported)
-                    : "Commands: //report <text> sends a report to the staff.";
+                        + (Bots is { Options.Enabled: true } ? "; //bot add <character> for playerbots" : "")
+                    : "Commands: //report <text> sends a report to the staff."
+                        + (Bots is { Options: { Enabled: true, PlayersMayUse: true } } ? " //bot add <character> summons one of your characters as a bot." : "");
             return await actor.Session.InvokeAsync(async now =>
             {
                 var outcome = await builder.RunAsync(actor.Session, line, now, ct);
@@ -115,5 +122,15 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
         {
             return "The game connection did not respond.";
         }
+    }
+
+    /// <summary>//bot: allowed for staff, or for everyone with Aion:Bots:PlayersMayUse; runs on the sender's game loop.</summary>
+    async Task<string> BotAsync(GameSession actor, string args, CancellationToken ct)
+    {
+        if (Bots is not { Options.Enabled: true } bots) return "Playerbots are off on this server.";
+        if (actor.Bot) return "Bots do not command bots.";
+        if (!bots.Options.PlayersMayUse && !await builder.AllowedAsync(actor, ct)) return "Playerbots are for staff on this server.";
+        return await actor.InvokeAsync(async now => (await bots.CommandAsync(actor, args, now, ct), new List<byte[]>()))
+            .WaitAsync(TimeSpan.FromSeconds(10), ct);
     }
 }
