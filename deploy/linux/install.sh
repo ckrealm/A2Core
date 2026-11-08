@@ -35,15 +35,25 @@ REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 SRC=/opt/aion/src HOST=/opt/aion/host STATE=/var/lib/aion DATA=/var/lib/aion/data CONFIG=/etc/aion
 export AION_PG_HOME=$STATE/postgres
 
+# The web build (Vite) needs Node.js ^20.19 or >=22.12. Ubuntu 24.04's nodejs is 18: install a newer one first
+# (deploy/windows/wsl-install.sh uses NodeSource); it is kept, as Ubuntu's npm package conflicts with NodeSource's nodejs.
+node_ok() {
+  command -v node &>/dev/null && command -v npm &>/dev/null && node -e '
+    const [major, minor] = process.versions.node.split(".").map(Number);
+    process.exit((major === 20 && minor >= 19) || (major === 22 && minor >= 12) || major > 22 ? 0 : 1)'
+}
 if [[ $SKIP_PACKAGES -eq 0 ]]; then
+  PACKAGES=(dotnet-sdk-10.0 postgresql python3 openssl)
+  node_ok || PACKAGES+=(nodejs npm)
   apt-get update
-  apt-get install -y dotnet-sdk-10.0 postgresql python3 openssl nodejs npm
+  apt-get install -y "${PACKAGES[@]}"
   [[ $TLS != letsencrypt ]] || apt-get install -y certbot
 fi
 dotnet --list-sdks | grep -q '^10\.' || { echo ".NET 10 SDK missing (dotnet-sdk-10.0)" >&2; exit 1; }
 PG_BIN="$(ls -d /usr/lib/postgresql/*/bin | sort -V | tail -1)"
 [[ -x "$PG_BIN/postgres" ]] || { echo "PostgreSQL server binaries missing" >&2; exit 1; }
 command -v npm &>/dev/null || { echo "npm missing (nodejs, npm)" >&2; exit 1; }
+node_ok || { echo "Node.js $(node --version) is too old for the web build (needs ^20.19 or >=22.12); see deploy/windows/README.md" >&2; exit 1; }
 echo "Using $(dotnet --version), node $(node --version) and $("$PG_BIN/postgres" --version)"
 
 id aion &>/dev/null || useradd --system --home-dir $STATE --shell /usr/sbin/nologin aion
@@ -121,10 +131,16 @@ chown root:aion $CONFIG/aion.env.new && chmod 640 $CONFIG/aion.env.new && mv $CO
 
 sed "s#@PG_BIN@#$PG_BIN#" "$REPO/deploy/linux/aion-postgres.service" > /etc/systemd/system/aion-postgres.service
 cp "$REPO/deploy/linux/aion-host.service" /etc/systemd/system/aion-host.service
+# Nightly database backups (deploy/linux/backup.sh; settings in /etc/aion/backup.env, see README "Backups").
+install -d -m 755 /opt/aion/bin
+install -m 755 "$REPO/deploy/linux/backup.sh" "$REPO/deploy/linux/restore.sh" /opt/aion/bin/
+install -d -o aion -g aion -m 750 $STATE/backups
+cp "$REPO/deploy/linux/aion-backup.service" "$REPO/deploy/linux/aion-backup.timer" /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now aion-postgres
 systemctl enable aion-host
 systemctl restart aion-host
+systemctl enable --now aion-backup.timer
 
 if command -v ufw &>/dev/null && ufw status | grep -q "Status: active"; then
   for port in 443 3700 8087 8091 13328; do ufw allow $port/tcp; done

@@ -1,0 +1,11 @@
+# Starts aion-backup.service every night. Persistent: a night missed while the machine was off runs at the next boot.
+[Unit]
+Description=Nightly AION2 database backup
+
+[Timer]
+OnCalendar=*-*-* 04:30:00
+RandomizedDelaySec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
