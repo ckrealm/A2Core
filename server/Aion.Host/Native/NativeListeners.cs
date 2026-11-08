@@ -267,7 +267,7 @@ public sealed class NativeLoginListener(NativeOptions options, IServiceProvider 
         if (services.GetService<WorldPresence>() is { } presence && presence.Full(Options.MaxPlayers, grant.AccountId))
         {
             Logger.LogInformation("Native login refused: server full ({Max} players)", Options.MaxPlayers);
-            return null;
+            return (null, HostDiagnostics.Outcome.Refused);
         }
         // The login port's character list (0x390b) shows a per-server character count.
         var owned = (await characters.ListAsync(new VerifiedAccount(grant.AccountId), ct)).Where(c => c.WorldId == grant.WorldId)
