@@ -48,13 +48,20 @@ public static class AccountEndpoints
             return Results.Json(new { created = true }, statusCode: 201);
         }).RequireRateLimiting("admin");
 
-        app.MapPost("/api/accounts/login", async (Credentials input, IAccountAuthentication auth, CancellationToken ct) =>
+        app.MapPost("/api/accounts/login", async (Credentials input, HttpContext context, IAccountAuthentication auth, CancellationToken ct) =>
         {
-            if (input.Username is null || input.Password is null) return Results.Unauthorized();
+            var diagnostics = context.RequestServices.GetService<Aion.Host.Diagnostics.HostDiagnostics>();
+            if (input.Username is null || input.Password is null)
+            {
+                diagnostics?.Login(Aion.Host.Diagnostics.HostDiagnostics.WebLogin, Aion.Host.Diagnostics.HostDiagnostics.Outcome.Failed);
+                return Results.Unauthorized();
+            }
             // "Keep me signed in" (the staff dashboard): a 30-day session instead of the standard 8 hours.
             var session = input.Remember == true
                 ? await auth.SignInAsync(input.Username, input.Password, TimeSpan.FromDays(30), ct)
                 : await auth.SignInAsync(input.Username, input.Password, ct);
+            diagnostics?.Login(Aion.Host.Diagnostics.HostDiagnostics.WebLogin,
+                session is null ? Aion.Host.Diagnostics.HostDiagnostics.Outcome.Failed : Aion.Host.Diagnostics.HostDiagnostics.Outcome.Succeeded);
             return session is null ? Results.Unauthorized() : Results.Ok(session);
         }).RequireRateLimiting("account-entry");
 

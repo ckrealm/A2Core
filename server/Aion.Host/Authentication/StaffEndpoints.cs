@@ -33,6 +33,7 @@ public static class StaffEndpoints
         });
 
         MapImages(staff);
+        DiagnosticsEndpoints.MapDiagnostics(staff);
 
         staff.MapPost("/announce", async (Announcement input, HttpContext ctx, IAccountAuthentication auth, IGameplayStore game,
             IServiceProvider services, CancellationToken ct) =>

@@ -5,7 +5,7 @@ import { Button, ConfirmDialog, Icon, Status, type ConfirmRequest, type StatusMe
 import { apiBlobUrl } from '../api';
 import { describe, type Call } from './AdminApp';
 import { duration } from './Overview';
-import type { Backups, Maintenance, PopulationPoint, ServerHealth } from './types';
+import type { Backups, Diagnostics, LoginCounts, Maintenance, PopulationPoint, ServerHealth } from './types';
 
 const POLL_MS = 5000;
 const HISTORY = 72;   // 6 minutes
@@ -57,6 +57,7 @@ export function ServerView({ call, token, active, isAdmin }: { call: Call; token
       </div>
       <p className="faint small">Game loop load is the time spent running world and map work; above about 70% players start to feel lag.</p>
       <Population call={call} active={active} />
+      <DiagnosticsCard call={call} active={active} />
       <div className="server-cards">
         <MaintenanceCard call={call} active={active} isAdmin={isAdmin} />
         {isAdmin && <RestartCard call={call} pending={health?.restartAt ?? null} now={now} onChange={load} />}
@@ -239,6 +240,80 @@ function BackupsCard({ call, token, active }: { call: Call; token: string; activ
         {data?.configured && data.files.length === 0 && <li className="empty">No backups yet.</li>}
       </ul>
       <Status message={message} />
+    </section>
+  );
+}
+
+const DIAGNOSTICS_POLL_MS = 30000;
+const LOGIN_LABELS: Record<keyof Diagnostics['logins'], string> = { web: 'Account site', nativeLogin: 'Login server', nativeGame: 'Game server' };
+
+/** What the gauges above do not show (GET /api/admin/diagnostics): databases, sign-ins, errors and unanswered client requests. */
+function DiagnosticsCard({ call, active }: { call: Call; active: boolean }) {
+  const [d, setD] = useState<Diagnostics | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    try { setD(await call<Diagnostics>('/api/admin/diagnostics')); setError(null); } catch (e) { setError(describe(e)); }
+  }, [call]);
+  useEffect(() => {
+    if (!active) return;
+    load();
+    const timer = window.setInterval(() => { if (document.visibilityState === 'visible') load(); }, DIAGNOSTICS_POLL_MS);
+    return () => clearInterval(timer);
+  }, [active, load]);
+  const counts = (c: LoginCounts) => `${c.succeeded} ok · ${c.failed} failed${c.refused ? ` · ${c.refused} refused` : ''}`;
+  return (
+    <section className="card card-body stack">
+      <div className="row-between">
+        <div>
+          <h2>Diagnostics</h2>
+          <p className="muted small">Counted since the server started. docs/DIAGNOSTICS.md explains each figure and how to find it in the logs.</p>
+        </div>
+        <Button size="sm" onClick={load}><Icon name="refresh" size={16} /> Refresh</Button>
+      </div>
+      <Status message={error ? { text: error, kind: 'error' } : null} />
+      {d && <>
+        <p className="small">
+          Connections: <strong>{d.sessions.login}</strong> login · <strong>{d.sessions.game}</strong> game · <strong>{d.sessions.characters}</strong> characters in the world
+          {' · '}CPU {d.process.cpuPercent}% · GC committed {d.process.gcCommittedMb} MB · collections {d.process.gcCollections.gen0}/{d.process.gcCollections.gen1}/{d.process.gcCollections.gen2}
+        </p>
+        <ul className="backup-list">
+          {d.databases.map(db => (
+            <li key={db.name}>
+              <span className="grow">Database <span className="mono">{db.name}</span>{db.database ? <span className="faint small"> ({db.database})</span> : null}</span>
+              <span className={`tag${db.reachable ? '' : ' tag-gm'}`}>{!db.configured ? 'not configured' : db.reachable ? `${db.latencyMs} ms` : db.error ?? 'unreachable'}</span>
+            </li>
+          ))}
+          {(Object.keys(LOGIN_LABELS) as (keyof Diagnostics['logins'])[]).map(k => (
+            <li key={k}><span className="grow">Sign-ins: {LOGIN_LABELS[k]}</span><span className="faint small">{counts(d.logins[k])}</span></li>
+          ))}
+        </ul>
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead><tr><th>Logged errors by source</th><th>Errors</th><th>Critical</th><th>Warnings with exception</th><th>Last</th></tr></thead>
+            <tbody>
+              {d.errors.map(e => (
+                <tr key={e.source}>
+                  <td data-label="Source" className="mono">{e.source}</td><td data-label="Errors">{e.errors}</td><td data-label="Critical">{e.critical}</td>
+                  <td data-label="Warnings">{e.warningsWithException}</td>
+                  <td data-label="Last" className="details">{e.lastType ?? ''}{e.lastAt ? ` · ${new Date(e.lastAt).toLocaleTimeString()}` : ''}</td>
+                </tr>
+              ))}
+              {d.errors.length === 0 && <tr><td colSpan={5} className="empty pad">No errors logged.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead><tr><th>Unanswered client requests</th><th>Times</th><th>Connections</th></tr></thead>
+            <tbody>
+              {d.unansweredOpcodes.slice(0, 20).map(o => (
+                <tr key={o.opcode}><td data-label="Opcode" className="mono">{o.opcode}</td><td data-label="Times">{o.count}</td><td data-label="Connections">{o.connections}</td></tr>
+              ))}
+              {d.unansweredOpcodes.length === 0 && <tr><td colSpan={3} className="empty pad">Every client request was answered.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </>}
     </section>
   );
 }
