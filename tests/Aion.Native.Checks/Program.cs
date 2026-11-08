@@ -2881,6 +2881,146 @@ checks = 0;
 }
 Console.WriteLine($"{checks} class skill effect checks passed (heals, buffs, debuffs, damage over time, resurrection).");
 
+// ---------- Playerbots (docs/PLAYERBOTS.md): sessions without a connection, driven by BotBrain ----------
+checks = 0;
+{
+    var botWorld = new SharedWorld(data);
+    var botStore = new FakeStore();
+    var botSessionOptions = new GameSessionOptions { World = botWorld, TrainingDummy = true };
+    long t = Now + 2_000_000;
+    byte[] Create(string name, int creation, byte slot) => new PacketWriter().U16(0x361b).String(name).U8(1).U32((uint)creation).Bytes([0x0c, 0x64]).U8(2).U8(slot).U8(0).ToArray();
+    int CreationOf(string cls) => Enumerable.Range(1, 64).First(c => data.Profile(c, 1)?.Class == cls);
+    var leader = new GameSession(data, botSessionOptions, new Random(21)) { Store = botStore };
+    await leader.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), t);
+    await leader.HandleAsync(Create("Leader", 1, 1), t);
+    await leader.HandleAsync(Create("Alt", 1, 2), t);
+    await leader.HandleAsync(Create("Ranged", CreationOf("Ranger"), 3), t);
+    await leader.HandleAsync(Create("Third", 1, 4), t);
+    await leader.HandleAsync(new PacketWriter().U16(0x361f).Varint((uint)botStore.States[0].WireId << 16).I32(0).Vec3(Vector3d.Zero).ToArray(), t);
+    await leader.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    // A second, development player watches (another client on the same map).
+    var watcher = new GameSession(data, botSessionOptions, new Random(22));
+    await watcher.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), t);
+    await watcher.HandleAsync(Create("Watcher", 1, 1), t);
+    await watcher.HandleAsync(select, t);
+    await watcher.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    Check(leader.InWorld && leader.CharacterName == "Leader" && watcher.InWorld, "a stored leader and a watching player are in the shared world");
+
+    var off = new PlayerBots(data, new BotOptions(), botWorld);
+    Check((await off.CommandAsync(leader, "add Alt", t, default)).Contains("off") && off.All.Count == 0, "Aion:Bots:Enabled false: no bots");
+    var botOptions = new BotOptions { Enabled = true, MaxPerAccount = 2, MaxTotal = 3 };
+    var botPresence = new WorldPresence();
+    var bots = new PlayerBots(data, botOptions, botWorld, presence: botPresence);
+    Check(BotRotations.Embedded.For("Gladiator") is { Range: > 0, Rotation.Length: > 2 } glad && glad.Rotation[^1].Skill == 11020000
+          && BotRotations.Embedded.Classes.Count == 8, "bot-rotations.json is embedded: every playable class, the filler last");
+    Check((await bots.CommandAsync(leader, "add Leader", t, default)).Contains("yourself") && (await bots.CommandAsync(leader, "add Nobody", t, default)).Contains("not one of your characters"),
+          "a bot is one of the summoner's other characters");
+    Check(await bots.CommandAsync(leader, "add Alt", t, default) == "Summoning Alt." && bots.All.Single().State == PlayerBot.Phase.Pending, "//bot add queues the character");
+    await watcher.TickAsync(t);
+    await bots.TickAsync(t += 50);
+    var alt = bots.All.Single();
+    var altKey = alt.Session.PlayerKey;
+    Check(alt.State == PlayerBot.Phase.InWorld && alt.Session.InWorld && alt.Session.CharacterName == "Alt" && alt.Session.Bot && botWorld.Online.ContainsKey(altKey)
+          && botPresence.Find("Alt")?.Session == alt.Session, "the bot logs in through the client's own requests (0x3613, 0x361f, 0x3622) and is in the world");
+    var seen = await watcher.TickAsync(t);
+    Check(seen.Any(b => Op(b) == 0x3645 && KeyOf(b) == altKey), "a real player sees the bot appear (0x3645 CharAppear, the shared world's own path)");
+    Check(alt.InParty && botWorld.Social.PartyOf(leader.WorldPlayer!) is { Members.Count: 2 } party && party.Leader == leader.WorldPlayer
+          && (await leader.TickAsync(t)).Any(b => Op(b) == SocialOpcodes.PartyAddMemberNt), "the bot joins the leader's party (PartyAddMember to the leader)");
+    Check((await bots.CommandAsync(leader, "add Alt", t, default)).Contains("already"), "a bot cannot be summoned twice");
+
+    // Follow: the leader runs 1500 cm east; the bot catches up along the ground within 5 s, at a speed the server accepts.
+    var start = leader.WorldPosition!.Value;
+    for (var i = 1; i <= 3; i++)
+    {
+        await leader.HandleAsync(new PacketWriter().U16(0x3701).U8(2).Vec3(start with { X = start.X + 500 * i }).U16(0).F32(0).U8(1).U64(1).ToArray(), t += 500);
+        for (var k = 0; k < 10; k++) await bots.TickAsync(t + k * 50);
+    }
+    static double Apart(Vector3d a, Vector3d b) => Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
+    var followTicks = 0;
+    while (Apart(alt.Session.WorldPosition!.Value, leader.WorldPosition!.Value) > BotBrain.FollowFar && followTicks < 100) { await bots.TickAsync(t += 50); followTicks++; }
+    Check(Apart(alt.Session.WorldPosition!.Value, leader.WorldPosition!.Value) <= BotBrain.FollowFar && alt.Session.SpeedRejects == 0 && alt.Brain!.MovesSent > 2,
+          $"the bot follows the leader within 100 ticks (took {followTicks}) without a speed reject");
+    var watched = await watcher.TickAsync(t);
+    Check(watched.Any(b => Op(b) == 0x371c && KeyOf(b) == altKey), "others see the bot run (0x3701 relayed as 0x371c, as for a player)");
+    for (var k = 0; k < 20; k++) await bots.TickAsync(t += 50);
+    Check(alt.Session.SpeedRejects == 0 && Apart(alt.Session.WorldPosition!.Value, alt.Brain!.SlotAround(leader.WorldPosition!.Value)) < BotBrain.FollowFar, "the bot settles at its follow slot");
+
+    // Assist: the leader hits the training botDummy; the bot runs to it and uses its rotation through the normal cast handler.
+    var botDummy = leader.Targets[Combat.TrainingDummyKey];
+    await leader.HandleAsync(Cast(basic, botDummy.Key, leader.WorldPosition!.Value), t += 50);
+    var hpAfterLeader = botDummy.Hp;
+    Check(leader.AttackTarget(t)?.Key == botDummy.Key, "the leader's fight is its last cast target");
+    await watcher.TickAsync(t);
+    var assistStart = t;
+    var watcherCasts = new List<byte[]>();
+    for (var k = 0; k < 240; k++)
+    {
+        await bots.TickAsync(t += 50);
+        if (k % 20 == 0) await leader.HandleAsync(Cast(basic, botDummy.Key, leader.WorldPosition!.Value), t);   // keeps the fight going (the leader's own cooldowns refuse most)
+        if (botDummy.Dead) break;
+        watcherCasts.AddRange(await watcher.TickAsync(t));
+    }
+    var castLog = alt.Brain!.CastLog;
+    Check(castLog.Count >= 3 && botDummy.Hp < hpAfterLeader || botDummy.Dead, $"the bot attacks the leader's target and it takes damage ({castLog.Count} casts, HP {hpAfterLeader} -> {botDummy.Hp})");
+    Check(watcherCasts.Any(b => Op(b) == 0x3802) && watcherCasts.Any(b => Op(b) == 0x3804), "others see the bot's skill starts and hits (0x3802, 0x3804)");
+    Check(alt.Brain.CastsSent == alt.Brain.CastsAccepted, $"every cast the bot sends is accepted: it respects cooldowns, MP and the global cooldown ({alt.Brain.CastsSent} sent)");
+    var spacingOk = castLog.Zip(castLog.Skip(1)).All(p => p.Second.At - p.First.At >= BotRotations.Embedded.GlobalCooldownMs)
+        && castLog.GroupBy(c => c.Skill).All(g => g.Zip(g.Skip(1)).All(p => p.Second.At - p.First.At >= data.Skill(g.Key)!.CooldownMs));
+    Check(spacingOk && castLog.Select(c => c.Skill).Distinct().Count() >= 2 && castLog[0].Skill == 11190000 && castLog.Count(c => c.Skill == 11190000) <= 1 + (t - assistStart) / 15000,
+          "the rotation opens with Leaping Slam (15 s cooldown), then fills; no skill is recast inside its cooldown");
+
+    // Caps: MaxPerAccount 2 per account, MaxTotal 3 on the host.
+    Check(await bots.CommandAsync(leader, "add Ranged", t, default) == "Summoning Ranged." && (await bots.CommandAsync(leader, "add Third", t, default)).Contains("MaxPerAccount"),
+          "Aion:Bots:MaxPerAccount caps one account's bots");
+    await bots.TickAsync(t += 50);
+    var ranged = bots.All.Single(b => b.Name == "Ranged");
+    Check(ranged.State == PlayerBot.Phase.InWorld && ranged.Session.ClassName == "Ranger" && ranged.Brain!.Rotation!.Range > 1000 && ranged.Brain!.Slot == 1,
+          "a second bot takes the next follow slot and its class's (ranged) rotation");
+    Check(await bots.CommandAsync(watcher, "add Devbot Cleric", t, default) == "Summoning Devbot." && (await bots.CommandAsync(watcher, "add Devbot2", t, default)).Contains("MaxTotal"),
+          "Aion:Bots:MaxTotal caps the host (a development login's bot is a new unsaved character)");
+    await bots.TickAsync(t += 50);
+    Check(bots.All.Single(b => b.Name == "Devbot").Session.ClassName == "Cleric", "a development bot takes the class asked for");
+
+    // Commands: stay / follow / passive.
+    Check((await bots.CommandAsync(leader, "stay", t, default)).StartsWith("stay") && alt.Brain.Movement == BotMovement.Stay
+          && (await bots.CommandAsync(leader, "passive Alt", t, default)).StartsWith("passive") && !alt.Brain.Assist && ranged.Brain!.Assist, "stay and passive change the strategies");
+    Check((await bots.CommandAsync(leader, "list", t, default)).Contains("Alt (InWorld, Stay, passive"), "//bot list shows the bots and their strategies");
+
+    // Dismiss: the bot leaves the world (others see it go), leaves the party and saves its position.
+    var savedBefore = botStore.Saved.Count;
+    await watcher.TickAsync(t);
+    Check(bots.Remove(leader, "Alt") == "Dismissed Alt.", "//bot remove");
+    await bots.TickAsync(t += 50);
+    var gone = await watcher.TickAsync(t);
+    Check(alt.State == PlayerBot.Phase.Gone && !botWorld.Online.ContainsKey(altKey) && alt.Session.SharedMap is null
+          && gone.Any(b => b.SequenceEqual(PlayerPackets.CharDisappear(altKey, 1))) && botPresence.Find("Alt") is null, "a dismissed bot leaves the world (0x3647 to those who saw it)");
+    Check(botStore.Saved.Count > savedBefore && botWorld.Social.PartyOf(leader.WorldPlayer!) is { } after && !after.Members.Any(m => m.Key == altKey), "it saved its position and left the party");
+
+    // GM / chat gating: //bot is staff-only unless Aion:Bots:PlayersMayUse.
+    var gmPresence = new WorldPresence();
+    gmPresence.Enter("Leader", leader, botStore.AccountId);
+    var botBuilder = new BuilderCommands(gmPresence, new GmPolicy(), (_, _, _) => { });
+    var chatId = new Aion.Application.Chat.ChatIdentity("1", "1204", "en_US");
+    Check(await new GmCommands(gmPresence, botBuilder).HandleAsync(chatId, "Leader", "//bot list", default) == "Playerbots are off on this server.", "//bot without playerbots on the host");
+    Check(await new GmCommands(gmPresence, botBuilder) { Bots = bots }.HandleAsync(chatId, "Leader", "//bot list", default) == "Playerbots are for staff on this server.",
+          "players may not use //bot unless Aion:Bots:PlayersMayUse");
+    var open = new PlayerBots(data, botOptions with { PlayersMayUse = true }, botWorld);
+    var botListed = new GmCommands(gmPresence, botBuilder) { Bots = open }.HandleAsync(chatId, "Leader", "//bot list", default);
+    await leader.TickAsync(t += 50);   // the command runs on the player's loop
+    Check((await botListed).StartsWith("No bots"), "with Aion:Bots:PlayersMayUse every player may use //bot");
+
+    // The leader leaves the world: its bots go with it (saved before its store closes).
+    leader.ExitSharedWorld();
+    await bots.OwnerLeftAsync(leader);
+    Check(bots.Of(leader).Count == 0 && !botWorld.Online.ContainsKey(ranged.Session.PlayerKey), "a leader's disconnect takes its bots out of the world");
+    await bots.TickAsync(t += 50);
+    Check(bots.All.Single().Name == "Devbot", "other players' bots stay");
+    watcher.ExitSharedWorld();
+    await bots.TickAsync(t += 50);
+    Check(bots.All.Count == 0, "a bot whose leader left the world (lobby, logout) leaves on the next tick");
+}
+Console.WriteLine($"{checks} playerbot checks passed (Aion:Bots).");
+
 int DarkCreation(GameData d) => Enumerable.Range(1, 64).First(c => d.Profile(c, 1) is { Race: 2 });
 
 byte[] Strings(ushort opcode, params string[] values)

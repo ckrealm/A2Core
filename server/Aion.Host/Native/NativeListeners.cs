@@ -482,6 +482,9 @@ public sealed class NativeGameListener(NativeOptions options, IServiceProvider s
                     Logger.LogWarning("Native game persistence errors: {Errors}", string.Join(",", session.PersistenceErrors));
             }
             catch (Exception error) { Logger.LogWarning(error, "Native game disconnect: the save failed"); }
+            // The player's bots leave and save with its store, before the store closes (docs/PLAYERBOTS.md).
+            try { if (services.GetService<PlayerBots>() is { } bots) await bots.OwnerLeftAsync(session, CancellationToken.None); }
+            catch (Exception error) { Logger.LogWarning(error, "Native game disconnect: dismissing the player's bots failed"); }
             if (session.Store is { } store) await store.DisposeAsync();
             Logger.LogInformation("Native game connection ended");
         }

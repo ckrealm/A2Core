@@ -135,6 +135,23 @@ same members (all to the killer with `killer`). `Aion__Rules__FallbackLoot=false
 without a reward table in the client's data (about three in four) roll instead (tools/data/fallback-loot.json:
 equipment of the monster's level from tools/data/items.json, rebuilt by `tools/fallback_loot.py`).
 
+## Playerbots
+
+Off by default. With them on, a player types `//bot add <character>` in chat and one of their own other characters joins
+them as a bot: it follows, joins the party and fights what they fight ([docs/PLAYERBOTS.md](../../docs/PLAYERBOTS.md)).
+
+```bash
+sudo tee -a /etc/aion/game.env >/dev/null <<'ENV'
+Aion__Bots__Enabled=true
+# every player may summon bots (false: staff characters only)
+Aion__Bots__PlayersMayUse=true
+Aion__Bots__MaxPerAccount=3
+Aion__Bots__MaxTotal=20
+ENV
+sudo systemctl restart aion-host
+journalctl -u aion-host | grep "Playerbots on"
+```
+
 ## Updating
 
 Changes are made and tested on the development PC, committed and pushed to the private GitHub
