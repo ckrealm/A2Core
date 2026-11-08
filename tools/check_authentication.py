@@ -111,7 +111,8 @@ def main():
             def page_assets(page):
                 return re.findall(rb'(?:src|href)="(/assets/[^"]+)"', page)
             status, page, headers = request('/')
-            check(status == 200 and b' Account</title>' in page and page_assets(page), 'account page')
+            # The account page's title is the one in web/index.html (the React page shows "Sign in" before sign-in).
+            check(status == 200 and b'<title>Sign in</title>' in page and page_assets(page), 'account page')
             check("frame-ancestors 'none'" in headers.get('Content-Security-Policy', ''), 'browser security headers')
             check(all(request(a.decode())[0] == 200 for a in page_assets(page)), 'page resources')
             check(b'<script>' not in page and b'<style' not in page, 'no inline scripts or styles')
@@ -212,8 +213,24 @@ def main():
             check(request('/api/admin/me', token=token)[0] == 403, 'HTTP ordinary user has no staff profile')
             check(request('/api/admin/characters', token=token)[0] == 403, 'HTTP ordinary user cannot search characters')
             check(request('/api/admin/characters/' + character, token=token)[0] == 403, 'HTTP ordinary user cannot inspect characters')
+            check(request('/api/admin/diagnostics')[0] == 401, 'anonymous diagnostics denied')
+            check(request('/api/admin/diagnostics', token=token)[0] == 403, 'HTTP ordinary user cannot read diagnostics')
             sql(f"INSERT INTO auth.account_roles VALUES('{account}','admin');", database=name)
             check(request('/api/admin/me', token=token)[1]['roles'] == ['admin'], 'HTTP staff profile lists role')
+            # Diagnostics (docs/DIAGNOSTICS.md): counters start with this host process (restarted above).
+            check(request('/api/accounts/login', 'POST', {'username': 'web_first', 'password': 'wrong password'})[0] == 401, 'HTTP wrong password after restart')
+            check(request('/api/accounts/login', 'POST', {'username': 'web_second', 'password': password})[0] == 200, 'HTTP login after restart')
+            status, diagnostics, _ = request('/api/admin/diagnostics', token=token)
+            check(status == 200 and {'startedAt', 'uptimeSeconds', 'process', 'sessions', 'databases', 'logins', 'errors', 'unansweredOpcodes'} <= set(diagnostics),
+                  'staff diagnostics fields')
+            check(diagnostics['logins']['web'] == {'succeeded': 1, 'failed': 1, 'refused': 0}, 'diagnostics count web sign-ins')
+            check(set(diagnostics['logins']) == {'web', 'nativeLogin', 'nativeGame'}, 'diagnostics sign-in entry points')
+            check(sorted(d['name'] for d in diagnostics['databases']) == ['Aion', 'Auth']
+                  and all(d['reachable'] and d['latencyMs'] >= 0 and d['database'] == name for d in diagnostics['databases']), 'diagnostics database ping')
+            check(diagnostics['sessions'] == {'login': 0, 'game': 0, 'characters': 0} and diagnostics['unansweredOpcodes'] == [], 'diagnostics without native ports')
+            check(diagnostics['process']['workingSetMb'] > 0 and diagnostics['process']['threads'] > 0 and diagnostics['uptimeSeconds'] >= 0, 'diagnostics process figures')
+            check(isinstance(diagnostics['errors'], list), 'diagnostics error counts')
+            check(not any(secret in json.dumps(diagnostics) for secret in credentials.values()), 'diagnostics show no database credentials')
             check(request('/api/admin/commands', 'POST', command, token)[0] == 200, 'HTTP admin changes level')
             check(request('/api/characters/' + character, token=token)[1]['progress']['level'] == 8, 'HTTP level persisted')
             sql("""
@@ -257,7 +274,10 @@ def main():
             granted = request('/api/admin/commands', 'POST', grant, token)
             check(granted[0] == 200 and request('/api/admin/commands', 'POST', grant, token)[1] == granted[1], 'HTTP grant and idempotent retry')
             detail = request('/api/admin/characters/' + created['characterId'], token=token)[1]
-            check(len(detail['inventory']['items']) == 2 and detail['character']['name'] == 'HttpStarter', 'HTTP staff detail shows granted item')
+            # Template 101 has no game.item_stacks row (equipment never stacks, migration 034): the grant of 3 is three bag rows.
+            bag = [i for i in detail['inventory']['items'] if i['location'] == 'bag']
+            check(len(detail['inventory']['items']) == 4 and len(bag) == 3 and all(i['templateId'] == 101 and i['quantity'] == 1 for i in bag)
+                  and detail['character']['name'] == 'HttpStarter', 'HTTP staff detail shows granted item')
             check(request('/api/admin/characters/' + str(uuid.uuid4()), token=token)[0] == 404, 'HTTP staff detail of unknown character')
             world_created = world_store.create(uuid.uuid4(), 'http-test', 'WorldStarter', b'\x00\xff\x01', voice_type=4, lobby_slot=2)
             check(world_store.load(world_created['characterId'])['appearance'] == 'AP8B', 'world bridge preserves appearance bytes')
@@ -313,7 +333,7 @@ def main():
             status, link, _ = request('/api/downloads/launcher', 'POST', token=player)
             check(status == 200 and link['url'].startswith('/download/launcher?ticket='), 'signed-in player gets a download link')
             status, body, headers = request(link['url'])
-            check(status == 200 and body == b'MZ launcher' and 'Aion%20Horizon.exe' in headers.get('Content-Disposition', ''), 'A2Core Launcher.exe downloaded as an attachment with the link')
+            check(status == 200 and body == b'MZ launcher' and 'A2Core%20Launcher.exe' in headers.get('Content-Disposition', ''), 'A2Core Launcher.exe downloaded as an attachment with the link')
             status, manifest, _ = request('/api/downloads/launcher/manifest')
             check(status == 200 and manifest == {'sha256': hashlib.sha256(b'MZ launcher').hexdigest(), 'size': 11, 'version': None},
                   'launcher manifest (hash and size) for the launcher\'s own update check, no sign-in needed')

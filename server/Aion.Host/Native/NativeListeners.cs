@@ -7,6 +7,7 @@ using Aion.Application.Gameplay;
 using Aion.Core.Accounts;
 using Aion.Protocol.Native;
 using Aion.Host;
+using Aion.Host.Diagnostics;
 using Aion.World;
 
 namespace Aion.Host.Native;
@@ -216,38 +217,52 @@ public sealed class NativeLoginListener(NativeOptions options, IServiceProvider 
             LastPickedRace = services.GetService<WorldChoices>() is { } picks ? picks.Race : null,
         }, Options.Development ? null : AuthenticateAsync);
         var chunk = new byte[8192];
-        while (true)
+        var diagnostics = services.GetService<HostDiagnostics>();
+        diagnostics?.LoginConnected();
+        try
         {
-            foreach (var body in buffer.Drain())
+            while (true)
             {
-                var step = await session.HandleAsync(cipher.Crypt(body), DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), ct);
-                await SendAsync(stream, step.Replies, ct);
-                if (step.Close is { } reason)
+                foreach (var body in buffer.Drain())
                 {
-                    Logger.LogInformation("Native login closed: {Reason}", reason);
-                    return;
+                    var step = await session.HandleAsync(cipher.Crypt(body), DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), ct);
+                    await SendAsync(stream, step.Replies, ct);
+                    if (step.Close is { } reason)
+                    {
+                        Logger.LogInformation("Native login closed: {Reason}", reason);
+                        return;
+                    }
                 }
+                using var idle = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                idle.CancelAfter(Options.IdleTimeout);
+                var read = await stream.ReadAsync(chunk, idle.Token);
+                if (read == 0) return;
+                buffer.Append(chunk.AsSpan(0, read));
             }
-            using var idle = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            idle.CancelAfter(Options.IdleTimeout);
-            var read = await stream.ReadAsync(chunk, idle.Token);
-            if (read == 0) return;
-            buffer.Append(chunk.AsSpan(0, read));
         }
+        finally { diagnostics?.LoginDisconnected(); }
     }
 
+    /// <summary>The ticket check with its outcome counted for the diagnostics API (the check itself is unchanged).</summary>
     async Task<LoginGrant?> AuthenticateAsync(ClientIdentity identity, CancellationToken ct)
+    {
+        var (grant, outcome) = await CheckTicketAsync(identity, ct);
+        services.GetService<HostDiagnostics>()?.Login(HostDiagnostics.NativeLogin, outcome);
+        return grant;
+    }
+
+    async Task<(LoginGrant?, HostDiagnostics.Outcome)> CheckTicketAsync(ClientIdentity identity, CancellationToken ct)
     {
         var handoff = services.GetService<IClientHandoff>();
         var characters = services.GetService<CharacterService>();
-        if (handoff is null || characters is null) return null;
+        if (handoff is null || characters is null) return (null, HostDiagnostics.Outcome.Failed);
         var grant = await handoff.BeginLoginAsync(identity.AuthnToken, Options.WorldId, ct);
-        if (grant is null || !Guid.TryParse(grant.Grant, out var grantId)) return null;
+        if (grant is null || !Guid.TryParse(grant.Grant, out var grantId)) return (null, HostDiagnostics.Outcome.Failed);
         // Banned accounts, and everyone but staff during maintenance, are turned away (the client shows a failed login).
         if (services.GetService<Aion.Host.Authentication.ServerControl>() is { } control && await control.LoginBlockedAsync(grant.AccountId, ct) is { } blocked)
         {
             Logger.LogInformation("Native login refused: {Reason}", blocked);
-            return null;
+            return (null, HostDiagnostics.Outcome.Refused);
         }
         if (services.GetService<WorldPresence>() is { } presence && presence.Full(Options.MaxPlayers, grant.AccountId))
         {
@@ -257,7 +272,7 @@ public sealed class NativeLoginListener(NativeOptions options, IServiceProvider 
         // The login port's character list (0x390b) shows a per-server character count.
         var owned = (await characters.ListAsync(new VerifiedAccount(grant.AccountId), ct)).Where(c => c.WorldId == grant.WorldId)
             .Select(c => (c.Name, c.Level, c.Race)).ToList();
-        return new LoginGrant(grant.WireAccountId.ToString(System.Globalization.CultureInfo.InvariantCulture), grantId, owned);
+        return (new LoginGrant(grant.WireAccountId.ToString(System.Globalization.CultureInfo.InvariantCulture), grantId, owned), HostDiagnostics.Outcome.Succeeded);
     }
 }
 
@@ -323,6 +338,7 @@ public sealed class NativeGameListener(NativeOptions options, IServiceProvider s
         var lastData = DateTimeOffset.UtcNow;
         string? present = null;
         var unanswered = new HashSet<int>();
+        var diagnostics = services.GetService<HostDiagnostics>();
         var trace = Options.TraceDirectory is { Length: > 0 } traceDir ? new ClientTrace(traceDir) : null;
         var traceWrittenAt = Environment.TickCount64;
         // The server frame clock 0x3600 (i64 ms): OBSERVED every 50 ms for the whole official session (26,964 in 1,348 s, map loads
@@ -403,8 +419,13 @@ public sealed class NativeGameListener(NativeOptions options, IServiceProvider s
                     if (header == 0x362E)
                         Logger.LogInformation("Native game BuilderCmd_RQ ({Length} bytes): {Body}", plain.Length,
                             Convert.ToHexString(plain.AsSpan(0, Math.Min(plain.Length, 1024))));
-                    else if (replies.Count == 0 && header >= 0 && !GameSession.SilentRequests.Contains(header) && GameSession.PositionReport(plain) is null && unanswered.Add(header))
-                        Logger.LogInformation("Native game unanswered opcode 0x{Opcode:x4} ({Length} bytes)", header, plain.Length);
+                    else if (replies.Count == 0 && header >= 0 && !GameSession.SilentRequests.Contains(header) && GameSession.PositionReport(plain) is null)
+                    {
+                        // Logged once per connection; every occurrence is counted for the diagnostics API.
+                        var first = unanswered.Add(header);
+                        diagnostics?.Unanswered(header, first);
+                        if (first) Logger.LogInformation("Native game unanswered opcode 0x{Opcode:x4} ({Length} bytes)", header, plain.Length);
+                    }
                     // In the world after 0x3622; out of it again on 0x3625 (back to character selection).
                     if (session.CharacterName != present)
                     {
@@ -466,24 +487,33 @@ public sealed class NativeGameListener(NativeOptions options, IServiceProvider s
         }
     }
 
+    /// <summary>The game login check with its outcome counted for the diagnostics API (the check itself is unchanged).</summary>
     async Task<INativeCharacterStore?> AuthenticateAsync(byte[] plain, CancellationToken ct)
     {
+        var (store, outcome) = await OpenStoreAsync(plain, ct);
+        services.GetService<HostDiagnostics>()?.Login(HostDiagnostics.NativeGame, outcome);
+        return store;
+    }
+
+    async Task<(INativeCharacterStore?, HostDiagnostics.Outcome)> OpenStoreAsync(byte[] plain, CancellationToken ct)
+    {
+        const HostDiagnostics.Outcome failed = HostDiagnostics.Outcome.Failed;
         var sessions = services.GetService<IWorldSessions>();
-        if (sessions is null) return null;
+        if (sessions is null) return (null, failed);
         ClientIdentity identity;
         try { identity = ClientIdentity.Parse(plain, game: true); }
-        catch (ProtocolException) { return null; }
+        catch (ProtocolException) { return (null, failed); }
         var (wireAccount, grant) = identity.Session();
         var opened = await sessions.OpenAsync(identity.AuthnToken, wireAccount, grant, Options.WorldId, ct);
-        if (opened is null) return null;
+        if (opened is null) return (null, failed);
         var who = await sessions.ValidateAsync(opened.Token, ct);
-        if (who is null) return null;
+        if (who is null) return (null, failed);
         if (services.GetService<Aion.Host.Authentication.ServerControl>() is { } control && await control.LoginBlockedAsync(who.Account.AccountId, ct) is { } blocked)
         {
             Logger.LogInformation("Native game login refused: {Reason}", blocked);
-            return null;
+            return (null, HostDiagnostics.Outcome.Refused);
         }
-        return new ServiceNativeCharacterStore(opened.Token, who, sessions, services.GetRequiredService<IWireCharacterRepository>(),
-            services.GetRequiredService<IGameplayStore>(), services.GetRequiredService<CharacterPersistenceService>());
+        return (new ServiceNativeCharacterStore(opened.Token, who, sessions, services.GetRequiredService<IWireCharacterRepository>(),
+            services.GetRequiredService<IGameplayStore>(), services.GetRequiredService<CharacterPersistenceService>()), HostDiagnostics.Outcome.Succeeded);
     }
 }

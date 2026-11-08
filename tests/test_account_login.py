@@ -1,5 +1,7 @@
 import json
+import sys
 import threading
+import types
 import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from unittest.mock import patch
@@ -35,6 +37,14 @@ class FakeAccountService(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
 
+def stub_tkinter():
+    """sign_in_for_launch only opens login_window when tkinter imports; the window tests replace login_window, so a
+    stand-in module is enough and they also run where no Tk toolkit is installed (python3 without python3-tk)."""
+    module = types.ModuleType('tkinter')
+    module.TclError = type('TclError', (Exception,), {})
+    return patch.dict(sys.modules, {'tkinter': module})
+
+
 class AccountLoginTests(unittest.TestCase):
     def setUp(self):
         FakeAccountService.calls = []
@@ -66,12 +76,18 @@ class AccountLoginTests(unittest.TestCase):
             self.assertEqual(attempt('hero', 'wrong'), 'Wrong username or password.')
             self.assertEqual(attempt('', ''), 'Enter your username and password.')
             return attempt('hero', 'correct horse') is None
-        with patch.object(account_login, 'login_window', window):
+        with stub_tkinter(), patch.object(account_login, 'login_window', window):
             self.assertEqual(sign_in_for_launch(self.session)['authorization'], 'A' * 64)
 
     def test_cancelled_window_launches_nothing(self):
-        with patch.object(account_login, 'login_window', lambda attempt, username='': False):
+        with stub_tkinter(), patch.object(account_login, 'login_window', lambda attempt, username='': False):
             self.assertIsNone(sign_in_for_launch(self.session))
+
+    def test_terminal_prompt_without_tkinter(self):
+        # No Tk toolkit at all: the terminal prompt asks again after a wrong password.
+        with patch.dict(sys.modules, {'tkinter': None}), patch('builtins.input', side_effect=['hero', 'hero']), \
+                patch.object(account_login.getpass, 'getpass', side_effect=['wrong', 'correct horse']), patch('builtins.print'):
+            self.assertEqual(sign_in_for_launch(self.session)['authorization'], 'A' * 64)
 
 
 if __name__ == '__main__':

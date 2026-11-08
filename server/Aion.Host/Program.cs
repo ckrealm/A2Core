@@ -17,6 +17,10 @@ using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.FileProviders;
 
 var builder = WebApplication.CreateBuilder(args);
+// Counters for the staff diagnostics API (docs/DIAGNOSTICS.md); also counts logged errors per category.
+var diagnostics = new Aion.Host.Diagnostics.HostDiagnostics();
+builder.Services.AddSingleton(diagnostics);
+builder.Logging.AddProvider(diagnostics);
 // Bind and advertised addresses (loopback unless configured for a public server).
 var network = builder.Configuration.GetSection("Aion:Network").Get<NetworkOptions>() ?? new NetworkOptions();
 network.Validate();
