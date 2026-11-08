@@ -23,6 +23,8 @@ public sealed partial class GameSession
         public bool Scripted { get; set; }
         /// <summary>A ChangeRelationshipEntity effect: the relationship the player shows while it lasts (PC_FriendlyToAll: monsters ignore them).</summary>
         public int? Relationship { get; set; }
+        /// <summary>A class skill's buff without a known SkillAbnormal (skill-effects.json): server-side only, the client shows no icon.</summary>
+        public bool Hidden { get; init; }
         public Dictionary<string, int> Stats { get; } = [];
         public List<HealOverTime> Heals { get; } = [];
     }
@@ -172,7 +174,7 @@ public sealed partial class GameSession
                     h.Remaining -= amount;
                     h.NextAt += h.IntervalMs;
                     r.Hp = Math.Min(r.HpMax, r.Hp + amount);
-                    replies.Add(RidePackets.AbnormalEffect(playerKey, playerKey, b.Uid, h.EffectId, h.Remaining, amount, b.SkillId));
+                    if (!b.Hidden) replies.Add(RidePackets.AbnormalEffect(playerKey, playerKey, b.Uid, h.EffectId, h.Remaining, amount, b.SkillId));
                     healed = true;
                 }
             if (healed) replies.Add(GamePackets.NpcHp(playerKey, r.Hp));
@@ -192,12 +194,13 @@ public sealed partial class GameSession
     {
         if (removed.Count == 0) return [];
         foreach (var b in removed) buffs.Remove(b);
-        var remove = PlayerPackets.AbnormalRemove(playerKey, removed.Select(b => (b.Uid, reason)).ToList());
-        var packets = new List<byte[]> { remove };
+        // Hidden (server-side) buffs were never announced: no 0x382c for them.
+        var shown = removed.Where(b => !b.Hidden).Select(b => (b.Uid, reason)).ToList();
+        var packets = shown.Count == 0 ? new List<byte[]>() : [PlayerPackets.AbnormalRemove(playerKey, shown)];
         // A transformation ending: back to the own form (polymorph uid 0) and the own relationship.
         if (removed.Any(b => b.Polymorph) && buffs.All(b => !b.Polymorph)) packets.Add(RidePackets.PolymorphUpdate(playerKey, 0));
         if (removed.Any(b => b.Relationship is not null) && buffs.All(b => b.Relationship is null)) packets.Add(GamePackets.RelationshipUpdate(playerKey, OwnRelationship));
-        worldPlayer?.Map?.Broadcast(worldPlayer, packets);
+        if (packets.Count > 0) worldPlayer?.Map?.Broadcast(worldPlayer, packets);
         return packets;
     }
 
@@ -254,10 +257,10 @@ public sealed partial class GameSession
     }
 
     /// <summary>The active buffs as other players' 0x3645 carries them.</summary>
-    public IReadOnlyList<AbnormalWire> BuffWires() => buffs.Select(Wire).ToList();
+    public IReadOnlyList<AbnormalWire> BuffWires() => buffs.Where(b => !b.Hidden).Select(Wire).ToList();
 
     /// <summary>After a map load the client draws the player anew: the active buffs and the speed again.</summary>
     List<byte[]> BuffsAfterLoad() =>
-        buffs.Count == 0 ? [] : [PlayerPackets.AbnormalAdd(playerKey, buffs.Select(Wire).ToList()),
+        buffs.Count == 0 ? [] : [.. buffs.Any(b => !b.Hidden) ? [PlayerPackets.AbnormalAdd(playerKey, buffs.Where(b => !b.Hidden).Select(Wire).ToList())] : Array.Empty<byte[]>(),
             .. BuffStat("MoveSpeed") is var speed and not 0 ? [PlayerPackets.MoveSpeedUpdate(playerKey, [(MoveSpeedStat, speed)])] : Array.Empty<byte[]>()];
 }

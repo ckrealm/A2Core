@@ -51,6 +51,14 @@ public sealed class Target
     public bool Walking { get; set; }
 
     public bool Dead => Hp <= 0;
+    /// <summary>A player's debuff (skill-effects.json, OURS): extra damage taken from players' hits (1/10000) until a time.</summary>
+    public int DamageTakenBonus { get; set; }
+    public long DamageTakenUntil { get; set; }
+    /// <summary>A player's slow (skill-effects.json, OURS): the movement speed in 1/10000 of its own until a time.</summary>
+    public int SlowRatio { get; set; }
+    public long SlowUntil { get; set; }
+    public int TakenBonus(long now) => now < DamageTakenUntil ? DamageTakenBonus : 0;
+    public double SpeedScale(long now) => now < SlowUntil ? Math.Clamp(SlowRatio, 0, 10_000) / 10_000.0 : 1.0;
     /// <summary>The corpse was removed (0x3642) and the NPC waits for its respawn.</summary>
     public bool CorpseRemoved { get; set; }
 
@@ -90,12 +98,13 @@ public static class Combat
     }
 
     public static IReadOnlyList<Hit> SkillHits(GameData data, int skillId, string? className, int level, int? weaponItem,
-        int targetDefense, Random rng, bool pvp = false)
+        int targetDefense, Random rng, bool pvp = false, int fixingBonus = 0)
     {
         var definition = data.Skill(skillId);
         if (definition is null) return [];
         var weapon = data.WeaponStatsOf(weaponItem);
-        var fixing = data.BaseStats(className, level).GetValueOrDefault("FixingDamage");
+        // A FixingDamage buff (skill-effects.json, OURS) adds to the attack like the level's own FixingDamage.
+        var fixing = data.BaseStats(className, level).GetValueOrDefault("FixingDamage") + fixingBonus;
         var criticalChance = Math.Min(CriticalCap, weapon.Critical / 1000.0);
         var hits = new List<Hit>();
         foreach (var row in definition.Damage)
@@ -105,10 +114,24 @@ public static class Combat
             double raw = Roll(flat, rng) + attack * Roll(ratio, rng) / 10000.0;
             var critical = rng.NextDouble() < criticalChance;
             if (critical) raw *= CriticalMultiplier;
-            var amount = Math.Max(1, (int)Math.Round(raw * DefenseScale / (DefenseScale + Math.Max(0, targetDefense))));
-            hits.Add(new Hit(amount, critical, row.EffectId));
+            hits.Add(new Hit(Mitigate(raw, targetDefense), critical, row.EffectId));
         }
         return hits;
+    }
+
+    /// <summary>Raw damage after the target's defense (the CANDIDATE model above), at least 1.</summary>
+    public static int Mitigate(double raw, int targetDefense) =>
+        Math.Max(1, (int)Math.Round(raw * DefenseScale / (DefenseScale + Math.Max(0, targetDefense))));
+
+    /// <summary>
+    /// The attack a skill's ratio scales (weapon roll + FixingDamage, as in <see cref="SkillHits"/>): also the power of heals and
+    /// damage over time (skill-effects.json, OURS).
+    /// </summary>
+    public static int Power(GameData data, string? className, int level, int? weaponItem, Random rng, int fixingBonus = 0)
+    {
+        var weapon = data.WeaponStatsOf(weaponItem);
+        return rng.Next(Math.Min(weapon.Min, weapon.Max), Math.Max(weapon.Min, weapon.Max) + 1)
+            + data.BaseStats(className, level).GetValueOrDefault("FixingDamage") + fixingBonus;
     }
 
     public const int HpBaseUnit = 133;
