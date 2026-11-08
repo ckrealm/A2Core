@@ -2625,6 +2625,152 @@ checks = 0;
 }
 Console.WriteLine($"{checks} server rate and rule checks passed (Aion:Rates, Aion:Rules, MaxPlayers).");
 
+// ---------- Party loot (Aion:Rules:PartyLoot), monster Kinah and the fallback table (OURS) ----------
+checks = 0;
+{
+    // Rules: the three loot settings parse, anything else stops the host; fallback loot on by default.
+    Check(WorldRules.Default.LootRule == PartyLootRule.RoundRobin && WorldRules.Default.FallbackLoot
+          && new WorldRules { PartyLoot = " FreeForAll " }.Validated().LootRule == PartyLootRule.FreeForAll
+          && new WorldRules { PartyLoot = "killer" }.Validated().LootRule == PartyLootRule.Killer && new WorldRules { PartyLoot = "round_robin" }.Validated().LootRule == PartyLootRule.RoundRobin,
+          "PartyLoot: freeforall | roundrobin (default) | killer; FallbackLoot default on");
+    var badLoot = false;
+    try { new WorldRules { PartyLoot = "needgreed" }.Validated(); } catch (InvalidOperationException) { badLoot = true; }
+    Check(badLoot, "an unknown PartyLoot setting is refused at startup");
+    Check(MonsterRewards.Split(101, 2).SequenceEqual([51L, 50L]) && MonsterRewards.Split(2, 3).SequenceEqual([1L, 1L, 0L]) && MonsterRewards.Split(0, 2).All(s => s == 0)
+          && MonsterRewards.Split(7, 0).SequenceEqual([7L]), "Kinah splits evenly, the remainder to the first shares (the killer first)");
+
+    async Task<(GameSession Session, FakeStore Store)> LootMember(SharedWorld world, WorldRules rules, string name, ServerRates? rates = null)
+    {
+        var lootStore = new FakeStore();
+        var session = new GameSession(data, new GameSessionOptions { World = world, Rules = rules, Rates = rates ?? ServerRates.Official }, new Random(13)) { Store = lootStore };
+        await session.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+        await session.HandleAsync(new PacketWriter().U16(0x361b).String(name).U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
+        await session.HandleAsync(new PacketWriter().U16(0x361f).Varint(lootStore.States[0].WireId << 16).I32(0).Vec3(Vector3d.Zero).ToArray(), Now);
+        await session.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+        return (session, lootStore);
+    }
+    async Task Join(GameSession leader, GameSession member, long at)
+    {
+        await leader.HandleAsync(SocialRequests.EncodeServerAndName(SocialOpcodes.PartyInviteRq, 1204, member.CharacterName!), at);
+        var notice = (await member.TickAsync(at + 1)).Single(b => (b[0] | b[1] << 8) == SocialOpcodes.PartyInviteNt);
+        await member.HandleAsync(SocialRequests.EncodePartyInviteResponse([new PartyInviteReply(BitConverter.ToInt64(notice, 2), PartyInviteAnswer.Accept)]), at + 2);
+        await leader.TickAsync(at + 3);
+    }
+    async Task Place(GameSession who, Vector3d at, long now, int map = GamePackets.SpawnMapId)
+    {
+        who.Teleport(map, at, now);
+        await who.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), now);
+    }
+    long KinahIn(IEnumerable<(int ItemId, long Count)> items) => items.Where(i => i.ItemId == GameSession.KinaItemId).Sum(i => i.Count);
+    long StoredKinah(FakeStore s) => s.Items.Where(i => i.TemplateId == GameSession.KinaItemId).Sum(i => i.Quantity);
+    var gearIds = MonsterRewards.Embedded.FallbackBand(45).Take(40).ToList();   // real items (items.json), each its own bag row
+    List<(int ItemId, long Count)> Gear(int n) => gearIds.Take(n).Select(i => (i, 1L)).ToList();
+    var t0 = Now + 400_000;
+
+    // Round robin between two members nearby: items alternate in join order, the turn carries over to the next kill; Kinah splits.
+    var robinWorld = new SharedWorld(data);
+    var robinRules = new WorldRules { PartyLoot = "roundrobin" };
+    var (lead, leadStore) = await LootMember(robinWorld, robinRules, "Lena");
+    var (mate, mateStore) = await LootMember(robinWorld, robinRules, "Milo");
+    await Join(lead, mate, t0);
+    var spot = GamePackets.SpawnPosition;
+    await Place(lead, spot, t0 + 10); await Place(mate, spot with { X = spot.X + 300 }, t0 + 10);
+    var leadPart = lead.ShareLootWithParty(Gear(3), 101);
+    await mate.TickAsync(t0 + 20);
+    var matePart = mateStore.Items.Where(i => gearIds.Contains(i.TemplateId)).Select(i => i.TemplateId).ToList();
+    Check(leadPart.Where(i => i.ItemId != GameSession.KinaItemId).Select(i => i.ItemId).SequenceEqual([gearIds[0], gearIds[2]]) && matePart.SequenceEqual([gearIds[1]])
+          && KinahIn(leadPart) == 51 && StoredKinah(mateStore) == 50 && mate.SharedLootReceived == 2,
+          "round robin: the leader, the member, the leader; Kinah 101 split 51/50 (the member's part granted to its bag)");
+    var nextKill = lead.ShareLootWithParty(Gear(1), 0);
+    await mate.TickAsync(t0 + 30);
+    Check(nextKill.Count == 0 && mateStore.Items.Count(i => i.TemplateId == gearIds[0]) == 1, "round robin: the turn carries over to the next kill (the member's turn)");
+    // Out of range: a member beyond PartyExpRange on the same map gets nothing; the killer keeps everything.
+    await Place(mate, spot with { X = spot.X + GameSession.PartyExpRange + 2000 }, t0 + 40);
+    var alone = lead.ShareLootWithParty(Gear(4), 90);
+    var mateLines = mateStore.Items.Count;
+    await mate.TickAsync(t0 + 50);
+    Check(alone.Count == 5 && KinahIn(alone) == 90 && mateStore.Items.Count == mateLines, "a member out of range gets no share: all items and Kinah to the killer");
+    await Place(mate, spot with { X = spot.X + 300 }, t0 + 60);
+
+    // A real kill through the party: an elite monster always pays Kinah (kinah-drops.json), split between the two and scaled by Aion:Rates:Kinah.
+    var richWorld = new SharedWorld(data);
+    var rich = new RatesOptions { Kinah = 3 }.Resolve();
+    var (killer, killerStore) = await LootMember(richWorld, robinRules, "Kara", rich);
+    var (friend, friendStore) = await LootMember(richWorld, robinRules, "Finn", rich);
+    await Join(killer, friend, t0 + 100);
+    await Place(killer, spot, t0 + 105, 1010);   // the field map has elites (map 1000 only normal monsters)
+    var elite = killer.Targets!.Values.First(t => t.SubType == "EliteMonster" && t.Hostile && !t.Dead);
+    var (eliteLow, eliteHigh) = MonsterRewards.Embedded.KinahRange("EliteMonster", elite.Level);
+    await Place(killer, elite.Position with { X = elite.Position.X + 150 }, t0 + 110, 1010);
+    await Place(friend, elite.Position with { X = elite.Position.X - 150 }, t0 + 110, 1010);
+    elite.Hp = 1;
+    await killer.HandleAsync(Cast(basic, elite.Key, elite.Position), t0 + 120);
+    await friend.TickAsync(t0 + 130);
+    var killerKinah = KinahIn(killer.GroundDropItems);
+    var friendKinah = StoredKinah(friendStore);
+    Check(elite.Dead && eliteLow > 0 && friendKinah > 0 && killerKinah - friendKinah is 0 or 1 && killerKinah + friendKinah >= eliteLow * 3 && killerKinah + friendKinah <= eliteHigh * 3,
+          $"a party kill's Kinah ({killerKinah}+{friendKinah}, x3 of {eliteLow}-{eliteHigh}) is split evenly, the killer's part on the ground");
+    // Kinah rate 0: no Kinah at all.
+    var poorWorld = new SharedWorld(data);
+    var (poor, _) = await LootMember(poorWorld, new WorldRules { PartyLoot = "killer", FallbackLoot = false }, "Pia", new RatesOptions { Kinah = 0 }.Resolve());
+    var poorTarget = poor.Targets!.Values.First(t => t.SubType == "NormalMonster" && t.Hostile && !t.Dead && !LootTables.Embedded.HasLoot(t.NpcId));
+    await Place(poor, poorTarget.Position with { X = poorTarget.Position.X + 150 }, t0 + 200);
+    poorTarget.Hp = 1;
+    var poorKill = await poor.HandleAsync(Cast(basic, poorTarget.Key, poorTarget.Position), t0 + 210);
+    Check(poorTarget.Dead && poor.GroundDrops.Count == 0 && poorKill.All(b => !(b[0] == 0x1e && b[1] == 0x56)),
+          "Kinah rate 0 and FallbackLoot off: a monster without a reward table drops nothing");
+
+    // Free for all: each item to a random member nearby (both get some of 40); killer: everything to the killer.
+    var ffaWorld = new SharedWorld(data);
+    var ffaRules = new WorldRules { PartyLoot = "freeforall" };
+    var (ffaLead, _) = await LootMember(ffaWorld, ffaRules, "Fern");
+    var (ffaMate, ffaStore) = await LootMember(ffaWorld, ffaRules, "Gus");
+    await Join(ffaLead, ffaMate, t0 + 300);
+    await Place(ffaLead, spot, t0 + 310); await Place(ffaMate, spot with { X = spot.X + 300 }, t0 + 310);
+    var ffaKept = ffaLead.ShareLootWithParty(Gear(40), 0);
+    await ffaMate.TickAsync(t0 + 320);
+    Check(ffaKept.Count is > 0 and < 40 && ffaKept.Count + ffaStore.Items.Count(i => gearIds.Contains(i.TemplateId)) == 40,
+          $"free for all: every item to one member nearby at random ({ffaKept.Count} kept of 40)");
+    var soloWorld = new SharedWorld(data);
+    var soloRules = new WorldRules { PartyLoot = "killer" };
+    var (soloLead, _) = await LootMember(soloWorld, soloRules, "Hugo");
+    var (soloMate, soloStore) = await LootMember(soloWorld, soloRules, "Ines");
+    await Join(soloLead, soloMate, t0 + 400);
+    await Place(soloLead, spot, t0 + 410); await Place(soloMate, spot with { X = spot.X + 300 }, t0 + 410);
+    var soloRows = soloStore.Items.Count;
+    var soloKept = soloLead.ShareLootWithParty(Gear(5), 77);
+    await soloMate.TickAsync(t0 + 420);
+    Check(soloKept.Count == 6 && KinahIn(soloKept) == 77 && soloStore.Items.Count == soloRows && soloMate.SharedLootReceived == 0,
+          "killer: items and Kinah all to the killer, nothing to the party");
+
+    // Fallback table: only items of items.json that the band's lowest level may wear, every band filled; citizens and the dummy get nothing.
+    var fallbackItems = MonsterRewards.Embedded.FallbackItems.ToList();
+    Check(fallbackItems.Count > 0 && fallbackItems.All(i => data.Item(i) is { Race: 0 }), "fallback loot: every item is a known item of items.json for every race");
+    Check(Enumerable.Range(1, 90).All(l => MonsterRewards.Embedded.FallbackBand(l) is { Count: > 0 } band && band.All(i => data.Item(i)!.PermitLevel <= l)),
+          "fallback loot: a monster of each level 1-90 has items its level may wear");
+    var fallbackRng = new Random(21);
+    var heroRolls = Enumerable.Range(0, 400).SelectMany(_ => MonsterRewards.Embedded.Fallback("HeroMonster", 30, fallbackRng)).ToList();
+    Check(heroRolls.Count is > 100 and < 300 && heroRolls.All(r => r.Count == 1 && MonsterRewards.Embedded.FallbackBand(30).Contains(r.ItemId))
+          && Enumerable.Range(0, 200).All(_ => MonsterRewards.Embedded.Fallback("NormalCitizen", 30, fallbackRng).Count == 0 && MonsterRewards.Embedded.Fallback("", 30, fallbackRng).Count == 0)
+          && MonsterRewards.Embedded.KinahRange("", 10) == (0, 0) && MonsterRewards.Embedded.KinahRange("NormalCitizen", 10) == (0, 0),
+          "fallback loot: one band item by the rank's chance; citizens and the training dummy get no items and no Kinah");
+    // A table-less monster killed with FallbackLoot on and many rolls drops generic items of its band.
+    var genericWorld = new SharedWorld(data);
+    var (generic, _) = await LootMember(genericWorld, new WorldRules(), "Jade", new RatesOptions { Drop = 100, Kinah = 0 }.Resolve());
+    // No hero monster without a table on the start map: a level-30 hero copy of a table-less monster (half the rolls hit).
+    var plainTemplate = generic.Targets!.Values.First(t => t.SubType == "NormalMonster" && t.Hostile && !t.Dead && !LootTables.Embedded.HasLoot(t.NpcId));
+    var plain = new Target { Key = 1_990_001, Name = plainTemplate.Name, Hp = 100, HpMax = 100, Position = plainTemplate.Position, NpcId = plainTemplate.NpcId, Level = 30, SubType = "HeroMonster" };
+    genericWorld.Map(GamePackets.SpawnMapId).Targets[plain.Key] = plain;
+    await Place(generic, plain.Position with { X = plain.Position.X + 150 }, t0 + 500);
+    plain.Hp = 1;
+    await generic.HandleAsync(Cast(basic, plain.Key, plain.Position), t0 + 510);
+    var genericDrops = generic.GroundDropItems.ToList();
+    Check(plain.Dead && genericDrops.Count > 0 && genericDrops.All(d => MonsterRewards.Embedded.FallbackBand(plain.Level).Contains(d.ItemId)),
+          $"a monster without a reward table drops fallback items of its level band ({genericDrops.Count} at drop rate 100)");
+    foreach (var s in new[] { lead, mate, killer, friend, poor, ffaLead, ffaMate, soloLead, soloMate, generic }) s.ExitSharedWorld();
+}
+Console.WriteLine($"{checks} party loot checks passed (Aion:Rules:PartyLoot, monster Kinah, Aion:Rules:FallbackLoot).");
+
 int DarkCreation(GameData d) => Enumerable.Range(1, 64).First(c => d.Profile(c, 1) is { Race: 2 });
 
 byte[] Strings(ushort opcode, params string[] values)

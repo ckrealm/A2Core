@@ -106,7 +106,7 @@ def environment(args, credentials):
 
 
 # Rates and host switches (OURS: the server owner's choice). Each is written only when given, so the host's defaults
-# (official rates, PvP on, 30 s respawn, no player cap) apply otherwise.
+# (official rates, PvP on, 30 s respawn, round-robin party loot, fallback loot on, no player cap) apply otherwise.
 GAMEPLAY = {
     'rates_profile': 'Aion__Rates__Profile',
     'exp_rate': 'Aion__Rates__Experience',
@@ -116,6 +116,8 @@ GAMEPLAY = {
     'max_players': 'Aion__Native__MaxPlayers',
     'respawn_seconds': 'Aion__Rules__RespawnSeconds',
     'pvp': 'Aion__Rules__Pvp',
+    'party_loot': 'Aion__Rules__PartyLoot',
+    'fallback_loot': 'Aion__Rules__FallbackLoot',
 }
 
 
@@ -125,7 +127,7 @@ def gameplay(args):
         value = getattr(args, name, None)
         if value is None:
             continue
-        if name == 'pvp':
+        if name in ('pvp', 'fallback_loot'):
             value = 'true' if value == 'on' else 'false'
         env[key] = value
     return env
@@ -162,6 +164,10 @@ def main(argv=None):
     rates.add_argument('--max-players', type=int, help='refuse logins beyond this many players (0: no cap)')
     rates.add_argument('--respawn-seconds', type=int, help='monster respawn after a kill (5-3600, default 30)')
     rates.add_argument('--pvp', choices=['on', 'off'], help='duels, arenas and Abyss player damage (default on)')
+    rates.add_argument('--party-loot', choices=['freeforall', 'roundrobin', 'killer'],
+                       help="a party member's kill: items to a random member nearby, to members in turn (default), or all to the killer")
+    rates.add_argument('--fallback-loot', choices=['on', 'off'],
+                       help='monsters without a reward table drop generic items of their level (default on)')
     parser.add_argument('--geolocation', default='59.9139,10.7522,NO', metavar='LAT,LON,CC',
                         help="server location for the region screen ('off' to omit)")
     args = parser.parse_args(argv)

@@ -35,6 +35,8 @@ public sealed class Target
     public bool Air { get; init; }
     /// <summary>A flying monster: appears with the passive abnormal 10000001 (immunities; every official flying monster, 17 of 17).</summary>
     public bool AirMonster { get; init; }
+    /// <summary>NpcData NpcSubType (NormalMonster, EliteMonster, HeroMonster...); empty for the training dummy. Picks the generic loot and Kinah (MonsterRewards).</summary>
+    public string SubType { get; init; } = "";
     public const int AirPassiveAbnormal = 10000001;
     /// <summary>The permanent abnormals' expiry on the wire (2099-12-31 15:00 UTC, OBSERVED with 10000001).</summary>
     public const long PermanentExpiry = 0x3bb2ad57580;
@@ -184,6 +186,7 @@ public static class Combat
                 Function = spawn.Function, Aggro = spawn.Aggro, Skills = spawn.Skills ?? [], NoRotation = spawn.NoRotation,
                 UniqueKey = spawn.UniqueKey, SocialAction = spawn.SocialAction, SocialStart = spawn.SocialAction != 0 ? StartedAt : 0, Route = spawn.Route,
                 Air = spawn.Air, AirMonster = spawn.Air && spawn.SubType.EndsWith("Monster", StringComparison.Ordinal), DamageScale = DamageScale(spawn.SubType, spawn.Grade),
+                SubType = spawn.SubType,
             };
         }
         return targets;

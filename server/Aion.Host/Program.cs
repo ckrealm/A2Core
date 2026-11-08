@@ -82,7 +82,7 @@ else
 var native = (builder.Configuration.GetSection("Aion:Native").Get<NativeOptions>() ?? new NativeOptions()) with { Network = network };
 if (native.MaxPlayers is < 0) throw new InvalidOperationException("Aion:Native:MaxPlayers must be 0 (no cap) or more.");
 // Base rates and host switches (OURS; server owner's choice): Aion:Rates (Profile official|accelerated, Experience, Kinah,
-// Drop, QuestExperience) and Aion:Rules (Pvp, RespawnSeconds). Scheduled dashboard events multiply on top of the rates.
+// Drop, QuestExperience) and Aion:Rules (Pvp, RespawnSeconds, PartyLoot freeforall|roundrobin|killer, FallbackLoot). Scheduled dashboard events multiply on top of the rates.
 var rates = (builder.Configuration.GetSection("Aion:Rates").Get<Aion.World.RatesOptions>() ?? new Aion.World.RatesOptions()).Resolve();
 var rules = (builder.Configuration.GetSection("Aion:Rules").Get<Aion.World.WorldRules>() ?? Aion.World.WorldRules.Default).Validated();
 builder.Services.AddSingleton(rates);

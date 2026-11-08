@@ -53,7 +53,8 @@ class ServerEnvTests(unittest.TestCase):
             root = Path(temp)
             server_data(root / 'data')
             env = server_env.environment(self.args(root, rates_profile='accelerated', exp_rate=None, quest_exp_rate=None,
-                                                   kinah_rate=4.0, drop_rate=None, max_players=10, respawn_seconds=15, pvp='off'),
+                                                   kinah_rate=4.0, drop_rate=None, max_players=10, respawn_seconds=15, pvp='off',
+                                                   party_loot='freeforall', fallback_loot='off'),
                                          {'aion_app': 'a', 'aion_auth': 'b'})
         self.assertEqual(env['Aion__Rates__Profile'], 'accelerated')
         self.assertEqual(env['Aion__Rates__Kinah'], 4.0)
@@ -61,10 +62,12 @@ class ServerEnvTests(unittest.TestCase):
         self.assertEqual(env['Aion__Native__MaxPlayers'], 10)
         self.assertEqual(env['Aion__Rules__RespawnSeconds'], 15)
         self.assertEqual(env['Aion__Rules__Pvp'], 'false')
+        self.assertEqual(env['Aion__Rules__PartyLoot'], 'freeforall')
+        self.assertEqual(env['Aion__Rules__FallbackLoot'], 'false')
 
     def test_rate_checks(self):
         for argv in (['--exp-rate', '-1'], ['--drop-rate', '101'], ['--rates-profile', 'fast'], ['--respawn-seconds', '2'],
-                     ['--max-players', '-3'], ['--pvp', 'maybe']):
+                     ['--max-players', '-3'], ['--pvp', 'maybe'], ['--party-loot', 'needgreed'], ['--fallback-loot', 'yes']):
             with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
                 server_env.main(['--public-address', '203.0.113.5', '--data', '.', '--state', '.', '--proxy', *argv])
 

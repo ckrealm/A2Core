@@ -94,20 +94,43 @@ public sealed record ServerRates(string Profile, double Experience, double Kinah
 /// Aion:Rules (OURS): host switches a small private server may want. Pvp off refuses duel challenges and arena queues with
 /// their existing failure replies and stops player-vs-player damage (duels, arenas, the Abyss). RespawnSeconds is the
 /// monster respawn after a kill (default 30, the previous fixed value; at least 5 so the corpse is removed first).
+/// PartyLoot shares a party member's kill among the members nearby (<see cref="PartyLootRule"/>; default roundrobin);
+/// FallbackLoot gives monsters without a reward table the generic level table (default on; <see cref="MonsterRewards"/>).
 /// </summary>
 public sealed record WorldRules
 {
     public bool Pvp { get; init; } = true;
     public int RespawnSeconds { get; init; } = (int)(GameSession.RespawnMs / 1000);
+    /// <summary>freeforall | roundrobin | killer (see <see cref="PartyLootRule"/>).</summary>
+    public string PartyLoot { get; init; } = "roundrobin";
+    public bool FallbackLoot { get; init; } = true;
 
     public const int MinRespawnSeconds = 5, MaxRespawnSeconds = 3600;
     public static WorldRules Default { get; } = new();
 
     public long RespawnMs => Math.Clamp(RespawnSeconds, MinRespawnSeconds, MaxRespawnSeconds) * 1000L;
 
-    public WorldRules Validated() =>
-        RespawnSeconds is >= MinRespawnSeconds and <= MaxRespawnSeconds ? this
-            : throw new InvalidOperationException($"Aion:Rules:RespawnSeconds must be between {MinRespawnSeconds} and {MaxRespawnSeconds} (got {RespawnSeconds}).");
+    /// <summary>The PartyLoot setting read (case and spaces ignored), or null when it is not one of the three.</summary>
+    public static PartyLootRule? ParseLootRule(string? text) => (text ?? "").Trim().ToLowerInvariant().Replace("-", "").Replace("_", "") switch
+    {
+        "freeforall" => PartyLootRule.FreeForAll,
+        "roundrobin" => PartyLootRule.RoundRobin,
+        "killer" => PartyLootRule.Killer,
+        _ => null,
+    };
 
-    public override string ToString() => $"PvP {(Pvp ? "on" : "off")}, monster respawn {RespawnMs / 1000} s";
+    /// <summary>The party loot rule in force (an unknown setting is refused by <see cref="Validated"/>; round robin if bypassed).</summary>
+    public PartyLootRule LootRule => ParseLootRule(PartyLoot) ?? PartyLootRule.RoundRobin;
+
+    public WorldRules Validated()
+    {
+        if (RespawnSeconds is < MinRespawnSeconds or > MaxRespawnSeconds)
+            throw new InvalidOperationException($"Aion:Rules:RespawnSeconds must be between {MinRespawnSeconds} and {MaxRespawnSeconds} (got {RespawnSeconds}).");
+        if (ParseLootRule(PartyLoot) is null)
+            throw new InvalidOperationException($"Aion:Rules:PartyLoot must be \"freeforall\", \"roundrobin\" or \"killer\" (got \"{PartyLoot}\").");
+        return this;
+    }
+
+    public override string ToString() =>
+        $"PvP {(Pvp ? "on" : "off")}, monster respawn {RespawnMs / 1000} s, party loot {LootRule.ToString().ToLowerInvariant()}, fallback loot {(FallbackLoot ? "on" : "off")}";
 }

@@ -105,6 +105,8 @@ Aion__Native__MaxPlayers=10
 Aion__Rules__Pvp=false
 # monster respawn after a kill, 5-3600
 Aion__Rules__RespawnSeconds=15
+# a party member's kill: freeforall, roundrobin (default) or killer
+Aion__Rules__PartyLoot=roundrobin
 ENV
 sudo chown root:aion /etc/aion/game.env && sudo chmod 640 /etc/aion/game.env
 sudo systemctl restart aion-host
@@ -117,9 +119,18 @@ multiply on top (each event rate is held to 0.1-10, the product is not, and loot
 Kinah rate applies to Kinah in monster drops, quest rewards, Kinah chests, reward boxes, dungeon, boss and cube rewards, achievements and
 collections; not to selling to merchants, trades, mail or staff grants. `tools/server_env.py` takes the same settings
 as options (`--rates-profile`, `--exp-rate`, `--quest-exp-rate`, `--kinah-rate`, `--drop-rate`, `--max-players`,
-`--respawn-seconds`, `--pvp on|off`) for a hand-made environment file. Comments go on their own lines (systemd reads
+`--respawn-seconds`, `--pvp on|off`, `--party-loot`, `--fallback-loot on|off`) for a hand-made environment file. Comments go on their own lines (systemd reads
 `#` after a value as part of it). The party size is not configurable: it stays 4. The server sends it to the client
 (PartyInfo LimitMember, a CANDIDATE field), and nothing recorded shows how the client's party window copes with another size.
+
+Party loot and monster Kinah are our own rules (nothing observed). `Aion__Rules__PartyLoot` shares a party member's kill
+among the members on the same map within 100 m (the members who share its experience): `roundrobin` gives the items to
+them in turn, `freeforall` gives each item to one of them at random, `killer` keeps everything with the killer. The
+killer's part lies on the ground to pick up; the others' parts go straight to their bags. Every monster also pays Kinah
+(tools/data/kinah-drops.json, by level and rank, times the Kinah rate `Aion__Rates__Kinah`), split evenly among the
+same members (all to the killer with `killer`). `Aion__Rules__FallbackLoot=false` turns off the generic loot that monsters
+without a reward table in the client's data (about three in four) roll instead (tools/data/fallback-loot.json:
+equipment of the monster's level from tools/data/items.json, rebuilt by `tools/fallback_loot.py`).
 
 ## Updating
 

@@ -24,6 +24,8 @@
     <EmbeddedResource Include="../../tools/data/boxes.json" LogicalName="boxes.json" />
     <EmbeddedResource Include="../../tools/data/levels.json" LogicalName="levels.json" />
     <EmbeddedResource Include="../../tools/data/loot.json" LogicalName="loot.json" />
+    <EmbeddedResource Include="../../tools/data/fallback-loot.json" LogicalName="fallback-loot.json" />
+    <EmbeddedResource Include="../../tools/data/kinah-drops.json" LogicalName="kinah-drops.json" />
     <EmbeddedResource Include="../../tools/data/shops.json" LogicalName="shops.json" />
     <EmbeddedResource Include="../../tools/data/enchant.json" LogicalName="enchant.json" />
     <EmbeddedResource Include="../../tools/data/instances.json" LogicalName="instances.json" />
