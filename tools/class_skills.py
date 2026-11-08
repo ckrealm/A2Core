@@ -33,6 +33,10 @@ def damage_rows(entry):
     Candidate reading of EffectValueList (not a recovered formula): [0..1] flat damage
     min/max, [2..3] weapon-attack ratio min/max in 1/10000, [4] kept raw; [21..24] the
     same four values again, read as the player-vs-player variant.
+
+    Only Damage rows are kept: the heal, Abnormal_True (buff/debuff) and other EffectTypes of the same
+    relationships.effects rows are not exported yet, so the server's heals and buffs come from the hand-made
+    tools/data/skill-effects.json (OURS). Exporting those rows here would let that table be generated.
     """
     rows = []
     for group in entry.get('relationships', {}).get('effects', []):

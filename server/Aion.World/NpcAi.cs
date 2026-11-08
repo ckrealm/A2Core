@@ -491,7 +491,7 @@ public sealed class NpcAi(Random rng, GameData? data = null)
     {
         var elapsed = Math.Max(0, now - brain.LastMs) / 1000.0;
         brain.LastMs = now;
-        var budget = (brain.Run ? target.RunSpeed : target.WalkSpeed) * (1 + brain.SpeedBoost / 10000.0) * elapsed;
+        var budget = (brain.Run ? target.RunSpeed : target.WalkSpeed) * (1 + brain.SpeedBoost / 10000.0) * target.SpeedScale(now) * elapsed;   // a player's slow
         // Walk the waypoints in order; stopAt applies to the final goal only.
         while (true)
         {

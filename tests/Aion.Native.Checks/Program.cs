@@ -2625,6 +2625,116 @@ checks = 0;
 }
 Console.WriteLine($"{checks} server rate and rule checks passed (Aion:Rates, Aion:Rules, MaxPlayers).");
 
+// ---------- Class skills beyond damage: heals, buffs, debuffs, damage over time, resurrection (skill-effects.json, OURS) ----------
+checks = 0;
+{
+    var effectsWorld = new SharedWorld(data);
+    async Task<GameSession> ClassSession(uint creation, int level, string name, SkillEffectTable? table = null)
+    {
+        var session = new GameSession(data, new GameSessionOptions { World = effectsWorld, TrainingDummy = true, CharacterLevel = level, SkillEffects = table }, new Random(11));
+        await session.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+        await session.HandleAsync(new PacketWriter().U16(0x361b).String(name).U8(1).U32(creation).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
+        await session.HandleAsync(select, Now);
+        await session.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+        return session;
+    }
+    const int HealingLight = 17100000, Regeneration = 17090000, ClericDefiance = 17240000, ChainOfTorment = 17070000, Mark = 17080000;
+    const int WishOfConcentration = 15310000, BittercoldWind = 15280000;
+    var table = SkillEffectTable.Embedded;
+    Check(table.Of(HealingLight) is { Target: "friendly", Effects: [{ Type: "heal" }] } && table.Of(ChainOfTorment)!.Effects[0].Type == "dot" && table.Of(11010000) is null,
+          "skill-effects.json: heal, dot entries by skill id; damage-only skills have none");
+    var cleric = await ClassSession(4, 16, "Cleric");
+    var ally = await ClassSession(1, 16, "Ally");
+    var foe = await ClassSession((uint)DarkCreation(data), 16, "Foe");
+    var castAt = cleric.Position ?? GamePackets.SpawnPosition;
+    var t = Now + 1_000;
+    // Self heal: HP up, MP spent, capped at the maximum, cooldown respected.
+    cleric.SetResource('H', 10);
+    var mpBefore = cleric.Resource.Mp;
+    var selfHeal = await cleric.HandleAsync(Cast(HealingLight, cleric.PlayerKey, castAt), t);
+    Check(selfHeal[0].SequenceEqual(GamePackets.CastReply(true, HealingLight, 9)) && cleric.Resource.Hp > 10 && cleric.Resource.Hp <= cleric.Resource.HpMax
+          && cleric.Resource.Mp == mpBefore - data.Skill(HealingLight)!.Cost.Mp && selfHeal.Any(b => Op(b) == 0x8d00 && KeyOf(b) == cleric.PlayerKey),
+          "Healing Light on self restores HP (0x8d00 bars) and spends its MP");
+    Check((await cleric.HandleAsync(Cast(HealingLight, cleric.PlayerKey, castAt), t + 100)).Single().SequenceEqual(GamePackets.CastReply(false, HealingLight, 9)),
+          "a heal on cooldown is refused");
+    t += data.Skill(HealingLight)!.CooldownMs;
+    cleric.SetResource('H', cleric.Resource.HpMax - 1);
+    await cleric.HandleAsync(Cast(HealingLight, cleric.PlayerKey, castAt), t);
+    Check(cleric.Resource.Hp == cleric.Resource.HpMax, "a heal stops at max HP");
+    // A heal at a monster or an enemy player is refused (no MP, no cooldown, no HP change).
+    t += data.Skill(HealingLight)!.CooldownMs;
+    var dummyNpc = cleric.Targets[Combat.TrainingDummyKey];
+    var dummyHp = dummyNpc.Hp;
+    mpBefore = cleric.Resource.Mp;
+    Check((await cleric.HandleAsync(Cast(HealingLight, Combat.TrainingDummyKey, dummyNpc.Position), t)).Single().SequenceEqual(GamePackets.CastReply(false, HealingLight, 9))
+          && dummyNpc.Hp == dummyHp && cleric.Resource.Mp == mpBefore, "a heal at a monster is refused");
+    foe.SetResource('H', 10);
+    Check((await cleric.HandleAsync(Cast(HealingLight, foe.PlayerKey, castAt), t)).Single()[3] == 1 && foe.Resource.Hp == 10 && foe.MapId == cleric.MapId, "a heal at an enemy (the other race) is refused");
+    // Another player: the heal reaches their session (their bars) and the caster sees their HP.
+    await ally.TickAsync(t);
+    ally.SetResource('H', 10);
+    var allyHeal = await cleric.HandleAsync(Cast(HealingLight, ally.PlayerKey, castAt), t);
+    var allyHears = await ally.TickAsync(t + 1);
+    Check(allyHeal[0][3] == 0 && ally.Resource.Hp > 10 && allyHeal.Any(b => b.SequenceEqual(GamePackets.NpcHp(ally.PlayerKey, ally.Resource.Hp)))
+          && allyHears.Any(b => Op(b) == 0x8d00 && KeyOf(b) == ally.PlayerKey), "Healing Light on an ally heals their session in the shared world");
+    // Heal over time on the ally: ticks every 2 s for 10 s, then stops.
+    ally.SetResource('H', 10);
+    await cleric.HandleAsync(Cast(Regeneration, ally.PlayerKey, castAt), t + 10);
+    var hp0 = ally.Resource.Hp;
+    await ally.TickAsync(t + 10 + 2_000);
+    var hp1 = ally.Resource.Hp;
+    await ally.TickAsync(t + 10 + 10_000);
+    var hp5 = ally.Resource.Hp;
+    ally.SetResource('H', 10);
+    await ally.TickAsync(t + 10 + 14_000);
+    var regenPerSecond = Math.Max(1, ally.Resource.HpMax / 50);
+    Check(hp1 - hp0 > 2 * regenPerSecond && hp5 > hp1 && ally.Resource.Hp <= 10 + 4 * Math.Max(1, ally.Resource.HpMax / 50) && ally.ActiveBuffs.Count == 0,
+          "Light of Regeneration heals the ally each tick and ends with its duration");
+    // A buff: Defiance adds Defense (server-side, no client icon) and runs out.
+    t += 20_000;
+    var defense = cleric.Defense;
+    var buffed = await cleric.HandleAsync(Cast(ClericDefiance, cleric.PlayerKey, castAt), t);
+    Check(buffed[0][3] == 0 && cleric.Defense == defense + 200 && buffed.All(b => Op(b) != 0x382a), "Defiance raises Defense, kept server-side (no 0x382a)");
+    await cleric.TickAsync(t + 10_001);
+    Check(cleric.Defense == defense && cleric.BuffStatOf("Defense") == 0, "the buff expires");
+    // A FixingDamage buff raises skill damage (same rolls): Combat.SkillHits with the bonus.
+    var plainHits = Combat.SkillHits(data, 17040000, "Cleric", 16, data.StarterWeapon(data.Profile(4, 1)!), 0, new Random(3));
+    var buffHits = Combat.SkillHits(data, 17040000, "Cleric", 16, data.StarterWeapon(data.Profile(4, 1)!), 0, new Random(3), fixingBonus: 30);
+    Check(buffHits.Sum(h => h.Amount) > plainHits.Sum(h => h.Amount), "a FixingDamage buff raises the hits");
+    var sorcerer = await ClassSession(7, 16, "Sorcerer");
+    var wish = await sorcerer.HandleAsync(Cast(WishOfConcentration, sorcerer.PlayerKey, castAt), t);
+    var mpWish = sorcerer.Resource.Mp;
+    var slowed = await sorcerer.HandleAsync(Cast(BittercoldWind, Combat.TrainingDummyKey, dummyNpc.Position), t + 10);
+    Check(wish[0][3] == 0 && sorcerer.BuffStatOf("FixingDamage") == 30 && slowed[0][3] == 0
+          && sorcerer.Resource.Mp == mpWish - data.Skill(BittercoldWind)!.Cost.Mp * 7000 / 10_000, "Wish of Concentration: FixingDamage and cheaper casts (MPUseDecrease)");
+    Check(dummyNpc.SpeedScale(t + 20) == 0.5 && dummyNpc.SpeedScale(t + 10 + 6_000) == 1.0, "Bittercold Wind halves the monster's speed for 6 s");
+    // Debuff and damage over time on the dummyNpc.
+    t += 30_000;
+    dummyNpc.Hp = dummyNpc.HpMax;
+    var marked = await cleric.HandleAsync(Cast(Mark, Combat.TrainingDummyKey, dummyNpc.Position), t);
+    Check(marked[0][3] == 0 && dummyNpc.TakenBonus(t + 1) == 1500 && dummyNpc.TakenBonus(t + 10_000) == 0, "Debilitating Mark: the monster takes 15% more for 10 s");
+    var torment = await cleric.HandleAsync(Cast(ChainOfTorment, Combat.TrainingDummyKey, dummyNpc.Position), t + 20);
+    var afterCast = dummyNpc.Hp;
+    var tick1 = await cleric.TickAsync(t + 20 + 2_000);
+    var afterTick = dummyNpc.Hp;
+    await cleric.TickAsync(t + 20 + 8_000);
+    var afterAll = dummyNpc.Hp;
+    await cleric.TickAsync(t + 20 + 12_000);
+    Check(torment[0][3] == 0 && afterTick < afterCast && tick1.Any(b => Op(b) == 0x3804 && KeyOf(b) == Combat.TrainingDummyKey) && afterAll < afterTick
+          && dummyNpc.Hp == afterAll && cleric.DotCount == 0, "Chain of Torment: damage-over-time ticks every 2 s for 8 s, then stops");
+    // Resurrection (a table entry of our own: no resurrection skill is in the class data): a dead ally revives in place.
+    var reviveTable = SkillEffectTable.Parse("""{"heal_range": 2500, "skills": {"17100000": {"target": "dead_friendly", "effects": [{"type": "resurrect", "hp_ratio": [3000, 3000]}]}}}""");
+    var priest = await ClassSession(4, 16, "Priest", reviveTable);
+    t += 40_000;
+    Check((await priest.HandleAsync(Cast(HealingLight, ally.PlayerKey, castAt), t)).Single()[3] == 1, "a resurrection at a living ally is refused");
+    ally.NpcHitsPlayer(ally.Resource.HpMax * 2, t);
+    Check(ally.Dead, "the ally died");
+    var revivedAlly = await priest.HandleAsync(Cast(HealingLight, ally.PlayerKey, castAt), t + 10);
+    Check(revivedAlly[0][3] == 0 && !ally.Dead && ally.Resource.Hp == ally.Resource.HpMax * 3000 / 10_000, "a resurrection skill revives the dead ally with 30% HP");
+    foreach (var s in new[] { cleric, ally, foe, sorcerer, priest }) s.ExitSharedWorld();
+}
+Console.WriteLine($"{checks} class skill effect checks passed (heals, buffs, debuffs, damage over time, resurrection).");
+
 int DarkCreation(GameData d) => Enumerable.Range(1, 64).First(c => d.Profile(c, 1) is { Race: 2 });
 
 byte[] Strings(ushort opcode, params string[] values)
