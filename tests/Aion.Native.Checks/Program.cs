@@ -2534,6 +2534,96 @@ Check(presence.Find("Player1") is not null, "leave only removes the same session
 presence.Leave("Player1", game);
 Check(presence.Find("Player1") is null && await gm.HandleAsync(chatter, "Player1", "//help", default) == "Enter the world first.", "leave");
 Console.WriteLine($"{checks} builder command checks passed.");
+// ---------- Server rates and rules (Aion:Rates, Aion:Rules, Aion:Native:MaxPlayers; OURS) ----------
+checks = 0;
+{
+    var official = new RatesOptions().Resolve();
+    Check(official == ServerRates.Official && official.Experience == 1 && official.Kinah == 1 && official.Drop == 1 && official.QuestExperience == 1,
+          "rates default to the official profile (all 1.0)");
+    var fast = new RatesOptions { Profile = "Accelerated" }.Resolve();
+    Check(fast.Profile == "accelerated" && fast.Experience == 5 && fast.Kinah == 3 && fast.Drop == 3 && fast.QuestExperience == 5,
+          "the accelerated profile presets experience 5, Kinah 3, drops 3 (quest experience follows experience)");
+    var tuned = new RatesOptions { Profile = "accelerated", Experience = 2, Drop = 1.5 }.Resolve();
+    Check(tuned.Experience == 2 && tuned.QuestExperience == 2 && tuned.Kinah == 3 && tuned.Drop == 1.5, "explicit rates override the preset; the rest stay preset");
+    Check(new RatesOptions { Experience = 3, QuestExperience = 1 }.Resolve() is { Experience: 3, QuestExperience: 1, Kinah: 1 }, "an explicit quest rate is kept apart from the kill rate");
+    foreach (var bad in new[] { new RatesOptions { Profile = "turbo" }, new RatesOptions { Experience = -1 }, new RatesOptions { Drop = 101 }, new RatesOptions { Kinah = double.NaN } })
+    {
+        var threw = false;
+        try { bad.Resolve(); } catch (InvalidOperationException) { threw = true; }
+        Check(threw, $"invalid rates are refused at startup ({bad})");
+    }
+    // Multipliers: the base rate times the event boost; the event boost alone is clamped 0.1-10, the product is not.
+    var events = new SharedWorld(data) { ExpRate = 50, DropRate = 0.01 };
+    Check(events.ExpRate == 10 && events.DropRate == 0.1, "scheduled event rates stay clamped 0.1-10");
+    Check(fast.KillExperience(100, 1) == 500 && fast.KillExperience(100, events.ExpRate) == 5000 && official.KillExperience(100, 1) == 100,
+          "kill experience: base x event (5 x 10 = 50, above the event clamp)");
+    Check(fast.QuestReward(1000) == 5000 && official.QuestReward(1000) == 1000 && fast.QuestReward(0) == 0, "quest experience: base quest rate");
+    var half = new RatesOptions { Kinah = 0.5 }.Resolve();
+    var none = new RatesOptions { Kinah = 0 }.Resolve();
+    Check(fast.KinahAmount(100) == 300 && half.KinahAmount(1) == 1 && half.KinahAmount(101) == 50 && none.KinahAmount(100) == 0 && official.KinahAmount(77) == 77,
+          "Kinah: scaled, at least 1 unless the rate is 0");
+    var rewards = fast.WithKinah([(GameSession.KinaItemId, 100L), (534660085, 2L)]);
+    Check(rewards.SequenceEqual([(GameSession.KinaItemId, 300L), (534660085, 2L)]) && none.WithKinah([(GameSession.KinaItemId, 5L), (534660085, 1L)]).SequenceEqual([(534660085, 1L)]),
+          "reward lists: only the Kinah line is scaled (a 0 line is dropped)");
+    var rollRng = new Random(3);
+    var mixed = Enumerable.Range(0, 2000).Select(_ => tuned.LootRolls(1, rollRng)).ToList();
+    Check(fast.LootRolls(1, rollRng) == 3 && official.LootRolls(1, rollRng) == 1 && mixed.All(r => r is 1 or 2) && mixed.Count(r => r == 2) is > 800 and < 1200,
+          "loot rolls: whole part of base x event, the fraction as a chance (1.5 = one or two)");
+    Check(new RatesOptions { Drop = 100 }.Resolve().LootRolls(10, rollRng) == ServerRates.MaxLootRolls && none.LootRolls(1, rollRng) == 1
+          && new RatesOptions { Drop = 0 }.Resolve().LootRolls(1, rollRng) == 0, "loot rolls are capped at 100 per kill; drop rate 0 rolls nothing");
+    // Rules: respawn seconds checked at startup, PvP default on.
+    Check(WorldRules.Default.Pvp && WorldRules.Default.RespawnMs == GameSession.RespawnMs, "rules default: PvP on, the 30 s respawn");
+    var respawnRefused = false;
+    try { new WorldRules { RespawnSeconds = 2 }.Validated(); } catch (InvalidOperationException) { respawnRefused = true; }
+    Check(respawnRefused && new WorldRules { RespawnSeconds = 5 }.Validated().RespawnMs == 5000, "respawn seconds must be 5-3600");
+    // Player cap: game connections at the cap refuse a new account, not one already in the world; no cap when unset.
+    var crowd = new WorldPresence();
+    var inWorld = Guid.NewGuid();
+    crowd.Connected(); crowd.Connected();
+    crowd.Enter("Inside", new GameSession(data, new GameSessionOptions(), new Random(1)), inWorld);
+    Check(crowd.Full(2, Guid.NewGuid()) && !crowd.Full(2, inWorld) && !crowd.Full(3, Guid.NewGuid()) && !crowd.Full(null, Guid.NewGuid()) && !crowd.Full(0, Guid.NewGuid()),
+          "MaxPlayers: logins beyond the cap are refused, a player already in may return");
+}
+{
+    // Kill experience and respawn through a session with the rates and rules set.
+    async Task<GameSession> RatedSession(GameSessionOptions options, string name = "Player1", uint creation = 1)
+    {
+        var session = new GameSession(data, options, new Random(7));
+        await session.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+        await session.HandleAsync(new PacketWriter().U16(0x361b).String(name).U8(1).U32(creation).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
+        await session.HandleAsync(select, Now);
+        await session.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+        return session;
+    }
+    var rated = await RatedSession(new GameSessionOptions { TrainingDummy = true, Rates = new RatesOptions { Experience = 2 }.Resolve(), Rules = new WorldRules { RespawnSeconds = 5 } });
+    var ratedDummy = rated.Targets[Combat.TrainingDummyKey];
+    ratedDummy.Hp = 1;
+    var expBefore = rated.Experience;
+    var ratedKill = await rated.HandleAsync(Cast(basic, Combat.TrainingDummyKey, pos), Now + 100_000);
+    var baseExp = (long)Math.Round(data.NeedExp(10) / 25.0 * 1.5);
+    Check(ratedDummy.Dead && ratedKill.Any(b => Op(b) == 0x8d07 && new PacketReader(b) { Offset = 10 }.U64() == (ulong)(baseExp * 2)),
+          "Aion:Rates:Experience 2 doubles the kill experience (0x8d07 gained)");
+    await rated.TickAsync(Now + 100_000 + 4_999);
+    Check(ratedDummy.Dead, "no respawn before Aion:Rules:RespawnSeconds");
+    await rated.TickAsync(Now + 100_000 + 5_000);
+    Check(!ratedDummy.Dead && ratedDummy.Hp == ratedDummy.HpMax, "the monster respawns after Aion:Rules:RespawnSeconds (5 s)");
+    // PvP off: duel challenges and arena queues get their failure replies; casts at other players do nothing.
+    var peaceful = new SharedWorld(data);
+    var calm = new GameSessionOptions { World = peaceful, Rules = new WorldRules { Pvp = false } };
+    var gina = await RatedSession(calm, "Gina");
+    var hank = await RatedSession(calm, "Hank");
+    await gina.TickAsync(Now + 10); await hank.TickAsync(Now + 10);
+    var refusedDuel = await gina.HandleAsync(SocialRequests.EncodeKey(SocialOpcodes.DuelCallOutRq, hank.PlayerKey), Now + 20);
+    Check(refusedDuel.Single().SequenceEqual(SocialPackets.DuelCallOutReply(1, 0, 0)) && peaceful.Social.Duels.Count == 0
+          && (await hank.TickAsync(Now + 30)).All(b => Op(b) != SocialOpcodes.DuelCallOutNt), "PvP off: a duel challenge gets the failure reply and reaches nobody");
+    var arenaRefused = await gina.HandleAsync(new PacketWriter().U16(GameSession.MatchingStartRq).I32(1).ToArray(), Now + 40);
+    Check(arenaRefused.Single().SequenceEqual(new PacketWriter().U16(GameSession.MatchingStartRs).U16(1).I32(1).ToArray()) && peaceful.Social.ArenaQueue.Count == 0,
+          "PvP off: the arena queue is refused (MatchingStart_RS result 1)");
+    var noHit = await gina.HandleAsync(Cast(basic, hank.PlayerKey, GamePackets.SpawnPosition), Now + 50);
+    Check(noHit.All(b => !(Op(b) == 0x3804 && KeyOf(b) == hank.PlayerKey)), "PvP off: a cast at another player does no damage");
+    gina.ExitSharedWorld(); hank.ExitSharedWorld();
+}
+Console.WriteLine($"{checks} server rate and rule checks passed (Aion:Rates, Aion:Rules, MaxPlayers).");
 
 int DarkCreation(GameData d) => Enumerable.Range(1, 64).First(c => d.Profile(c, 1) is { Race: 2 });
 

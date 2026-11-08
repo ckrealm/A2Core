@@ -32,6 +32,10 @@ public sealed record GameSessionOptions
     public bool TrainingDummy { get; init; }
     /// <summary>The race of the world this wire account picked on the login port (<see cref="WorldChoices"/>); null: none known.</summary>
     public Func<string, int?>? WorldRace { get; init; }
+    /// <summary>The host's base rates (Aion:Rates); they multiply with the scheduled event boosts of <see cref="World"/>.</summary>
+    public ServerRates Rates { get; init; } = ServerRates.Official;
+    /// <summary>Host switches (Aion:Rules): PvP and the monster respawn.</summary>
+    public WorldRules Rules { get; init; } = WorldRules.Default;
 }
 
 /// <summary>
@@ -45,7 +49,10 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
     public const long CombatTimeoutMs = 3500;   // official 0x8d21 leave ~3.3-3.6 s after the last action
     public const long CheckpointMs = 30000;
     public const double AreaRange = 400;        // "within 4m" of the area skills' text
-    /// <summary>Monster respawn after the kill (OURS; the official delay is unknown) and corpse removal (OBSERVED ~4050 ms after 0x8d04).</summary>
+    /// <summary>
+    /// Monster respawn after the kill (OURS; the official delay is unknown; the default of Aion:Rules:RespawnSeconds) and corpse
+    /// removal (OBSERVED ~4050 ms after 0x8d04).
+    /// </summary>
     public const long RespawnMs = 30_000, CorpseMs = 4_000;
     /// <summary>Official SP (stamina): sprint drains 500 every 100 ms; regen per second 20000 out of combat, 5000 in combat, none while sprinting.</summary>
     public const int SprintDrain = 500, SprintTickMs = 100, SpRegenOutOfCombat = 20000, SpRegenInCombat = 5000;
@@ -1014,13 +1021,16 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
             var rewards = quest.Rewards ?? new QuestRewards();
             var items = (rewards.Items ?? []).Where(i => i.Length == 2).Select(i => ((int)i[0], i[1])).ToList();
             if (rewards.Kina > 0) items.Insert(0, (KinaItemId, rewards.Kina));
+            // Aion:Rates: the base Kinah and quest experience rates (OURS).
+            items = options.Rates.WithKinah(items);
+            var questExp = options.Rates.QuestReward(rewards.Exp);
             var replies = new List<byte[]>();
             if (Store is { } store && CharacterId is { } character)
             {
-                if (await store.RewardQuestAsync(character, record.Code, rewards.Exp, items, ct) is not long total)
+                if (await store.RewardQuestAsync(character, record.Code, questExp, items, ct) is not long total)
                     return [GamePackets.QuestTakeRewardReply(uid, 1)];
                 // The store added the reward to the level's experience; level-ups follow (ExpUpdate, LevelUpdate, ...).
-                replies.AddRange(await GainExperienceAsync(total, rewards.Exp, ExpReasonQuest, ct));
+                replies.AddRange(await GainExperienceAsync(total, questExp, ExpReasonQuest, ct));
                 replies.AddRange(await InventoryChangesAsync(ct));
             }
             if (AscensionQuests.Contains(record.Code) && (selected?.Ascension ?? 1) < 2
@@ -2034,7 +2044,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         {
             var due = respawnAt[key];
             if (!Targets.TryGetValue(key, out var target) || !target.Dead) continue;
-            if (!target.CorpseRemoved && now >= due - RespawnMs + CorpseMs)
+            if (!target.CorpseRemoved && now >= due - options.Rules.RespawnMs + CorpseMs)
             {
                 target.CorpseRemoved = true;
                 replies.Add(GamePackets.Death(target.Key));
@@ -2057,7 +2067,8 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
     List<byte[]> CombatReplies(int skill, CastRequest request, long now)
     {
         var replies = RespawnTargets(now);
-        if (request.TargetKey >= SharedWorld.FirstPlayerKey && request.TargetKey != playerKey)
+        // Aion:Rules:Pvp off: casts at other players do nothing (no duel, arena or Abyss damage).
+        if (request.TargetKey >= SharedWorld.FirstPlayerKey && request.TargetKey != playerKey && options.Rules.Pvp)
         {
             var pvp = DuelHits(skill, request.TargetKey, now);
             if (pvp.Count == 0) pvp = ArenaHits(skill, request.TargetKey, now);
@@ -2084,7 +2095,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
             replies.AddRange(MapEventHp(target, now));
             if (target.Dead)
             {
-                respawnAt[target.Key] = now + RespawnMs;  // HP 0 is the kill
+                respawnAt[target.Key] = now + options.Rules.RespawnMs;  // HP 0 is the kill (Aion:Rules:RespawnSeconds)
                 killedNpcs.Add(target.NpcId);
                 replies.AddRange(AchieveKill(target.NpcId));
                 replies.AddRange(BossChallengeKilled(target, now));
@@ -2161,7 +2172,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         var replies = new List<byte[]>();
         foreach (var (victim, killer) in fights.TakeNpcKills())
         {
-            respawnAt[victim.Key] = now + RespawnMs;
+            respawnAt[victim.Key] = now + options.Rules.RespawnMs;
             replies.Add(GamePackets.TargetUpdate(victim.Key));
             replies.Add(GamePackets.Kill(victim.Key, 0, killer.Key, 0, ""));
             replies.AddRange(fights.Killed(victim));

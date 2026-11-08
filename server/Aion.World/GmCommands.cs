@@ -28,6 +28,14 @@ public sealed class WorldPresence
 
     public Entry? Find(string name) => byName.GetValueOrDefault(name);
 
+    /// <summary>
+    /// Aion:Native:MaxPlayers (OURS): whether a login of <paramref name="account"/> must be turned away because the host already has
+    /// that many game connections (in the world or on the character screen). An account already in the world may always come
+    /// back (a reconnect replaces its old connection); null or 0 is no cap.
+    /// </summary>
+    public bool Full(int? maxPlayers, Guid account) =>
+        maxPlayers is > 0 and var max && Connections >= max && !byName.Values.Any(e => e.AccountId == account);
+
     /// <summary>The session playing a stored character, if it is in the world.</summary>
     public Entry? FindCharacter(Guid character) => byName.Values.FirstOrDefault(e => e.Session.CharacterId == character);
 }

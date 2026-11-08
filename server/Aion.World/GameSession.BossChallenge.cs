@@ -133,6 +133,7 @@ public sealed partial class GameSession
         bossChallenges[groupId] = record;
         pendingBossChallengeSave = record;
         var rewards = (first ? stage.First : []).Concat(stage.Repeat).Where(r => r.Length >= 2).Select(r => ((int)r[0], r[1])).ToList();
+        rewards = options.Rates.WithKinah(rewards);
         if (rewards.Count > 0) pendingRewards.Add(rewards);
         var replies = new List<byte[]> { WriteBossChallenge(PacketWriter.Opcode(UpdateBossChallengeNt).U16(0).I64(points).I32(elapsed), record).U8(0).ToArray() };
         replies.AddRange(Achieve("ClearBossChallenge", 1, e => e.Values.Length >= 2 && e.Has(group.Name) && int.TryParse(e.Values[1], out var need) && level >= need, now));

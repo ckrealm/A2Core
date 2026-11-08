@@ -308,7 +308,7 @@ public sealed partial class GameSession
     {
         if (Achievements.Of(id) is not { } entry || !achievements.TryGetValue(id, out var state) || state.RewardedStep >= step || state.Count < entry.StepCount(step)) return null;
         if (PaidPassLocked(id)) return null;   // the paid pass's levels need a purchase (none is sold)
-        var items = entry.StepRewards(step);
+        var items = options.Rates.WithKinah(entry.StepRewards(step));
         if (Store is { } store && CharacterId is { } character)
         {
             var ok = await Stored(async () => await store.TakeAchievementRewardAsync(character, id, step, items, ct) ? [[]] : []);
@@ -338,7 +338,7 @@ public sealed partial class GameSession
         if (step < 1 || step > rewards.Count || groupRewardsTaken.Contains((groupId, step))) return null;
         var row = rewards[step - 1];
         if (row.Length < 3 || CompletedInGroup(groupId) < row[0]) return null;
-        var items = new List<(int, long)> { ((int)row[1], row[2]) };
+        var items = options.Rates.WithKinah([((int)row[1], row[2])]);
         if (Store is { } store && CharacterId is { } character)
         {
             var ok = await Stored(async () => await store.TakeGroupRewardAsync(character, groupId, step, items, ct) ? [[]] : []);

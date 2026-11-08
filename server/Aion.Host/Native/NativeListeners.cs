@@ -39,7 +39,13 @@ public sealed record NativeOptions
     public int[] PreloadMaps { get; init; } = [1000];
     /// <summary>Research: write each game connection's client message trace here (ClientTrace); unset: off.</summary>
     public string? TraceDirectory { get; init; }
+    /// <summary>TCP connections per native port (login and game each), whether signed in or not: a socket guard, not a player count.</summary>
     public int MaxConnections { get; init; } = 16;
+    /// <summary>
+    /// Players on this host (OURS): account logins beyond this many game connections are refused like a failed login (the
+    /// client's own failure screen). Null or 0: only <see cref="MaxConnections"/> limits. Development logins are not counted.
+    /// </summary>
+    public int? MaxPlayers { get; init; }
     /// <summary>
     /// A connection without client data for this long is closed. Dead peers are found by TCP keepalive (ServeAsync) well
     /// before it; the limit only drops a live client that stays silent, as one may on the character screen (live
@@ -243,6 +249,11 @@ public sealed class NativeLoginListener(NativeOptions options, IServiceProvider 
             Logger.LogInformation("Native login refused: {Reason}", blocked);
             return null;
         }
+        if (services.GetService<WorldPresence>() is { } presence && presence.Full(Options.MaxPlayers, grant.AccountId))
+        {
+            Logger.LogInformation("Native login refused: server full ({Max} players)", Options.MaxPlayers);
+            return null;
+        }
         // The login port's character list (0x390b) shows a per-server character count.
         var owned = (await characters.ListAsync(new VerifiedAccount(grant.AccountId), ct)).Where(c => c.WorldId == grant.WorldId)
             .Select(c => (c.Name, c.Level, c.Race)).ToList();
@@ -275,6 +286,7 @@ public sealed class NativeGameListener(NativeOptions options, IServiceProvider s
             Builder = services.GetService<BuilderCommands>(), Terrain = services.GetService<TerrainStore>(), Nav = services.GetService<NavMeshStore>(),
             World = services.GetService<SharedWorld>(), DevelopmentMap = Options.Development ? Options.DevelopmentStartMap : null,
             WorldRace = services.GetService<WorldChoices>() is { } choices ? choices.Race : null,
+            Rates = services.GetService<ServerRates>() ?? ServerRates.Official, Rules = services.GetService<WorldRules>() ?? WorldRules.Default,
         }, new Random());
         // With a shared world, sessions take turns (WorldTurn): world work alone, map work in parallel per map;
         // storage calls run outside the turn (TurnStore).

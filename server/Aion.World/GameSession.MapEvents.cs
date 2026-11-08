@@ -791,7 +791,7 @@ public sealed partial class GameSession : IMapEventHost
             else if (room is not null) session.instanceExitAt ??= mapEventNow + hold;
             // The clear reward (RewardDungeon.dat RewardLight/RewardDark by race: sealed dungeons' kina, materials, a title), once per copy.
             if (first && room is not null && (session.profileRace == 2 ? room.RewardDark : room.RewardLight) is { Length: > 0 } reward)
-                session.pendingRewards.Add(reward.Where(r => r.Length >= 2).Select(r => ((int)r[0], r[1])).ToList());
+                session.pendingRewards.Add(session.Rates.WithKinah(reward.Where(r => r.Length >= 2).Select(r => ((int)r[0], r[1]))));
             if (first && room is not null)
             {
                 var earned = session.AchieveDungeonClear(room, run.Name, CopyMembers().Count() + 1);

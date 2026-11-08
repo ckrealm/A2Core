@@ -69,7 +69,8 @@ public sealed partial class GameSession
         var matchingId = BitConverter.ToInt32(plain, 2);
         byte[] Reply(int result) => PacketWriter.Opcode(MatchingStartRs).U16(result).I32(matchingId).ToArray();
         var size = ArenaTeamSize(matchingId);
-        if (size == 0 || Social is not { } s || worldPlayer is null || instanceKey != 0 || ArenaOf(worldPlayer) is not null || s.ArenaQueue.Any(q => q.Player == worldPlayer)) return [Reply(1)];
+        // Aion:Rules:Pvp off: the arena queue is refused with the existing failure reply (OURS).
+        if (size == 0 || !options.Rules.Pvp || Social is not { } s || worldPlayer is null || instanceKey != 0 || ArenaOf(worldPlayer) is not null || s.ArenaQueue.Any(q => q.Player == worldPlayer)) return [Reply(1)];
         s.ArenaQueue.Add(new ArenaQueueEntry(worldPlayer, matchingId, now));
         var replies = new List<byte[]> { Reply(0), MatchingState(matchingId, MatchingStateMatching) };
         var waiting = s.ArenaQueue.Where(q => q.MatchingId == matchingId).OrderBy(q => q.SinceMs).Take(size * 2).ToList();

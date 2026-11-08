@@ -182,7 +182,7 @@ public sealed partial class GameSession
             return;
         }
         foreach (var session in CopyMembers().Prepend(this))
-            session.pendingRewards.Add(RollRewards(table, session.Rng));
+            session.pendingRewards.Add(session.Rates.WithKinah(RollRewards(table, session.Rng)));
     }
 
     /// <summary>Each table entry is an independent chance of 1e8 with a count range (as LootTables).</summary>
@@ -228,7 +228,7 @@ public sealed partial class GameSession
             return plain is null ? [] : [PacketWriter.Opcode(CubeRewardRs).U16(1).U8(0).Varint(0).ToArray()];
         if (!c.CubeTaken.TryGetValue(playerKey, out var items))
         {
-            items = RollRewards(table, rng);
+            items = options.Rates.WithKinah(RollRewards(table, rng));
             c.CubeTaken[playerKey] = items;
             pendingRewards.Add(items);
         }
