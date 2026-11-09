@@ -35,7 +35,7 @@ public sealed partial class GameSession
         range is not { Length: > 0 } ? 0 : random.Next(Math.Min(range[0], range[^1]), Math.Max(range[0], range[^1]) + 1);
 
     /// <summary>The attack heals and dots scale with (Combat.Power, with this player's FixingDamage buffs).</summary>
-    int SkillPower() => Combat.Power(data, className, level, equippedWeapon, rng, BuffStat("FixingDamage"));
+    int SkillPower() => Combat.Power(data, className, level, StatWeapon, rng, BuffStat("FixingDamage"));
 
     /// <summary>
     /// heal = (flat + power x ratio / 10000 + the target's HPMax x hp_ratio / 10000) x the caster's skill-level scale
@@ -43,7 +43,7 @@ public sealed partial class GameSession
     /// </summary>
     int HealAmount(SkillEffect e, int targetHpMax, int skill) =>
         Math.Max(0, (int)Math.Round((RollRange(e.Flat, rng) + (double)SkillPower() * RollRange(e.Ratio, rng) / 10_000 + (double)targetHpMax * RollRange(e.HpRatio, rng) / 10_000)
-            * data.Progression.SkillLevelScale(SkillLevel(skill))));
+            * data.Progression.SkillLevelScale(CombatSkillLevel(skill))));
 
     /// <summary>
     /// The player a friendly skill lands on: another player on the map selected by key (alive, or dead for a resurrection; not an
@@ -167,7 +167,7 @@ public sealed partial class GameSession
                     break;
                 case "dot" when e.IntervalMs > 0:
                     dots.RemoveAll(d => d.Target == npc && d.Skill == skill);   // a recast renews it
-                    var raw = (RollRange(e.Flat, rng) + (double)SkillPower() * RollRange(e.Ratio, rng) / 10_000) * data.Progression.SkillLevelScale(SkillLevel(skill));
+                    var raw = (RollRange(e.Flat, rng) + (double)SkillPower() * RollRange(e.Ratio, rng) / 10_000) * data.Progression.SkillLevelScale(CombatSkillLevel(skill));
                     dots.Add(new Dot
                     {
                         Target = npc, Skill = skill, EffectId = data.Skill(skill)?.Damage.LastOrDefault()?.EffectId ?? 0, IntervalMs = e.IntervalMs,
