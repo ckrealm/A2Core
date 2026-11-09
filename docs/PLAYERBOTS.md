@@ -381,8 +381,8 @@ the bots of a map into one map turn.
   skill-effects.json yet (the class data carries none). The checks use a table entry of their own.
 - **Solo instances and unrecorded entries.** See [Instances](#instances).
 - **Quest sharing.** None.
-- **Random bots** (mod-playerbots' `randombots`). These would be bot accounts with generated characters that
-  wander and level on their own. They need an account and character factory, plus a "grind/quest" strategy set.
+- **Random bots** (mod-playerbots' `randombots`): done as world bots, see [WORLDBOTS.md](WORLDBOTS.md). They are generated,
+  unsaved characters; summoning or inviting them into a player's party is not done.
 - **Bot accounts.** Summoning another account's characters, or server-owned ones, needs a store opened without a
   client ticket. Today a bot always uses its leader's account store.
 - **Console command.** `s bot ...` through `0x362e` is not wired. Only the `//bot` chat command is.

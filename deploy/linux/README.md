@@ -153,6 +153,27 @@ sudo systemctl restart aion-host
 journalctl -u aion-host | grep "Playerbots on"
 ```
 
+## World bots and bot chat
+
+Also off by default. World bots are characters the server plays in the open world: they hunt, level, loot and rest at
+hunting grounds of their race and level. With bot chat on they talk in the world channel (their own faction only by default)
+and answer whispers, written by a language model; Ollama on this server is free and needs no key
+([docs/WORLDBOTS.md](../../docs/WORLDBOTS.md), including hosted free tiers and how many bots a machine carries).
+
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull llama3.2:3b
+sudo tee -a /etc/aion/game.env >/dev/null <<'ENV'
+Aion__WorldBots__Enabled=true
+Aion__WorldBots__Count=60
+Aion__BotChat__Enabled=true
+ENV
+sudo systemctl restart aion-host
+journalctl -u aion-host | grep -E "World bots on|Bot chat on"
+```
+
+A hosted model's API key goes in `/etc/aion/game.env` (`Aion__BotChat__ApiKey=...`), never in the repository.
+
 ## Market (`//ah`)
 
 On by default: players list and buy items with `//ah` in chat, a seller bot keeps the market stocked and a buyer bot buys
