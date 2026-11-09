@@ -152,6 +152,23 @@ sudo systemctl restart aion-host
 journalctl -u aion-host | grep "Playerbots on"
 ```
 
+## Market (`//ah`)
+
+On by default: players list and buy items with `//ah` in chat, a seller bot keeps the market stocked and a buyer bot buys
+fairly priced player listings ([docs/MARKET.md](../../docs/MARKET.md) has every key).
+
+```bash
+sudo tee -a /etc/aion/game.env >/dev/null <<'ENV'
+Aion__Market__SaleTaxPercent=5
+# Light and Dark share one market
+Aion__Market__CrossWorld=true
+Aion__Market__Seller__Equipment=true
+Aion__Market__Buyer__BuyChancePercent=35
+ENV
+sudo systemctl restart aion-host
+journalctl -u aion-host | grep "Market:"
+```
+
 Dungeon entry limits are our own rule too and are off unless `Aion__Dungeons__EntryLimits=true`. Then each character may
 enter each expedition, awakening dungeon, daily dungeon and raid `Aion__Dungeons__DailyEntries` times a day (default 3;
 0 no limit); the day starts at `Aion__Dungeons__ResetHour` (server local time, default 9). `Aion__Dungeons__Entries__<id or
