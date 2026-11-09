@@ -306,6 +306,7 @@ public sealed class NativeGameListener(NativeOptions options, IServiceProvider s
             Friends = services.GetService<FriendsOptions>() ?? FriendsOptions.Default,
             Enchant = services.GetService<EnchantRules>() ?? EnchantRules.Default,
             DungeonScaling = services.GetService<DungeonScaling>() ?? DungeonScaling.Default,
+            Loot = services.GetService<LootRules>() ?? LootRules.Default,
         }, new Random());
         // With a shared world, sessions take turns (WorldTurn): world work alone, map work in parallel per map;
         // storage calls run outside the turn (TurnStore).

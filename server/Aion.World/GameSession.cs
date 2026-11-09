@@ -44,6 +44,8 @@ public sealed record GameSessionOptions
     public EnchantRules Enchant { get; init; } = EnchantRules.Default;
     /// <summary>Aion:DungeonScaling: weaker monsters in group-dungeon copies entered short-handed (on by default).</summary>
     public DungeonScaling DungeonScaling { get; init; } = DungeonScaling.Default;
+    /// <summary>Aion:Loot: class-aware and duplicate-avoiding equipment picks, bad-luck protection (LootRules, OURS).</summary>
+    public LootRules Loot { get; init; } = LootRules.Default;
     /// <summary>Heal/buff/debuff effects of class skills; null: the embedded tools/data/skill-effects.json (OURS values).</summary>
     public SkillEffectTable? SkillEffects { get; init; }
 }

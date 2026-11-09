@@ -109,7 +109,7 @@ def environment(args, credentials):
 # (official rates, PvP on, 30 s respawn, round-robin party loot, fallback loot on, no player cap, no dungeon entry limits,
 # untracked objectives done after 30 s, enchanting at the friends-server odds: chance x2, correction x2, no level lost,
 # materials spent, small-group dungeon scaling on: -10% HP / -7% damage per member short of 4, at least 70% / 80%,
-# resets daily at 05:00 host time and weekly on Wednesday) apply otherwise.
+# resets daily at 05:00 host time and weekly on Wednesday, class-aware loot with bad-luck protection) apply otherwise.
 GAMEPLAY = {
     'rates_profile': 'Aion__Rates__Profile',
     'exp_rate': 'Aion__Rates__Experience',
@@ -137,8 +137,15 @@ GAMEPLAY = {
     'reset_hour': 'Aion__Resets__Hour',
     'reset_day': 'Aion__Resets__WeeklyDay',
     'reset_timezone': 'Aion__Resets__TimeZone',
+    'class_loot': 'Aion__Loot__ClassAware',
+    'loot_rerolls': 'Aion__Loot__ClassRerolls',
+    'avoid_duplicate_loot': 'Aion__Loot__AvoidDuplicates',
+    'bad_luck_protection': 'Aion__Loot__BadLuckProtection',
+    'dry_kill_bonus': 'Aion__Loot__DryKillBonus',
+    'pity_kills': 'Aion__Loot__PityKills',
 }
-ON_OFF = ('pvp', 'fallback_loot', 'dungeon_limits', 'dungeon_scaling', 'enchant_no_downgrade', 'enchant_keep_materials')
+ON_OFF = ('pvp', 'fallback_loot', 'dungeon_limits', 'dungeon_scaling', 'enchant_no_downgrade', 'enchant_keep_materials',
+          'class_loot', 'avoid_duplicate_loot', 'bad_luck_protection')
 DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
 
@@ -235,6 +242,15 @@ def main(argv=None):
     resets.add_argument('--reset-hour', type=int, help='hour every daily and weekly reset happens (0-23, default 5)')
     resets.add_argument('--reset-day', type=str.capitalize, choices=DAYS, help='day of the weekly resets (default Wednesday)')
     resets.add_argument('--reset-timezone', help='time zone of the reset hour (IANA id such as America/Chicago; default the host zone)')
+    loot = parser.add_argument_group('loot (unset: the host defaults, all on; docs/friends-server/LOOT.md)')
+    loot.add_argument('--class-loot', choices=['on', 'off'],
+                      help="re-draw equipment the looter's class cannot use, then swap weapons to the class's (default on)")
+    loot.add_argument('--loot-rerolls', type=int, help='re-draws per wrong-class or duplicate equipment pick (0-20, default 3)')
+    loot.add_argument('--avoid-duplicate-loot', choices=['on', 'off'], help='re-draw equipment the looter already has (default on)')
+    loot.add_argument('--bad-luck-protection', choices=['on', 'off'],
+                      help='elite/hero kills without equipment raise the equipment chance and guarantee an item (default on)')
+    loot.add_argument('--dry-kill-bonus', type=float, help='equipment chance x(1 + this x dry kills) (0-10, default 0.25)')
+    loot.add_argument('--pity-kills', type=int, help='dry kills after which the next kill gives equipment (1-1000, default 8)')
     parser.add_argument('--geolocation', default='59.9139,10.7522,NO', metavar='LAT,LON,CC',
                         help="server location for the region screen ('off' to omit)")
     args = parser.parse_args(argv)
@@ -267,6 +283,12 @@ def main(argv=None):
         value = getattr(args, name)
         if value is not None and not low <= value <= high:
             parser.error(f"--{name.replace('_', '-')} must be between {low} and {high}")
+    if args.loot_rerolls is not None and not 0 <= args.loot_rerolls <= 20:
+        parser.error('--loot-rerolls must be between 0 and 20')
+    if args.dry_kill_bonus is not None and not 0 <= args.dry_kill_bonus <= 10:
+        parser.error('--dry-kill-bonus must be between 0 and 10')
+    if args.pity_kills is not None and not 1 <= args.pity_kills <= 1000:
+        parser.error('--pity-kills must be between 1 and 1000')
     if args.staff_path is not None and (len(args.staff_path) < 9 or not args.staff_path.startswith('/')
                                         or not all(c.isalnum() or c in '-_' for c in args.staff_path[1:])):
         parser.error('--staff-path must be / followed by at least 8 letters, digits, - or _')

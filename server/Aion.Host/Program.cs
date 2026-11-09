@@ -100,6 +100,9 @@ var enchantRules = (builder.Configuration.GetSection("Aion:Enchant").Get<Aion.Wo
 // Aion:DungeonScaling (OURS, docs/friends-server/DUNGEON_SCALING.md): weaker monsters in group-dungeon copies entered short-handed.
 var dungeonScaling = (builder.Configuration.GetSection("Aion:DungeonScaling").Get<Aion.World.DungeonScaling>() ?? Aion.World.DungeonScaling.Default).Validated();
 builder.Services.AddSingleton(dungeonScaling);
+// Aion:Loot (OURS, docs/friends-server/LOOT.md): ClassAware, ClassRerolls, AvoidDuplicates, BadLuckProtection, DryKillBonus,
+// PityKills, PityMonsters.
+var lootRules = (builder.Configuration.GetSection("Aion:Loot").Get<Aion.World.LootRules>() ?? Aion.World.LootRules.Default).Validated();
 builder.Services.AddSingleton(rates);
 builder.Services.AddSingleton(rules);
 // Playerbots (OURS, docs/PLAYERBOTS.md): Aion:Bots (Enabled, PlayersMayUse, MaxPerAccount, MaxTotal, JoinParty, TeleportBeyond).
@@ -110,6 +113,7 @@ builder.Services.AddSingleton(dungeonRules);
 var friends = (builder.Configuration.GetSection("Aion:Friends").Get<Aion.World.FriendsOptions>() ?? Aion.World.FriendsOptions.Default).Validated();
 builder.Services.AddSingleton(friends);
 builder.Services.AddSingleton(enchantRules);
+builder.Services.AddSingleton(lootRules);
 if (native.LoginPort is not null || native.GamePort is not null)
 {
     if (!native.Development && !accountsReady)
@@ -272,6 +276,8 @@ var app = builder.Build();
 if (native.LoginPort is not null || native.GamePort is not null)
     app.Logger.LogInformation("World rates: {Rates} (scheduled events multiply on top, each 0.1-10). Rules: {Rules}. Players: {Players}. Dungeons: {Dungeons}; {Scaling}. Enchant: {Enchant}. Friends: {Friends}. Resets: {Resets}.",
         rates, rules, native.MaxPlayers is > 0 and var maxPlayers ? $"at most {maxPlayers}" : $"no cap beyond {native.MaxConnections} connections per port", dungeonRules, dungeonScaling, enchantRules, friends.Describe(), resets);
+if (native.LoginPort is not null || native.GamePort is not null)
+    app.Logger.LogInformation("Loot: {Loot}.", lootRules);
 // Chat mutes and the chat log go through the staff tools when both exist.
 if (app.Services.GetService<Aion.Host.Authentication.ServerControl>() is { } serverControl && app.Services.GetService<ChatRelay>() is { } chatRelay)
     chatRelay.Moderation = serverControl;

@@ -2664,10 +2664,11 @@ checks = 0;
     Check(MonsterRewards.Split(101, 2).SequenceEqual([51L, 50L]) && MonsterRewards.Split(2, 3).SequenceEqual([1L, 1L, 0L]) && MonsterRewards.Split(0, 2).All(s => s == 0)
           && MonsterRewards.Split(7, 0).SequenceEqual([7L]), "Kinah splits evenly, the remainder to the first shares (the killer first)");
 
-    async Task<(GameSession Session, FakeStore Store)> LootMember(SharedWorld world, WorldRules rules, string name, ServerRates? rates = null)
+    // Aion:Loot off here: these checks are the party rules alone (the Aion:Loot section below turns it on).
+    async Task<(GameSession Session, FakeStore Store)> LootMember(SharedWorld world, WorldRules rules, string name, ServerRates? rates = null, LootRules? loot = null)
     {
         var lootStore = new FakeStore();
-        var session = new GameSession(data, new GameSessionOptions { World = world, Rules = rules, Rates = rates ?? ServerRates.Official }, new Random(13)) { Store = lootStore };
+        var session = new GameSession(data, new GameSessionOptions { World = world, Rules = rules, Rates = rates ?? ServerRates.Official, Loot = loot ?? LootRules.Off }, new Random(13)) { Store = lootStore };
         await session.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
         await session.HandleAsync(new PacketWriter().U16(0x361b).String(name).U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
         await session.HandleAsync(new PacketWriter().U16(0x361f).Varint(lootStore.States[0].WireId << 16).I32(0).Vec3(Vector3d.Zero).ToArray(), Now);
@@ -2793,8 +2794,130 @@ checks = 0;
     Check(plain.Dead && genericDrops.Count > 0 && genericDrops.All(d => MonsterRewards.Embedded.FallbackBand(plain.Level).Contains(d.ItemId)),
           $"a monster without a reward table drops fallback items of its level band ({genericDrops.Count} at drop rate 100)");
     foreach (var s in new[] { lead, mate, killer, friend, poor, ffaLead, ffaMate, soloLead, soloMate, generic }) s.ExitSharedWorld();
+
+    // ---- Aion:Loot (OURS, LootRules): class-aware picks, duplicates avoided, bad-luck protection ----
+    Check(LootRules.Default is { ClassAware: true, ClassRerolls: 3, AvoidDuplicates: true, BadLuckProtection: true, PityKills: 8 } && LootRules.Default.Picks
+          && !LootRules.Off.Picks && !LootRules.Off.BadLuckProtection && LootRules.Default.Counts("HeroMonster") && LootRules.Default.Counts("elitemonster")
+          && !LootRules.Default.Counts("NormalMonster") && !LootRules.Off.Counts("HeroMonster")
+          && LootRules.Default.ChanceAfter(0) == 1 && LootRules.Default.ChanceAfter(8) == 3 && LootRules.Off.ChanceAfter(8) == 1,
+          "Aion:Loot defaults: class-aware with 3 re-draws, duplicates avoided, +25% equipment chance per dry elite/hero kill, guaranteed after 8");
+    foreach (var bad in new[] { new LootRules { ClassRerolls = -1 }, new LootRules { ClassRerolls = 21 }, new LootRules { PityKills = 0 },
+                 new LootRules { DryKillBonus = -0.1 }, new LootRules { DryKillBonus = double.NaN }, new LootRules { PityMonsters = " , " } })
+    {
+        var lootRefused = false;
+        try { bad.Validated(); } catch (InvalidOperationException) { lootRefused = true; }
+        Check(lootRefused, $"Aion:Loot refuses {bad}");
+    }
+    Check(new LootRules { PityMonsters = "", BadLuckProtection = false }.Validated() is not null, "Aion:Loot: an empty PityMonsters is fine with bad-luck protection off");
+
+    // Class and race: Item.dat has no class field; only weapons are class-bound (equipment_rules.py), Guarders/armour/accessories suit all.
+    const int GreatswordA = 110130002, SwordA = 110230002, StaffA = 110830002, GreatswordB = 110130003;
+    var guarder = MonsterRewards.Embedded.FallbackBand(45).First(i => data.Item(i)!.Category == "Guarder");
+    var helmet = MonsterRewards.Embedded.FallbackBand(45).First(i => data.Item(i)!.Category == "Helmet");
+    const int darkOnly = 110130014;   // an Asmodian (ItemRace Dark) greatsword
+    LootLooter Glad(LootRules rules, params int[] owned) => new(data, rules, "Gladiator", 1, new HashSet<int>(owned));
+    var glad = Glad(LootRules.Default);
+    Check(data.ClassWeapon("Gladiator") is ("Greatsword", _) && data.ClassWeapon("Novice") is null && data.ClassWeapon(null) is null
+          && glad.Usable(GreatswordA) && !glad.Usable(SwordA) && !glad.Usable(StaffA) && glad.Usable(guarder) && glad.Usable(helmet) && glad.Usable(GameSession.KinaItemId)
+          && data.Item(darkOnly) is { Race: 2 } && !glad.Usable(darkOnly) && new LootLooter(data, LootRules.Default, null, 1, new HashSet<int>()).Usable(SwordA),
+          "Aion:Loot: a Gladiator uses greatswords, Guarders, armour and anything that is not equipment; not swords, staves or the other race's items");
+    Check(glad.Swap(SwordA) == GreatswordA && glad.Swap(StaffA) == GreatswordA && glad.Swap(GreatswordA) is null && glad.Swap(helmet) is null
+          && data.Item(glad.Swap(SwordA))!.Level == data.Item(SwordA)!.Level && data.Item(glad.Swap(SwordA))!.PermitLevel == data.Item(SwordA)!.PermitLevel,
+          "Aion:Loot: another class's weapon swaps to the class weapon of the same ItemLevel and PermitLevelMin (the Item.dat sibling)");
+    int Picked(LootLooter looter, params int[] draws) { var n = 0; return looter.Pick(() => draws[Math.Min(n++, draws.Length - 1)]); }
+    var pickCount = 0;
+    Check(Picked(Glad(LootRules.Default), SwordA, guarder) == guarder && Picked(Glad(LootRules.Default), SwordA, StaffA, SwordA, StaffA, guarder) == GreatswordA
+          && Picked(Glad(LootRules.Default with { ClassRerolls = 0 }), SwordA, guarder) == GreatswordA
+          && Picked(Glad(LootRules.Default), GameSession.KinaItemId, guarder) == GameSession.KinaItemId
+          && Glad(LootRules.Default).Pick(() => { pickCount++; return GreatswordA; }) == GreatswordA && pickCount == 1,
+          "Aion:Loot: an unusable pick is drawn again (3 re-draws), then swapped; a usable or non-equipment pick is taken at once");
+    Check(Picked(Glad(LootRules.Default, helmet), helmet, guarder) == guarder && Picked(Glad(LootRules.Default, helmet), helmet, helmet, helmet, helmet) == helmet
+          && Picked(Glad(LootRules.Default with { AvoidDuplicates = false }, helmet), helmet, guarder) == helmet
+          && Picked(Glad(LootRules.Default with { ClassAware = false }), SwordA, guarder) == SwordA
+          && Picked(Glad(LootRules.Default, GreatswordA), SwordA, SwordA, SwordA, SwordA, GreatswordB) == GreatswordA,
+          "Aion:Loot: an owned item is drawn again and kept only when nothing new comes; either switch off leaves its part alone");
+    var oneKill = Glad(LootRules.Default);
+    Check(Picked(oneKill, helmet) == helmet && Picked(oneKill, helmet, guarder) == guarder, "Aion:Loot: the same kill does not give one item twice");
+
+    // Tables: the same random numbers give the same loot without a pick rule or with one that takes the first draw (settings off = before).
+    const int WeaponNpc = 2000925;   // reward_basic_D_N3_20: weapon and armour packages
+    bool SameRolls(Func<Random, List<(int, long)>> a, Func<Random, List<(int, long)>> b) =>
+        Enumerable.Range(0, 300).All(seed => a(new Random(seed)).SequenceEqual(b(new Random(seed))));
+    Check(SameRolls(r => LootTables.Embedded.Roll(WeaponNpc, 1, r), r => LootTables.Embedded.Roll(WeaponNpc, 1, r, draw => draw(), 1, glad.IsEquipment))
+          && SameRolls(r => MonsterRewards.Embedded.Fallback("HeroMonster", 30, r), r => MonsterRewards.Embedded.Fallback("HeroMonster", 30, r, draw => draw(), 1)),
+          "Aion:Loot: a pick that keeps the first draw and no chance boost roll exactly as before (reward tables and the fallback band)");
+    var classRng = new Random(5);
+    var classDrops = Enumerable.Range(0, 10000).SelectMany(_ => LootTables.Embedded.Roll(WeaponNpc, 1, classRng, Glad(LootRules.Default with { AvoidDuplicates = false }).Pick))
+        .Select(d => d.ItemId).Where(i => data.Item(i) is { } item && LootLooter.Weapons.Contains(item.Category)).ToList();
+    var plainRng = new Random(5);
+    var plainWeapons = Enumerable.Range(0, 10000).SelectMany(_ => LootTables.Embedded.Roll(WeaponNpc, 1, plainRng))
+        .Select(d => d.ItemId).Where(i => data.Item(i) is { } item && LootLooter.Weapons.Contains(item.Category)).ToList();
+    Check(classDrops.Count > 20 && classDrops.All(i => data.Item(i)!.Category == "Greatsword") && plainWeapons.Any(i => data.Item(i)!.Category != "Greatsword"),
+          $"Aion:Loot: class-aware, every weapon a Gladiator gets from a weapon package is a greatsword ({classDrops.Count} of 10000 kills; off: {plainWeapons.Count(i => data.Item(i)!.Category != "Greatsword")} for other classes)");
+    var boostRng = new Random(9); var flatRng = new Random(9);
+    int Gear3000(Random r, double boost) => Enumerable.Range(0, 3000).Sum(_ => LootTables.Embedded.Roll(WeaponNpc, 1, r, null, boost, glad.IsEquipment).Count(d => glad.IsEquipment(d.ItemId)));
+    var flatGear = Gear3000(flatRng, 1); var boostedGear = Gear3000(boostRng, 3);
+    Check(boostedGear > flatGear * 2.4 && boostedGear < flatGear * 3.6, $"Aion:Loot: after 8 dry kills the equipment packages hit 3x as often ({flatGear} -> {boostedGear} of 3000)");
+    Check(LootTables.Embedded.CanDropEquipment(WeaponNpc, 1, glad.IsEquipment)
+          && data.Item(LootTables.Embedded.GuaranteedEquipment(WeaponNpc, 1, new Random(3), glad.IsEquipment, Glad(LootRules.Default).Pick)) is { Category: not ("Sword" or "Staff" or "Dagger" or "Bow" or "Orb" or "Mace" or "Magicbook") }
+          && data.Item(MonsterRewards.Embedded.GuaranteedFallback(30, new Random(3))) is not null,
+          "Aion:Loot: a guaranteed item comes from the monster's own equipment packages (or its level band), for the class");
+    var pityBook = new LootPityBook();
+    var someone = Guid.NewGuid();
+    Check(pityBook.Record(someone, 7, false) == 0 && pityBook.Record(someone, 7, false) == 1 && pityBook.Dry(someone, 7) == 2 && pityBook.Dry(someone, 8) == 0
+          && pityBook.Record(someone, 7, true) == 2 && pityBook.Dry(someone, 7) == 0, "Aion:Loot: dry kills count per character and monster, any equipment resets them");
+
+    // A real kill: a hero monster with only Kinah-less no-equipment luck; after PityKills dry kills the next kill gives the Gladiator equipment.
+    var pityRules = new LootRules { PityKills = 2, DryKillBonus = 0 };
+    var pityWorld = new SharedWorld(data);
+    var (pityHero, pityStore) = await LootMember(pityWorld, new WorldRules { PartyLoot = "killer" }, "Pax", new RatesOptions { Kinah = 0, Drop = 0 }.Resolve(), pityRules);
+    var pityTemplate = pityHero.Targets!.Values.First(t => t.SubType == "NormalMonster" && t.Hostile && !t.Dead && !LootTables.Embedded.HasLoot(t.NpcId));
+    async Task<List<(int ItemId, long Count)>> PityKill(GameSession who, int key, long at)
+    {
+        var victim = new Target { Key = key, Name = pityTemplate.Name, Hp = 1, HpMax = 100, Position = pityTemplate.Position, NpcId = pityTemplate.NpcId, Level = 30, SubType = "HeroMonster" };
+        pityWorld.Map(GamePackets.SpawnMapId).Targets[victim.Key] = victim;
+        await Place(who, victim.Position with { X = victim.Position.X + 150 }, at);
+        await who.HandleAsync(Cast(basic, victim.Key, victim.Position), at + 10);
+        Check(victim.Dead, $"Aion:Loot check kill {key} lands");
+        return who.GroundDropItems.ToList();
+    }
+    // Drop rate 0: the tables never roll, so every kill is dry; the third kill (after 2 dry) is guaranteed.
+    var dry1 = await PityKill(pityHero, 1_990_101, t0 + 600);
+    var dry2 = await PityKill(pityHero, 1_990_102, t0 + 20_600);
+    Check(dry1.Count == 0 && dry2.Count == 0 && pityRules.Book.Dry(pityHero.CharacterId!.Value, pityTemplate.NpcId) == 2 && pityHero.PityDrops == 0,
+          $"Aion:Loot: hero kills without equipment are counted as dry kills (drop rate 0: nothing rolls; {dry1.Count}/{dry2.Count} drops, {pityRules.Book.Dry(pityHero.CharacterId!.Value, pityTemplate.NpcId)} dry)");
+    var sure = await PityKill(pityHero, 1_990_103, t0 + 40_600);
+    Check(pityHero.PityDrops == 1 && sure.Count == 1 && data.Item(sure[0].ItemId) is { } sureItem && glad.Usable(sure[0].ItemId)
+          && MonsterRewards.Embedded.FallbackBand(30).Contains(sure[0].ItemId) && pityRules.Book.Dry(pityHero.CharacterId!.Value, pityTemplate.NpcId) == 0,
+          $"Aion:Loot: after PityKills dry kills the next kill drops one item the Gladiator can use ({sure.FirstOrDefault().ItemId}), and the count resets");
+    var offRules = LootRules.Off with { PityKills = 1 };
+    var (offHero, _) = await LootMember(pityWorld, new WorldRules { PartyLoot = "killer" }, "Oz", new RatesOptions { Kinah = 0, Drop = 0 }.Resolve(), offRules);
+    for (var k = 0; k < 4; k++) await PityKill(offHero, 1_990_110 + k, t0 + 70_000 + k * 20_000);
+    Check(offHero.PityDrops == 0 && offHero.GroundDropItems.Count() == 0 && offRules.Book.Dry(offHero.CharacterId!.Value, pityTemplate.NpcId) == 0,
+          "Aion:Loot off: no dry kills counted and no guaranteed item");
+
+    // Party: the member who receives another class's weapon gets its own class's; members count their own dry kills.
+    var classWorld = new SharedWorld(data);
+    var classRules = new LootRules { PityKills = 1 };
+    var (cLead, _) = await LootMember(classWorld, new WorldRules { PartyLoot = "roundrobin" }, "Cleo", null, classRules);
+    var (cMate, cMateStore) = await LootMember(classWorld, new WorldRules { PartyLoot = "roundrobin" }, "Cyd", null, classRules);
+    await Join(cLead, cMate, t0 + 1000);
+    await Place(cLead, spot, t0 + 1010); await Place(cMate, spot with { X = spot.X + 300 }, t0 + 1010);
+    var cKept = cLead.ShareLootWithParty([(GreatswordB, 1), (SwordA, 1)], 0);
+    await cMate.TickAsync(t0 + 1020);
+    Check(cKept.Single().ItemId == GreatswordB && cMateStore.Items.Any(i => i.TemplateId == GreatswordA) && cMateStore.Items.All(i => i.TemplateId != SwordA),
+          "Aion:Loot in a party: the member's sword (another class's weapon) arrives as the Gladiator's greatsword of the same grade");
+    var partyKill = new LootKill(WeaponNpc, "EliteMonster", 20, false);
+    classRules.Book.Record(cMate.CharacterId!.Value, WeaponNpc, false);
+    var mateRows = cMateStore.Items.Count;
+    cLead.ShareLootWithParty([], 0, partyKill);
+    await cMate.TickAsync(t0 + 1030);
+    Check(cMate.PityDrops == 1 && cMateStore.Items.Count == mateRows + 1 && glad.Usable(cMateStore.Items[^1].TemplateId) && data.Item(cMateStore.Items[^1].TemplateId) is not null
+          && classRules.Book.Dry(cMate.CharacterId!.Value, WeaponNpc) == 0,
+          "Aion:Loot in a party: a member past its own PityKills gets its own guaranteed item, even with an empty share of the kill");
+    foreach (var s in new[] { pityHero, offHero, cLead, cMate }) s.ExitSharedWorld();
 }
-Console.WriteLine($"{checks} party loot checks passed (Aion:Rules:PartyLoot, monster Kinah, Aion:Rules:FallbackLoot).");
+Console.WriteLine($"{checks} party loot checks passed (Aion:Rules:PartyLoot, monster Kinah, Aion:Rules:FallbackLoot, Aion:Loot).");
 
 // ---------- Class skills beyond damage: heals, buffs, debuffs, damage over time, resurrection (skill-effects.json, OURS) ----------
 checks = 0;

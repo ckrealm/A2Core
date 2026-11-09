@@ -46,7 +46,7 @@ class ServerEnvTests(unittest.TestCase):
         self.assertNotIn('Aion__ChatDevelopmentLogins', env)
         self.assertNotIn('Aion__NcGuard__RewriteHosts', env)
         # Rates and rules are written only when given: the host's defaults apply.
-        self.assertFalse([key for key in env if key.startswith(('Aion__Rates__', 'Aion__Rules__', 'Aion__Dungeons__', 'Aion__Enchant__', 'Aion__DungeonScaling__', 'Aion__Resets__')) or key == 'Aion__Native__MaxPlayers'])
+        self.assertFalse([key for key in env if key.startswith(('Aion__Rates__', 'Aion__Rules__', 'Aion__Dungeons__', 'Aion__Enchant__', 'Aion__DungeonScaling__', 'Aion__Resets__', 'Aion__Loot__')) or key == 'Aion__Native__MaxPlayers'])
 
     def test_rates_and_rules(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -116,6 +116,23 @@ class ServerEnvTests(unittest.TestCase):
         self.assertEqual(env['Aion__Resets__WeeklyDay'], 'Wednesday')
         self.assertEqual(env['Aion__Resets__TimeZone'], 'America/Chicago')
         for argv in (['--reset-hour', '24'], ['--reset-day', 'Someday'], ['--reset-timezone', 'a b']):
+            with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+                server_env.main(['--public-address', '203.0.113.5', '--data', '.', '--state', '.', '--proxy', *argv])
+
+    def test_loot_settings(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            server_data(root / 'data')
+            env = server_env.environment(self.args(root, class_loot='off', loot_rerolls=5, avoid_duplicate_loot='on',
+                                                   bad_luck_protection='off', dry_kill_bonus=0.5, pity_kills=4),
+                                         {'aion_app': 'a', 'aion_auth': 'b'})
+        self.assertEqual(env['Aion__Loot__ClassAware'], 'false')
+        self.assertEqual(env['Aion__Loot__ClassRerolls'], 5)
+        self.assertEqual(env['Aion__Loot__AvoidDuplicates'], 'true')
+        self.assertEqual(env['Aion__Loot__BadLuckProtection'], 'false')
+        self.assertEqual(env['Aion__Loot__DryKillBonus'], 0.5)
+        self.assertEqual(env['Aion__Loot__PityKills'], 4)
+        for argv in (['--class-loot', 'yes'], ['--loot-rerolls', '21'], ['--dry-kill-bonus', '-1'], ['--pity-kills', '0']):
             with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
                 server_env.main(['--public-address', '203.0.113.5', '--data', '.', '--state', '.', '--proxy', *argv])
 

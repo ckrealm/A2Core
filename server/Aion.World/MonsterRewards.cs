@@ -56,11 +56,28 @@ public sealed class MonsterRewards
     public IReadOnlyList<int> FallbackBand(int level) => Band(fallback.Bands, level, b => b.Min, b => b.Max)?.Items ?? [];
 
     /// <summary>One fallback roll for a monster of this rank and level: one item of its band by the rank's chance, or nothing.</summary>
-    public List<(int ItemId, long Count)> Fallback(string subType, int level, Random rng)
+    /// Aion:Loot (OURS, LootRules) may re-draw the pick (<paramref name="pick"/>) and multiply the chance (bad-luck protection).
+    public List<(int ItemId, long Count)> Fallback(string subType, int level, Random rng, Func<Func<int>, int>? pick = null, double chanceScale = 1)
     {
-        if (!fallback.Chance.TryGetValue(subType, out var chance) || rng.NextDouble() * ChanceScale >= chance) return [];
+        if (!fallback.Chance.TryGetValue(subType, out var chance)) return [];
+        var roll = rng.NextDouble() * ChanceScale;
+        if (chanceScale == 1 ? roll >= chance : roll >= chance * chanceScale) return [];
         var items = FallbackBand(level);
-        return items.Count == 0 ? [] : [(items[rng.Next(items.Count)], 1)];
+        if (items.Count == 0) return [];
+        int Draw() => items[rng.Next(items.Count)];
+        return [(pick is null ? Draw() : pick(Draw), 1)];
+    }
+
+    /// <summary>Whether a monster of this rank rolls the fallback table at all.</summary>
+    public bool HasFallback(string subType, int level) => fallback.Chance.ContainsKey(subType) && FallbackBand(level).Count > 0;
+
+    /// <summary>Bad-luck protection (LootRules, OURS): one item of the level's band, whatever the chance; 0 when the band is empty.</summary>
+    public int GuaranteedFallback(int level, Random rng, Func<Func<int>, int>? pick = null)
+    {
+        var items = FallbackBand(level);
+        if (items.Count == 0) return 0;
+        int Draw() => items[rng.Next(items.Count)];
+        return pick is null ? Draw() : pick(Draw);
     }
 
     /// <summary>The (min, max) Kinah of a kill before rates, or (0, 0) for an NPC that pays none.</summary>

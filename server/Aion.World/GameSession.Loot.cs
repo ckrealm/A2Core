@@ -12,6 +12,7 @@ namespace Aion.World;
 // pays Kinah (MonsterRewards), and a party member's kill is shared with the members nearby (Aion:Rules:PartyLoot, the
 // members of the experience share): the killer's part lies on the ground as before, the others' part is granted straight
 // to their bags on their own loops (the same grant and inventory messages as a pickup); Kinah is split evenly.
+// Aion:Loot (OURS, LootRules): class-aware and duplicate-avoiding equipment picks, bad-luck protection per character and monster.
 public sealed partial class GameSession
 {
     sealed record GroundDrop(int Key, long Uid, int ItemId, long Count, Vector3d Center, Vector3d At, long ExpiresAt);
@@ -33,12 +34,21 @@ public sealed partial class GameSession
         // x2.5 = two rolls and a third half the time. Kinah in a drop is scaled by Aion:Rates:Kinah.
         var rolls = options.Rates.LootRolls(options.World?.DropRate ?? 1, rng);
         var generic = options.Rules.FallbackLoot && !LootTables.Embedded.HasLoot(target.NpcId);
+        // Aion:Loot: picks re-drawn for the killer's class and bag; the equipment chance grows with its dry kills of this monster.
+        var loot = options.Loot;
+        var me = loot.Picks || loot.BadLuckProtection ? Looter() : null;
+        Func<Func<int>, int>? pick = loot.Picks ? me!.Pick : null;
+        var kill = new LootKill(target.NpcId, target.SubType, target.Level, generic);
+        var pity = PityCounts(kill, me);
+        var boost = pity ? loot.ChanceAfter(loot.Book.Dry(PityKey, target.NpcId)) : 1;
         var rolled = new List<(int, long)>();
         for (var i = 0; i < rolls; i++)
-            rolled.AddRange(generic ? MonsterRewards.Embedded.Fallback(target.SubType, target.Level, rng) : LootTables.Embedded.Roll(target.NpcId, profileRace, rng));
+            rolled.AddRange(generic ? MonsterRewards.Embedded.Fallback(target.SubType, target.Level, rng, pick, boost)
+                : LootTables.Embedded.Roll(target.NpcId, profileRace, rng, pick, boost, me is null ? null : me.IsEquipment));
         rolled = options.Rates.WithKinah(rolled);
         var kinah = options.Rates.KinahAmount(MonsterRewards.Embedded.Kinah(target.SubType, target.Level, rng));
-        var mine = ShareLootWithParty(rolled, kinah);
+        var mine = ShareLootWithParty(rolled, kinah, loot.Counts(target.SubType) ? kill : null);
+        if (pity) mine = WithPity(mine, kill, me!);
         if (mine.Count == 0) return [];
         var placed = new List<DropItem>();
         foreach (var (item, count) in mine)
@@ -61,7 +71,7 @@ public sealed partial class GameSession
     /// Aion:Rules:PartyLoot over a kill's items and Kinah among the killer and its party members nearby (NearbyPartyMembers,
     /// as the experience share). The other members' parts are granted on their loops (ShareLoot); the killer's part is returned.
     /// </summary>
-    internal List<(int ItemId, long Count)> ShareLootWithParty(List<(int ItemId, long Count)> items, long kinah)
+    internal List<(int ItemId, long Count)> ShareLootWithParty(List<(int ItemId, long Count)> items, long kinah, LootKill? kill = null)
     {
         var rule = options.Rules.LootRule;
         var members = rule == PartyLootRule.Killer || worldPlayer is null ? [] : NearbyPartyMembers();
@@ -84,21 +94,30 @@ public sealed partial class GameSession
         var shares = MonsterRewards.Split(kinah, everyone.Count);
         for (var i = 0; i < everyone.Count; i++)
             if (shares[i] > 0) parts[everyone[i]].Add((KinaItemId, shares[i]));
+        // With bad-luck protection every member nearby hears of the kill (its own dry count), even with an empty share.
         foreach (var member in members)
-            if (parts[member].Count > 0) member.Session.ShareLoot(parts[member]);
+            if (parts[member].Count > 0 || kill is not null) member.Session.ShareLoot(parts[member], kill);
         return parts[worldPlayer!];
     }
 
     /// <summary>Loot a party member's kill gave this player: granted on this player's own loop (its store, its messages).</summary>
-    public void ShareLoot(IReadOnlyList<(int ItemId, long Count)> items, CancellationToken ct = default) =>
-        _ = InvokeAsync(async now => (true, await GrantSharedLootAsync(items, now, ct)));
+    public void ShareLoot(IReadOnlyList<(int ItemId, long Count)> items, LootKill? kill = null, CancellationToken ct = default) =>
+        _ = InvokeAsync(async now => (true, await GrantSharedLootAsync(items, kill, now, ct)));
 
     /// <summary>Item and Kinah lines this player received from party members' kills.</summary>
     public long SharedLootReceived { get; private set; }
 
-    async Task<List<byte[]>> GrantSharedLootAsync(IReadOnlyList<(int ItemId, long Count)> items, long now, CancellationToken ct)
+    async Task<List<byte[]>> GrantSharedLootAsync(IReadOnlyList<(int ItemId, long Count)> items, LootKill? kill, long now, CancellationToken ct)
     {
-        if (items.Count == 0 || dead) return [];
+        if (dead) return [];
+        // Aion:Loot on this member's own loop: another class's weapon becomes this class's; this member's dry kills and guarantee.
+        if (options.Loot.ClassAware || kill is not null && options.Loot.BadLuckProtection)
+        {
+            var me = Looter();
+            if (options.Loot.ClassAware) items = items.Select(i => (me.Adjust(i.ItemId), i.Count)).ToList();
+            if (kill is not null && PityCounts(kill, me)) items = WithPity([.. items], kill, me);
+        }
+        if (items.Count == 0) return [];
         var replies = new List<byte[]>();
         if (Store is { } store && CharacterId is { } character)
         {
@@ -110,6 +129,51 @@ public sealed partial class GameSession
         SharedLootReceived += items.Count;
         return replies;
     }
+
+    /// <summary>This player as a looter (Aion:Loot): class, race and the equipment it already has (stored, worn, on the ground).</summary>
+    LootLooter Looter(LootRules? rules = null)
+    {
+        var owned = new HashSet<int>(storedItems.Values.Select(s => s.TemplateId));
+        owned.UnionWith(inventory.Values.Select(i => i.ItemId));
+        owned.UnionWith(drops.Values.Select(d => d.ItemId));
+        return new LootLooter(data, rules ?? options.Loot, className, profileRace, owned);
+    }
+
+    /// <summary>The key of this player's dry kills: the stored character, or this connection on development logins.</summary>
+    Guid PityKey => CharacterId ?? developmentPityKey;
+    readonly Guid developmentPityKey = Guid.NewGuid();
+
+    /// <summary>Whether bad-luck protection counts this kill: a counted rank, and a monster that can drop equipment at all.</summary>
+    bool PityCounts(LootKill kill, LootLooter? me) =>
+        me is not null && options.Loot.Counts(kill.SubType)
+        && (kill.Generic ? MonsterRewards.Embedded.HasFallback(kill.SubType, kill.Level) : LootTables.Embedded.CanDropEquipment(kill.NpcId, profileRace, me.IsEquipment));
+
+    /// <summary>
+    /// Bad-luck protection over this player's part of a kill: no equipment after PityKills dry kills adds one item for the class
+    /// (from the monster's own equipment packages, or its level band; always class-aware, avoiding what the player has when it
+    /// can); the dry count resets on any equipment, else grows.
+    /// </summary>
+    List<(int ItemId, long Count)> WithPity(List<(int ItemId, long Count)> items, LootKill kill, LootLooter me)
+    {
+        var got = items.Any(i => me.IsEquipment(i.ItemId));
+        if (!got && options.Loot.Book.Dry(PityKey, kill.NpcId) >= options.Loot.PityKills)
+        {
+            var sure = Looter(options.Loot with { ClassAware = true, AvoidDuplicates = true, ClassRerolls = Math.Max(options.Loot.ClassRerolls, LootRules.DefaultPityRerolls) });
+            var item = kill.Generic ? MonsterRewards.Embedded.GuaranteedFallback(kill.Level, rng, sure.Pick)
+                : LootTables.Embedded.GuaranteedEquipment(kill.NpcId, profileRace, rng, me.IsEquipment, sure.Pick);
+            if (item != 0)
+            {
+                items = [.. items, (item, 1)];
+                got = true;
+                PityDrops++;
+            }
+        }
+        options.Loot.Book.Record(PityKey, kill.NpcId, got);
+        return items;
+    }
+
+    /// <summary>Equipment items bad-luck protection guaranteed to this player (for checks).</summary>
+    public int PityDrops { get; private set; }
 
     /// <summary>Pet souls (and pets) are used as soon as they are acquired (Item.dat AutoUseWhenAcquire).</summary>
     async Task<List<byte[]>> AutoUseAsync(IEnumerable<int> itemIds, long now, CancellationToken ct)

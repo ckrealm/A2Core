@@ -305,6 +305,11 @@ public sealed class GameData
         profile is not null && classes.Classes.GetValueOrDefault(profile.Class)?.StarterWeapons.TryGetValue(
             profile.Race.ToString(System.Globalization.CultureInfo.InvariantCulture), out var weapon) == true ? weapon : null;
 
+    /// <summary>A class's weapon type and one of its starter weapons (any race), or null for classes without a weapon (Novice).</summary>
+    public (string WeaponType, int StarterWeapon)? ClassWeapon(string? className) =>
+        className is not null && classes.Classes.GetValueOrDefault(className) is { WeaponType: { Length: > 0 } type, StarterWeapons.Count: > 0 } c
+            && type != "None" ? (type, c.StarterWeapons.Values.Min()) : null;
+
     /// <summary>An equippable item's Item.dat summary, or null.</summary>
     public ItemInfo? Item(int? itemId) =>
         itemId is null ? null : items.GetValueOrDefault(itemId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));

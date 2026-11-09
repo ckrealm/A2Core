@@ -135,6 +135,13 @@ same members (all to the killer with `killer`). `Aion__Rules__FallbackLoot=false
 without a reward table in the client's data (about three in four) roll instead (tools/data/fallback-loot.json:
 equipment of the monster's level from tools/data/items.json, rebuilt by `tools/fallback_loot.py`).
 
+Equipment drops follow `Aion__Loot__*` (our own rules, all on by default; [docs/friends-server/LOOT.md](../../docs/friends-server/LOOT.md)):
+a weapon for another class is drawn again and then swapped for the looter's own (`ClassAware`, `ClassRerolls`), an item the
+looter already has is drawn again (`AvoidDuplicates`), and elite/hero kills that gave a character no equipment raise its
+equipment chance until one is guaranteed (`BadLuckProtection`, `DryKillBonus`, `PityKills`, `PityMonsters`). All off gives the
+loot of before. `tools/server_env.py` options: `--class-loot on|off`, `--loot-rerolls`, `--avoid-duplicate-loot on|off`,
+`--bad-luck-protection on|off`, `--dry-kill-bonus`, `--pity-kills`.
+
 ## Playerbots
 
 Off by default. With them on, a player types `//bot add <character>` in chat and one of their own other characters joins
