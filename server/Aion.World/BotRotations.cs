@@ -17,7 +17,8 @@ namespace Aion.World;
 /// <see cref="TargetDistanceAbove"/> (cm, gap closers), <see cref="EnemiesAtLeast"/> (monsters fighting the group within the area
 /// of the cast: around the bot for "self" areas, around the target otherwise), <see cref="After"/> (one of these skills was the
 /// bot's last accepted cast within <see cref="AfterWithinMs"/>, 3000 by default: combo chains), <see cref="AfterCritical"/> (one of the
-/// bot's hits was a critical within that window: crit-only skills) and <see cref="SelfMpBelow"/>. Target "tank": the group's tank
+/// bot's hits was a critical within that window: crit-only skills), <see cref="AfterBlock"/>, <see cref="AfterEvasion"/> and
+/// <see cref="AfterDodge"/> (the bot blocked or evaded a monster's hit, or dodged, within that window: GameSession.GuardHit) and <see cref="SelfMpBelow"/>. Target "tank": the group's tank
 /// (a tank bot, else the member most monsters attack).
 /// </summary>
 public sealed record BotCondition(
@@ -41,7 +42,10 @@ public sealed record BotCondition(
     [property: JsonPropertyName("enemies_at_least")] int? EnemiesAtLeast = null,
     [property: JsonPropertyName("after")] int[]? After = null,
     [property: JsonPropertyName("after_within_ms")] int? AfterWithinMs = null,
-    [property: JsonPropertyName("after_critical")] bool? AfterCritical = null)
+    [property: JsonPropertyName("after_critical")] bool? AfterCritical = null,
+    [property: JsonPropertyName("after_block")] bool? AfterBlock = null,
+    [property: JsonPropertyName("after_evasion")] bool? AfterEvasion = null,
+    [property: JsonPropertyName("after_dodge")] bool? AfterDodge = null)
 {
     public static BotCondition Enemy { get; } = new();
     public static readonly IReadOnlySet<string> SupportedTargets = new HashSet<string> { "enemy", "self", "leader", "ally", "tank", "dead_ally" };

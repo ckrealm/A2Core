@@ -135,13 +135,25 @@ class BotRotationTests(unittest.TestCase):
             {'skill': 11020000, 'level': 1, 'when': {'target': 'enemy', 'after': [17070000]}},          # a Cleric skill
             {'skill': 11260000, 'level': 16, 'when': {'target': 'self', 'enemies_at_least': 2}},        # enemy condition on self
             {'skill': 11020000, 'level': 1, 'area': 'moon', 'when': {'target': 'enemy'}},
-            {'skill': 11200000, 'level': 7, 'when': {'target': 'enemy'}}]}}}                             # skipped (block)
+            {'skill': 16330000, 'level': 7, 'when': {'target': 'enemy'}}]}}}                             # skipped (spirits)
         problems = bot_rotations.validate(bad, self.data)
         self.assertTrue(any('unknown position' in p for p in problems), problems)
         for i, text in enumerate(['does not interrupt', 'leaves nothing', 'not a Gladiator skill', 'enemy conditions',
                                   'area must be', 'is skipped']):
             with self.subTest(text):
                 self.assertTrue(any(p.startswith(f'Gladiator[{i}]') and text in p for p in problems), problems)
+
+    def test_block_evasion_and_dodge_procs_are_planned(self):
+        procs = {'Gladiator': {11200000: 'after_block', 11360000: 'after_dodge'},
+                 'Templar': {12270000: 'after_block', 12430000: 'after_dodge'},
+                 'Assassin': {13210000: 'after_evasion', 13360000: 'after_dodge'},
+                 'Chanter': {18150000: 'after_block', 18210000: 'after_dodge'}}
+        for name, skills in procs.items():
+            for sid, condition in skills.items():
+                with self.subTest(name=name, skill=sid):
+                    steps = self.steps(name, sid)
+                    self.assertTrue(steps and all(s['when'].get(condition) for s in steps))
+        self.assertEqual(set(bot_rotations.SKIPPED), {16330000, 16300000})
 
     def test_support_entries_come_from_skill_effects(self):
         cleric = self.tracked['classes']['Cleric']['rotation']

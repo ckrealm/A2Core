@@ -4,16 +4,8 @@
  "global_cooldown_ms": 1000,
  "tank_hate_multiplier": 3,
  "skipped": {
-  "11200000": "Ankle Slice: only after a successful block",
-  "11360000": "Rush Strike: only after a Dodge",
-  "12270000": "Debilitating Smash: only after a successful block",
-  "12430000": "Shield Rush: only after a Dodge",
-  "13210000": "Whirlwind Slice: only after a successful evasion",
-  "13360000": "Infiltrate: only after a Dodge",
   "16300000": "Elemental Fusion: needs Four Elements stacks from spirits (no spirits)",
-  "16330000": "Dimensional Control: fires when a spirit uses a skill (no spirits)",
-  "18150000": "Heat Wave Blow: only after a successful block",
-  "18210000": "Tremor Crush: only after a Dodge"
+  "16330000": "Dimensional Control: fires when a spirit uses a skill (no spirits)"
  },
  "classes": {
   "Gladiator": {
@@ -42,6 +34,24 @@
      "when": {
       "target": "enemy",
       "target_casting": true
+     }
+    },
+    {
+     "skill": 11360000,
+     "name": "Rush Strike",
+     "level": 10,
+     "when": {
+      "target": "enemy",
+      "after_dodge": true
+     }
+    },
+    {
+     "skill": 11200000,
+     "name": "Ankle Slice",
+     "level": 7,
+     "when": {
+      "target": "enemy",
+      "after_block": true
      }
     },
     {
@@ -274,6 +284,24 @@
      "when": {
       "target": "enemy",
       "target_casting": true
+     }
+    },
+    {
+     "skill": 12430000,
+     "name": "Shield Rush",
+     "level": 10,
+     "when": {
+      "target": "enemy",
+      "after_dodge": true
+     }
+    },
+    {
+     "skill": 12270000,
+     "name": "Debilitating Smash",
+     "level": 7,
+     "when": {
+      "target": "enemy",
+      "after_block": true
      }
     },
     {
@@ -533,6 +561,24 @@
      "when": {
       "target": "enemy",
       "target_distance_above": 500
+     }
+    },
+    {
+     "skill": 13360000,
+     "name": "Infiltrate",
+     "level": 10,
+     "when": {
+      "target": "enemy",
+      "after_dodge": true
+     }
+    },
+    {
+     "skill": 13210000,
+     "name": "Whirlwind Slice",
+     "level": 7,
+     "when": {
+      "target": "enemy",
+      "after_evasion": true
      }
     },
     {
@@ -2034,6 +2080,24 @@
      "when": {
       "target": "enemy",
       "target_distance_above": 500
+     }
+    },
+    {
+     "skill": 18210000,
+     "name": "Tremor Crush",
+     "level": 10,
+     "when": {
+      "target": "enemy",
+      "after_dodge": true
+     }
+    },
+    {
+     "skill": 18150000,
+     "name": "Heat Wave Blow",
+     "level": 7,
+     "when": {
+      "target": "enemy",
+      "after_block": true
      }
     },
     {

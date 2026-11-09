@@ -1979,6 +1979,11 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         if (!invincible.Sp) resources!.Sp -= cost.Sp;
         if (!invincible.Hp) resources!.Hp -= cost.Hp;
         actionUid = actionUid % 255 + 1;
+        if (dodging || IsDodge(skill))
+        {
+            LastDodgeAt = now;
+            dodgingUntil = now + DodgeEvadeMs;
+        }
         if (dodging)
         {
             // The request's location is already the dash vector (about 100 cm along the movement input, OBSERVED in the client's own
@@ -2207,6 +2212,46 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
     /// An NPC hit lands on the player: combat starts, HP drops (official 0x8d00 for the player's key).
     /// At HP 0 the player dies (see Die); invincible HP holds.
     /// </summary>
+    /// <summary>OURS: a blocked hit deals this share; the block chance is the weapon's Block stat / 1000 (Item.dat: Sword 200,
+    /// Greatsword 150, Staff 125, Dagger and Mace 50), at most <see cref="BlockCap"/>.</summary>
+    public const double BlockTaken = 0.5, BlockCap = 0.4;
+    /// <summary>OURS: the chance to evade a monster's hit outright (no evasion stat is extracted yet): leather classes more.</summary>
+    public static double EvasionChance(string? className) => className switch { "Assassin" => 0.12, "Ranger" => 0.10, _ => 0.05 };
+    /// <summary>OURS: a dodge (CombatDodge / NormalDodge) evades every monster hit that lands within this long of its start.</summary>
+    public const int DodgeEvadeMs = DodgeAbnormalMs + DodgeAbnormalOffMs;
+    long dodgingUntil;
+    /// <summary>A class's own Dodge (Skill.dat "Dodge", class base + 100: 11000100 Gladiator ... 18000100 Chanter) or NormalDodge.</summary>
+    public static bool IsDodge(int skill) => skill == NormalDodge || skill % 1_000_000 == 100 && skill / 1_000_000 is >= 11 and <= 18;
+    /// <summary>When this player last blocked, evaded or dodged (the bots' after-block/evasion/dodge skills).</summary>
+    public long LastBlockAt { get; private set; } = long.MinValue / 2;
+    public long LastEvadeAt { get; private set; } = long.MinValue / 2;
+    public long LastDodgeAt { get; private set; } = long.MinValue / 2;
+    public int Blocks { get; private set; }
+    public int Evasions { get; private set; }
+
+    /// <summary>
+    /// The player's guard against a monster's hit (NpcAi.Guard): a dodge in progress or the evasion roll takes none of it, a block
+    /// half; returns the damage taken.
+    /// </summary>
+    internal int GuardHit(int damage, long now)
+    {
+        if (resources is null || dead || damage <= 0) return damage;
+        if (now < dodgingUntil || rng.NextDouble() < EvasionChance(className))
+        {
+            LastEvadeAt = now;
+            Evasions++;
+            return 0;
+        }
+        var block = Math.Min(BlockCap, (data.Item(equippedWeapon)?.Stat("Block") ?? 0) / 1000.0);
+        if (block > 0 && rng.NextDouble() < block)
+        {
+            LastBlockAt = now;
+            Blocks++;
+            return Math.Max(1, (int)Math.Round(damage * BlockTaken));
+        }
+        return damage;
+    }
+
     internal List<byte[]> NpcHitsPlayer(int damage, long now, int killerKey = 0)
     {
         if (resources is null || dead) return [];
@@ -2978,6 +3023,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
             {
                 aiMap.AiTickAt = now + 50;
                 aiMap.Ai.DefenseOf ??= key => aiMap.Players.TryGetValue(key, out var p) ? p.Session.Defense : 0;
+                aiMap.Ai.Guard ??= (key, damage, at) => aiMap.Players.TryGetValue(key, out var p) ? p.Session.GuardHit(damage, at) : damage;
                 aiMap.BroadcastAll(aiMap.Ai.Tick(aiMap.Targets, aiMap.NpcVictims(), now, (key, damage) =>
                 {
                     if (aiMap.Players.TryGetValue(key, out var victim)) victim.Send(victim.Session.NpcHitsPlayer(damage, now, aiMap.Ai.LastAttacker));
@@ -2990,6 +3036,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         }
         else if (targets is not null && (ai.DefenseOf ??= _ => Defense) is not null)
         {
+            ai.Guard ??= (_, damage, at) => GuardHit(damage, at);
             replies.AddRange(Visible(ai.Tick(targets, invisible || dead || FriendlyToAll ? null : position, now, damage => NpcHitsPlayer(damage, now, ai.LastAttacker))));
             replies.AddRange(NpcKillsByNpcs(ai, now));
         }

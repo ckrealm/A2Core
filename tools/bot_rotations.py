@@ -19,8 +19,9 @@ How a class's list is built:
   * a heal-role bot only spends MP on damage while it has HEAL_ROLE_MP_FLOOR % left.
 
 Skills the bots never use, because the server has no event they need, are listed in SKIPPED with
-the reason (a block, an evasion, a Dodge just before, a spirit). Crit-only skills use
-`after_critical` (the bot's own hit was a critical lately, GameSession.LastCriticalAt). Staggered-only
+the reason (now only the Elementalist's spirit skills). Crit-only skills use `after_critical` (the
+bot's own hit was a critical lately, GameSession.LastCriticalAt); block, evasion and Dodge procs use
+`after_block`, `after_evasion` and `after_dodge` (GameSession.GuardHit, LastDodgeAt). Staggered-only
 skills use `target_stunned`: a stunned monster, or a boss whose stagger broke
 (GameSession.BossStaggerStuns).
 
@@ -76,7 +77,7 @@ FRIENDLY_TARGETS = {'self': {'self', 'friendly'}, 'ally': {'friendly'}, 'leader'
 CONDITIONS = {'target', 'target_hp_below', 'target_hp_above', 'self_hp_below', 'self_mp_above', 'self_mp_below', 'in_combat',
               'buff_missing', 'target_casting', 'target_stunned', 'target_slowed', 'target_elite', 'target_boss', 'target_on_self',
               'target_effect_missing', 'target_has', 'target_distance_above', 'enemies_at_least', 'after', 'after_within_ms',
-              'after_critical'}
+              'after_critical', 'after_block', 'after_evasion', 'after_dodge'}
 # Conditions that only make sense on an entry aimed at the fight's target.
 ENEMY_ONLY = {'target_casting', 'target_stunned', 'target_slowed', 'target_elite', 'target_boss', 'target_on_self',
               'target_effect_missing', 'target_has', 'target_distance_above', 'enemies_at_least'}
@@ -111,6 +112,8 @@ def E(skill, roles=None, area=None, filler=False, **when):
 PLAN = {
     'Gladiator': [
         E(11290000, target_casting=True),                                  # Mocking Blade: knockdown, the interrupt
+        E(11360000, after_dodge=True),                                     # Rush Strike: right after a Dodge
+        E(11200000, after_block=True),                                     # Ankle Slice: right after a block
         E(11190000, target_distance_above=500),                            # Leaping Slam: leap in from up to 20 m
         E(11100000),                                                       # Ruinous Blow: Prepare for Battle, early and on cooldown
         E(11300000, target_stunned=True, target_elite=True),               # Aerial Snare: keeps a knocked-down elite in the air
@@ -126,6 +129,8 @@ PLAN = {
     ],
     'Templar': [
         E(12100000, target_casting=True),                                  # Shield Smite: stun, the interrupt
+        E(12430000, after_dodge=True),                                     # Shield Rush: right after a Dodge
+        E(12270000, after_block=True),                                     # Debilitating Smash: right after a block
         E(12130000, roles=['tank'], target_on_self=False),                 # Poach: hook a monster off someone else (taunt)
         E(12090000, target_distance_above=600),                            # Punishment: the 20 m opener (Executor buff)
         E(12300000, target_stunned=True),                                  # Annihilate: on a stunned target
@@ -142,7 +147,9 @@ PLAN = {
     ],
     'Assassin': [
         E(13070000, target_casting=True),                                  # Shadowstrike: behind the target and stun
-        E(13070000, target_distance_above=500),                            # ... and the opener from up to 20 m
+        E(13070000, target_distance_above=500),
+        E(13360000, after_dodge=True),                                     # Infiltrate: right after a Dodge
+        E(13210000, after_evasion=True),                                   # Whirlwind Slice: right after an evasion                            # ... and the opener from up to 20 m
         E(13220000, target_stunned=True),                                  # Shadow Fall: knockdown on a stunned target
         E(13220000, after=[13070000, 13130000]),
         E(13340000, target_stunned=True),                                  # Storm Rampage: staggered targets only
@@ -216,6 +223,8 @@ PLAN = {
     'Chanter': [
         E(18060000, target_casting=True),                                  # Impactful Crush: stun, the interrupt
         E(18090000, target_distance_above=500),                            # Rushing Smash: charge in from up to 20 m
+        E(18210000, after_dodge=True),                                     # Tremor Crush: right after a Dodge
+        E(18150000, after_block=True),                                     # Heat Wave Blow: right after a block
         E(18100000, after=[18060000, 18290000]),                           # Dark Crush in its window
         E(18080000, target_stunned=True),                                  # Wave Blow: knockdown on a stunned target
         E(18300000, target_stunned=True),                                  # Gust Rampage: staggered targets only
@@ -230,18 +239,12 @@ PLAN = {
     ],
 }
 
-# Active skills the bots leave out, with the reason (the server has no such trigger yet).
+# Active skills the bots leave out, with the reason (the server has no such trigger yet). The block,
+# evasion and Dodge procs are in the plans: the server rolls blocks and evasions on monster hits and a
+# victim bot dodges a monster's special (GameSession.GuardHit, BotBrain.DodgeSpecial).
 SKIPPED = {
-    11200000: 'Ankle Slice: only after a successful block',
-    11360000: 'Rush Strike: only after a Dodge',
-    12270000: 'Debilitating Smash: only after a successful block',
-    12430000: 'Shield Rush: only after a Dodge',
-    13210000: 'Whirlwind Slice: only after a successful evasion',
-    13360000: 'Infiltrate: only after a Dodge',
     16330000: 'Dimensional Control: fires when a spirit uses a skill (no spirits)',
     16300000: 'Elemental Fusion: needs Four Elements stacks from spirits (no spirits)',
-    18150000: 'Heat Wave Blow: only after a successful block',
-    18210000: 'Tremor Crush: only after a Dodge',
 }
 
 

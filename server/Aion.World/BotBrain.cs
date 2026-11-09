@@ -115,10 +115,10 @@ public sealed class BotBrain(GameData data, GameSession bot, GameSession leader,
 
     /// <summary>
     /// Where to stand while a monster fighting the group winds up an area special that would reach the bot: straight away from
-    /// the monster, just outside its reach; where it stands when it is already just outside. Null when the bot is well clear or is
-    /// the special's victim.
+    /// the monster, just outside its reach; Hold when it is already just outside (it may still cast, but takes no step). Null when
+    /// the bot is well clear or is the special's victim.
     /// </summary>
-    Vector3d? Escape(Vector3d me, List<(Target Npc, GameSession Victim)> threats)
+    (Vector3d Spot, bool Hold)? Escape(Vector3d me, List<(Target Npc, GameSession Victim)> threats)
     {
         if (bot.SharedMap?.Ai is not { } ai) return null;
         foreach (var (npc, victim) in threats)
@@ -126,9 +126,37 @@ public sealed class BotBrain(GameData data, GameSession bot, GameSession leader,
             if (victim == bot || ai.WindingArea(npc) is not { } reach) continue;
             var d = Flat(me, npc.Position);
             if (d >= reach + EscapeMargin + 100) continue;
-            if (d >= reach + 50) return me;   // out of it: hold here (a melee bot would walk back in) until the special lands
+            if (d >= reach + 50) return (me, true);   // out of it: no steps (a melee bot would walk back in) until the special lands
             var (dx, dy) = d > 1 ? ((me.X - npc.Position.X) / d, (me.Y - npc.Position.Y) / d) : (Math.Cos(Slot), Math.Sin(Slot));
-            return new Vector3d(npc.Position.X + dx * (reach + EscapeMargin), npc.Position.Y + dy * (reach + EscapeMargin), me.Z);
+            return (new Vector3d(npc.Position.X + dx * (reach + EscapeMargin), npc.Position.Y + dy * (reach + EscapeMargin), me.Z), false);
+        }
+        return null;
+    }
+
+    /// <summary>A victim dodges a monster's special this long before it lands (ms, OURS; the dodge evades for GameSession.DodgeEvadeMs).</summary>
+    public const int DodgeLeadMs = 300;
+    public int Dodges { get; private set; }
+    (int Npc, long Due)? dodged;
+    /// <summary>The bot's class Dodge (each class has its own, GameSession.IsDodge), or null when it has not learned one.</summary>
+    public int? DodgeSkill => Enumerable.Range(11, 8).Select(c => c * 1_000_000 + 100).Where(bot.Knows).Cast<int?>().FirstOrDefault();
+
+    /// <summary>
+    /// The dodge request when the bot is the victim of a monster's special landing within <see cref="DodgeLeadMs"/> and it can
+    /// dodge (its class Dodge learned, SP, off cooldown); once per special. A short dash straight away from the monster.
+    /// </summary>
+    List<byte[]>? DodgeSpecial(Vector3d me, List<(Target Npc, GameSession Victim)> threats, long now)
+    {
+        if (bot.SharedMap?.Ai is not { } ai || DodgeSkill is not { } own || now < bot.CooldownUntil(own) || now < refused.GetValueOrDefault(own)) return null;
+        if (data.Skill(own) is not { } dodge || bot.Resource.Sp < dodge.Cost.Sp) return null;
+        foreach (var (npc, victim) in threats)
+        {
+            if (victim != bot || ai.SpecialDueAt(npc) is not { } due || due <= now || due - now > DodgeLeadMs || dodged == (npc.Key, due)) continue;
+            dodged = (npc.Key, due);
+            Dodges++;
+            var d = Math.Max(1, Flat(me, npc.Position));
+            var dash = new Vector3d(me.X + (me.X - npc.Position.X) / d * 100, me.Y + (me.Y - npc.Position.Y) / d * 100, me.Z);
+            uid = (byte)(uid % 255 + 1);
+            return [BotRequests.CastBegin(), BotRequests.Cast(own, bot.PlayerKey, yaw, dash, uid), BotRequests.CastEnd()];
         }
         return null;
     }
@@ -193,11 +221,20 @@ public sealed class BotBrain(GameData data, GameSession bot, GameSession leader,
         var group = Group();
         var threats = Threats(group, lead);
         // Boss mechanics first: out of an area special being wound up (unless the bot is its victim, who takes it anyway).
+        var hold = false;
         if (Escape(me, threats) is { } safe)
         {
-            Escapes++;
-            return MoveToward(me, safe, ArriveWithin / 2, now);
+            if (!safe.Hold)
+            {
+                Escapes++;
+                return MoveToward(me, safe.Spot, ArriveWithin / 2, now);
+            }
+            hold = true;
         }
+        // The victim of a special about to land dodges through it (a Dodge evades the hits during it, GameSession.GuardHit).
+        if (DodgeSpecial(me, threats, now) is { } dodge) return dodge;
+        // Held just outside an area special: casts from where the bot stands, no steps.
+        List<byte[]> MoveToward(Vector3d from, Vector3d to, double within, long at) => hold ? StopMoving(from, at) : this.MoveToward(from, to, within, at);
         // A monster on a non-tank bot: bring it to the group's tank bot (mod-playerbots' "flee to tank"), so the tank picks it up
         // and the monster is not dragged off to its leash.
         if (Role != "tank" && TankBot(group) is { WorldPosition: { } tankAt } && threats.Any(x => x.Victim == bot) && Flat(me, tankAt) > ToTankBeyond)
@@ -382,7 +419,11 @@ public sealed class BotBrain(GameData data, GameSession bot, GameSession leader,
             if (when.SelfHpBelow is { } selfBelow && hpMax > 0 && hp * 100.0 / hpMax >= selfBelow) continue;
             if (when.SelfMpAbove is { } mpAbove && mpMax > 0 && mp * 100.0 / mpMax <= mpAbove) continue;
             if (when.SelfMpBelow is { } mpBelow && mpMax > 0 && mp * 100.0 / mpMax >= mpBelow) continue;
-            if (when.AfterCritical == true && now - bot.LastCriticalAt > (when.AfterWithinMs ?? ComboWindowMs)) continue;
+            var window = when.AfterWithinMs ?? ComboWindowMs;
+            if (when.AfterCritical == true && now - bot.LastCriticalAt > window) continue;
+            if (when.AfterBlock == true && now - bot.LastBlockAt > window) continue;
+            if (when.AfterEvasion == true && now - bot.LastEvadeAt > window) continue;
+            if (when.AfterDodge == true && now - bot.LastDodgeAt > window) continue;
             if (when.After is { Length: > 0 } after && (lastAccepted is not { } last || !after.Contains(last.Skill) || now - last.At > (when.AfterWithinMs ?? ComboWindowMs))) continue;
             if (when.InCombat is { } combat && combat != fighting) continue;
             if (data.Skill(step.Skill) is not { } skill || mp < skill.Cost.Mp || sp < skill.Cost.Sp || hp <= skill.Cost.Hp) continue;

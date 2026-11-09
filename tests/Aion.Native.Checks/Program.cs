@@ -3535,6 +3535,39 @@ checks = 0;
     Check(reach is > 500 && stab.Brain!.Escapes > 0 && Apart3(stab.Session.WorldPosition!.Value, blast.Position) > reach,
           $"the Assassin steps out of the boss's area special ({Apart3(stab.Session.WorldPosition!.Value, blast.Position):F0} cm, reach {reach:F0})");
     Check(guard.Brain!.Escapes == 0, "the tank, its victim, holds its ground");
+    var heldAtEdge = stab.Session.WorldPosition!.Value;
+    await Run(20);
+    Check(Apart3(stab.Session.WorldPosition!.Value, heldAtEdge) < 1, "outside the area the Assassin takes no step back in until the special lands");
+
+    // Dodge: a special lands on the tank soon; the tank dodges just before it, then uses its after-Dodge skill (Shield Rush).
+    bool DodgeReady() => t >= guard.Session.CooldownUntil(12430000) && t >= guard.Session.CooldownUntil(guard.Brain.DodgeSkill!.Value)
+                         && t - guard.Session.LastDodgeAt > BotBrain.ComboWindowMs && rai.CastingSpecial(blast) is null;
+    // (Its own specials are called off meanwhile: each would draw a dodge and the Shield Rush after it.)
+    await Run(1000, () => { if (rai.CastingSpecial(blast) is not null) rai.Brains[blast.Key].Pending = null; return DodgeReady(); });
+    Check(DodgeReady(), "Shield Rush and the Dodge ready, no special on its way");
+    guard.Session.SetResource('S', guard.Session.Resource.SpMax);
+    var dodgesBefore = guard.Brain.Dodges;
+    var dueAt = t + 1000;
+    var landing = blast.Skills.Where(id => data.NpcSkill(id) is not null).Skip(1).First();
+    rai.Brains[blast.Key].Pending = new NpcAi.PendingHit(landing, data.NpcSkill(landing)!, 8, dueAt);
+    for (var k = 0; k < 40 && t <= dueAt + 100; k++)
+    {
+        await team.TickAsync(t += 50);
+        await lead.TickAsync(t);
+        foreach (var sess in team.All.Select(b => b.Session).Append(lead).Where(sess => !sess.Dead)) sess.SetResource('H', sess.Resource.HpMax);
+    }
+    Check(guard.Brain.Dodges == dodgesBefore + 1 && guard.Session.LastDodgeAt >= dueAt - BotBrain.DodgeLeadMs - 50 && guard.Session.LastDodgeAt < dueAt,
+          $"the tank dodges just before the special lands ({dueAt - guard.Session.LastDodgeAt} ms before)");
+    var dodgedAt = guard.Session.LastDodgeAt;
+    await Run(60, () => guard.Brain.CastLog.Any(c => c.Skill == 12430000 && c.At > dodgedAt));
+    Check(guard.Brain.CastLog.Any(c => c.Skill == 12430000 && c.At > dodgedAt && c.At - dodgedAt <= BotBrain.ComboWindowMs),
+          "then Shield Rush, its after-Dodge skill (after_dodge)");
+    // The dodge's evasion window (GameSession.DodgeEvadeMs) on the server side: every hit inside it is evaded, then they land again.
+    var evadeBase = guard.Session.Evasions;
+    guard.Session.SetResource('S', guard.Session.Resource.SpMax);
+    Check(await guard.Session.HandleAsync(Cast(guard.Brain.DodgeSkill!.Value, guard.Session.PlayerKey, guard.Session.WorldPosition!.Value), t += 1000) is [var dodgeReply, ..] && dodgeReply[3] == 0
+          && guard.Session.GuardHit(100, t + 10) == 0 && guard.Session.GuardHit(100, t + GameSession.DodgeEvadeMs - 10) == 0 && guard.Session.Evasions == evadeBase + 2,
+          "a Dodge evades every monster hit for its first half second");
     rai.Brains[blast.Key].Pending = null;
     rai.AreaSkills = BossAreaSkills.Embedded;
 
@@ -3562,6 +3595,11 @@ checks = 0;
     Check(team.All.Any(b => b.Brain!.AreaCasts > 0), "with two monsters on the group a melee bot casts an area skill around itself");
     await Run(2000, () => pair.a.Dead && pair.b.Dead);
     Check(pair.a.Dead && pair.b.Dead, "the party kills both");
+    // Blocks and evasions (GameSession.GuardHit): over these fights the tank blocked hits and someone evaded one; a blocked or
+    // evaded hit opens the after-block skill (Debilitating Smash for the Templar).
+    Check(guard.Session.Blocks > 0 && team.All.Sum(b => b.Session.Evasions) > 0,
+          $"monster hits are blocked ({guard.Session.Blocks}) and evaded ({team.All.Sum(b => b.Session.Evasions)})");
+    Check(guard.Brain!.CastLog.Any(c => c.Skill == 12270000), "the tank uses Debilitating Smash, its after-block skill (after_block)");
     lead.ExitSharedWorld();
     await team.OwnerLeftAsync(lead);
 }
