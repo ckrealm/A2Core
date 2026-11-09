@@ -2111,7 +2111,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         foreach (var target in chosen.Where(t => t.Hostile).ToList())
         {
             if (target.Dead) continue;
-            var hits = Combat.SkillHits(data, skill, className, level, equippedWeapon, target.Defense, rng, fixingBonus: BuffStat("FixingDamage") + DaevanionStat("FixingDamage"), skillLevel: CombatSkillLevel(skill));
+            var hits = Combat.SkillHits(data, skill, className, level, StatWeapon, target.Defense, rng, fixingBonus: BuffStat("FixingDamage") + DaevanionStat("FixingDamage"), skillLevel: CombatSkillLevel(skill));
             replies.AddRange(HitTarget(target, skill, hits, now));
         }
         return replies;
@@ -2306,13 +2306,18 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
     {
         dead = true;
         diving = false;
-        if (copy is { } dungeonCopy) dungeonCopy.Deaths++;
+        List<byte[]> limitNote = [];
+        if (copy is { } dungeonCopy)
+        {
+            dungeonCopy.Deaths++;
+            limitNote = HardModeDeath(dungeonCopy);
+        }
         reviveAt = now + ReviveDelayMs;
         diedAt = position;
         inCombat = false;
         var kill = GamePackets.Kill(playerKey, 0, killerKey, ServerId, "", dieType: 2);
         worldPlayer?.Map?.Broadcast(worldPlayer, [kill]);
-        return [.. ForceDismount(), .. ClearBuffs(), kill, GamePackets.CombatState(playerKey, false)];
+        return [.. ForceDismount(), .. ClearBuffs(), kill, GamePackets.CombatState(playerKey, false), .. limitNote];
     }
 
     /// <summary>
@@ -2351,6 +2356,9 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         dead = false;
         if (resources is null) return [];
         (resources.Hp, resources.Mp) = (resources.HpMax, resources.MpMax);
+        // A hard mode's revives used up: the respawn is outside (Aion:Dungeons:HardModeRevives). A resurrection in place
+        // (a Cleric's skill, a rebirth buff or item) keeps the player in.
+        if (!inPlace && OutOfRevives()) return [resources.Update(), .. LeaveInstance(now)];
         if (inPlace && diedAt is { } fell) return [resources.Update(), .. Teleport(worldMap, fell, now)];
         // Inside a dungeon: the running stage's revival point, else the dungeon's start (the reload keeps the events).
         var raceWord = profileRace == 2 ? "Dark" : "Light";
@@ -2371,6 +2379,20 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         inventory.Values.Where(i => i.Container == InventoryItem.Equipped).Select(i => data.Item(i.ItemId)).OfType<ItemInfo>();
 
     int EquipItemLevel() => inventory.Values.Where(i => i.Container == InventoryItem.Equipped).Sum(i => i.Detail?.ItemLevel ?? 0);
+
+    /// <summary>
+    /// The item whose weapon stats this character hits with (GameData.StatWeapon, OURS): the equipped weapon, or for a Brawler's
+    /// gauntlet a Greatsword of its gear level: the character level or the mean ItemLevel of the other worn items, the higher.
+    /// </summary>
+    int? StatWeapon
+    {
+        get
+        {
+            if (data.Item(equippedWeapon) is not { Category: "Gauntlet" }) return equippedWeapon;
+            var worn = inventory.Values.Where(i => i.Container == InventoryItem.Equipped && i.Slot != 1).Select(i => data.ItemLevel(i.ItemId)).ToList();
+            return data.StatWeapon(equippedWeapon, Math.Max(level, worn.Count == 0 ? 0 : (int)worn.Average()));
+        }
+    }
 
     /// <summary>The weapon in equip slot 1; development logins (no store) keep the class starter weapon.</summary>
     int? WeaponFromInventory() =>
@@ -2394,7 +2416,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         var (stats, hpMax) = StatSheet();
         int Of(int type) => stats.FirstOrDefault(s => s.Type == type).Value;
         var gear = EquippedItems().ToList();
-        var weapon = data.WeaponStatsOf(equippedWeapon);
+        var weapon = data.WeaponStatsOf(StatWeapon);
         var attack = (weapon.Min + weapon.Max) / 2.0 + data.BaseStats(className, level).GetValueOrDefault("FixingDamage")
             + gear.Sum(i => i.Stat("WeaponFixingDamage"));
         return data.Progression.CombatPower(new Dictionary<string, double>
@@ -2417,7 +2439,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         var basis = data.BaseStats(className, level);
         var hpMax = Math.Max(1, (basis.GetValueOrDefault("HPMax") is > 0 and var hp ? hp : GamePackets.SpawnHpMax) + gear.Sum(i => i.Stat("HPMax")) + EnchantStat("HPMax") + RideStat("HPMax")
             + BuffStat("HPMax") + BoardStat("HPMax") + TitleStat("HPMax") + DaevanionStat("HPMax"));
-        var weapon = data.WeaponStatsOf(equippedWeapon);
+        var weapon = data.WeaponStatsOf(StatWeapon);
         var stats = GamePackets.DefaultStats.Select(s => s.Type switch
         {
             31 => (s.Type, weapon.Max + EnchantStat("WeaponDamage")), 33 => (s.Type, weapon.Min + EnchantStat("WeaponMinDamage")),

@@ -214,6 +214,7 @@ public sealed class GameData
         this.mapBases = mapBases ?? [];
         this.mapPoints = mapPoints ?? [];
         this.devMenu = new Dictionary<string, string[]>(devMenu ?? [], StringComparer.OrdinalIgnoreCase);
+        gauntletLadder = new(BuildGauntletLadder);
     }
 
     static readonly Lazy<GameData> embedded = new(() => new GameData(
@@ -272,7 +273,21 @@ public sealed class GameData
     public int MaxLevel => classes.MaxLevel;
     public int ClampLevel(int level) => Math.Clamp(level, 1, classes.MaxLevel);
 
-    public StarterProfile? Profile(int creationId, int gender) => profiles.GetValueOrDefault($"{creationId}:{gender}");
+    /// <summary>
+    /// Aion:Rules:BrawlerModel "own" (set once at host startup): a Brawler (class Fighter) is sent with its CANDIDATE pc_id
+    /// 45-48. Off (default): it is sent with the Gladiator body of its race and gender, which the client surely draws.
+    /// </summary>
+    public static bool BrawlerOwnModel { get; set; }
+
+    /// <summary>The creation profile; a Brawler's pc_id follows <see cref="BrawlerOwnModel"/>.</summary>
+    public StarterProfile? Profile(int creationId, int gender)
+    {
+        var found = profiles.GetValueOrDefault($"{creationId}:{gender}");
+        if (found is not { Class: "Fighter" } || BrawlerOwnModel) return found;
+        // PCCreationInfo: creation 1 is the Light Gladiator, 9 the Dark one.
+        return profiles.GetValueOrDefault($"{(found.Race == 1 ? 1 : 9)}:{gender}") is { Class: "Gladiator" } gladiator
+            ? found with { PcId = gladiator.PcId } : found;
+    }
 
     /// <summary>
     /// Skills known at a level: (skill, highest skill level), sorted by skill ID. The recovered SkillAcquireData unlocks end at
@@ -320,6 +335,26 @@ public sealed class GameData
         Item(itemId) is { } item ? new WeaponStats(item.Stat("WeaponMinDamage"), item.Stat("WeaponDamage"), item.Stat("Critical"), item.Stat("WeaponAccuracy"))
         : itemId is not null && classes.WeaponStats.TryGetValue(itemId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture), out var stats)
             ? stats : new WeaponStats(0, 0, 0, 0);
+
+    /// <summary>
+    /// OURS (docs/friends-server/BRAWLER.md): the item whose weapon stats a weapon hits with. The 2.0.6.0 client has only two
+    /// level-1 gauntlets (Brawler is Korea-only), so a gauntlet hits like the Greatsword (the other two-handed melee weapon)
+    /// of the highest Item.dat ItemLevel at most <paramref name="gearLevel"/>, when that is stronger. Any other weapon is itself.
+    /// </summary>
+    public int? StatWeapon(int? itemId, int gearLevel) =>
+        Item(itemId) is { Category: "Gauntlet" } gauntlet && GauntletProxy(gearLevel) is { } proxy
+            && Item(proxy)!.Stat("WeaponDamage") > gauntlet.Stat("WeaponDamage") ? proxy : itemId;
+
+    /// <summary>The Greatsword a gauntlet hits like at a gear level (highest ItemLevel at most it, then highest damage), or null.</summary>
+    public int? GauntletProxy(int gearLevel) => gauntletLadder.Value
+        .LastOrDefault(e => e.Level <= gearLevel) is { Id: > 0 } found ? found.Id : null;
+
+    readonly Lazy<List<(int Level, int Id)>> gauntletLadder;
+
+    List<(int Level, int Id)> BuildGauntletLadder() => [.. items
+        .Where(kv => kv.Value.Category == "Greatsword" && int.TryParse(kv.Key, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _))
+        .OrderBy(kv => kv.Value.Level).ThenBy(kv => kv.Value.Stat("WeaponDamage")).ThenBy(kv => kv.Key, StringComparer.Ordinal)
+        .Select(kv => (kv.Value.Level, int.Parse(kv.Key, System.Globalization.CultureInfo.InvariantCulture)))];
 
     /// <summary>Item.dat ItemLevel (1 for unknown items), the equip level the client sums.</summary>
     public int ItemLevel(int itemId) => Item(itemId)?.Level ?? 1;
