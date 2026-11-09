@@ -17,8 +17,8 @@ Before this, every open-world monster respawned on the flat `Aion:Rules:RespawnS
 
 Gear grades in this client, from lowest to highest: Common, Rare, Epic (named "Legend" in the client data), Unique. In the client data the enhance cap is +5 for Common and Rare, +10 for Epic and +15 for Unique. Per the Aion 2 guides, higher grades also get more manastone slots and option rolls.
 
-- **One grade up**: a monster's equipment drop may become the next grade, with the same category, race and the nearest item level within 5. Common or Rare becomes Epic, and Epic becomes Unique. The chance depends on the monster: `UpgradeChanceNormal` 2%, `UpgradeChanceElite` 8%, `UpgradeChanceHero` 25% (named elites and bosses).
-- **Pre-enchanted**: each equipment piece looted from a monster (picked up, or shared through party or boss loot) may arrive enchanted. Chances are `EnchantLowChance` 25% for +1 to +3, `EnchantMidChance` 5% for +4 to +6, and `EnchantHighChance` 1% for +7 up to the item's max. The level never passes the item's cap.
+- **One grade up**: a monster's equipment drop may become the next grade, with the same category, race and the nearest item level within 5. Common or Rare becomes Epic, and Epic becomes Unique. The chance depends on the monster: `UpgradeChanceNormal` 2%, `UpgradeChanceElite` 6%, `UpgradeChanceHero` 12% (named elites and bosses).
+- **Pre-enchanted**: each equipment piece looted from a monster (picked up, or shared through party or boss loot) may arrive enchanted. Chances are `EnchantLowChance` 20% for +1 to +3, `EnchantMidChance` 4% for +4 to +6, and `EnchantHighChance` 0.5% for +7 up to the item's max. The level never passes the item's cap.
 - Anvil enchant odds are not changed here.
 
 ## Chat commands (every player)
@@ -45,8 +45,8 @@ Set these in `/etc/aion/game.env` (or as environment variables), for example `Ai
 | `Aion:Fun:BossAnnouncements` | true |
 | `Aion:Fun:SharedBossLoot` | true |
 | `Aion:Fun:LuckyDrops` | true |
-| `Aion:Fun:UpgradeChanceNormal` / `Elite` / `Hero` (percent) | 2 / 8 / 25 |
-| `Aion:Fun:EnchantLowChance` / `Mid` / `High` (percent) | 25 / 5 / 1 |
+| `Aion:Fun:UpgradeChanceNormal` / `Elite` / `Hero` (percent) | 2 / 6 / 12 |
+| `Aion:Fun:EnchantLowChance` / `Mid` / `High` (percent) | 20 / 4 / 0.5 |
 | `Aion:Fun:BuffCommand`, `BuffMinutes`, `BuffCooldownSeconds`, `BuffSkills` | true, 30, 0, six item skills |
 | `Aion:Fun:HubCommand`, `HubAbyssMinLevel` | true, 45 |
 | `Aion:Fun:DuelRestore` | true |

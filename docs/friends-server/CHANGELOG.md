@@ -34,7 +34,7 @@
 
 ## 2026-11-09 — fun features (`Aion:Fun`, docs/friends-server/FUN.md)
 - **Field bosses**: the 13 open-world field bosses respawn after a random 60–90 minutes (59 named elites: 10–15 minutes) instead of every 30 s. Server-wide notices when a boss is defeated and when it is back. Everyone who fought it rolls its loot.
-- **Lucky drops**: equipment drops may come one grade up (Common/Rare → Epic, Epic → Unique) at 2% from normal monsters, 8% from elites and 25% from named elites and bosses. Looted gear may arrive enchanted (25% +1..+3, 5% +4..+6, 1% +7..max).
+- **Lucky drops**: equipment drops may come one grade up (Common/Rare → Epic, Epic → Unique) at 2% from normal monsters, 6% from elites and 12% from named elites and bosses. Looted gear may arrive enchanted (20% +1..+3, 4% +4..+6, 0.5% +7..max).
 - **`/buff`** (food, drink and scroll buffs for 30 minutes) and **`/hub`** (teleports to the race's towns and the Abyss) for every player.
 - Duels give back the HP and MP they cost (never a free heal).
 - All OURS values, all configurable, all on by default. 28 checks.

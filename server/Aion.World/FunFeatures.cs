@@ -41,12 +41,12 @@ public sealed record FunOptions
     public bool LuckyDrops { get; init; } = true;
     /// <summary>Percent chance an equipment drop becomes the next grade (Common/Rare → Epic, Epic → Unique) by monster rank.</summary>
     public double UpgradeChanceNormal { get; init; } = 2;
-    public double UpgradeChanceElite { get; init; } = 8;
-    public double UpgradeChanceHero { get; init; } = 25;
+    public double UpgradeChanceElite { get; init; } = 6;
+    public double UpgradeChanceHero { get; init; } = 12;
     /// <summary>Percent chances a looted equipment piece arrives enchanted: +1..+3, +4..+6, +7..its max.</summary>
-    public double EnchantLowChance { get; init; } = 25;
-    public double EnchantMidChance { get; init; } = 5;
-    public double EnchantHighChance { get; init; } = 1;
+    public double EnchantLowChance { get; init; } = 20;
+    public double EnchantMidChance { get; init; } = 4;
+    public double EnchantHighChance { get; init; } = 0.5;
 
     /// <summary>
     /// The best of each buff group in the item data: drink (HP regen, abnormal resistance), food (damage +16, defense +160),
