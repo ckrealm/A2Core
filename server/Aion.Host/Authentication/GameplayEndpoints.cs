@@ -86,17 +86,18 @@ public static class GameplayEndpoints
             var players=new List<object>();
             foreach(var (e,v) in views.OrderBy(p => p.View.Name,StringComparer.OrdinalIgnoreCase))
             {
-                var stored=v.CharacterId is { } id ? (await game.AdminFindCharactersAsync(account,id.ToString(),ct)).FirstOrDefault() : null;
+                var stored=!e.Bot && v.CharacterId is { } id ? (await game.AdminFindCharactersAsync(account,id.ToString(),ct)).FirstOrDefault() : null;
                 players.Add(new {
                     v.Name, v.CharacterId, AccountName=stored?.AccountName, v.StaffRole, v.Level, v.ClassName, v.MapId, v.Area,
                     Position=v.Position is { } at ? new[]{Math.Round(at.X),Math.Round(at.Y),Math.Round(at.Z)} : null,
                     v.Hp, v.HpMax, v.Mp, v.MpMax, v.Invisible, v.PartyLeader, v.PartySize, InWorldSince=e.Since,
-                    Heading=Math.Round(v.Heading,1), v.Dead, v.SpeedRejects, v.CombatPower });
+                    Heading=Math.Round(v.Heading,1), v.Dead, v.SpeedRejects, v.CombatPower, e.Bot });
             }
             return Results.Ok(new {
                 ServerTime=DateTimeOffset.UtcNow,
                 StartedAt=new DateTimeOffset(System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime()),
                 Connections=presence?.Connections ?? 0,
+                People=entries.Count(e => !e.Bot), Bots=entries.Count(e => e.Bot),
                 Players=players });
         });
         // Minimap outlines: a map's subzone polygons (2D, cm), the same data that clears world-map fog.

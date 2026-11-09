@@ -72,7 +72,7 @@ public sealed class ServerControl(IStaffTools tools, IServiceProvider services, 
     {
         var count = 0;
         if (services.GetService<WorldPresence>() is not { } presence) return 0;
-        foreach (var entry in presence.All)
+        foreach (var entry in presence.Players)
         {
             if (entry.AccountId is { } account && await tools.IsStaffAsync(account, ct)) continue;
             _ = entry.Session.InvokeAsync(_ => (true, entry.Session.StaffKick(message.Length > 0 ? message : "Server maintenance")));

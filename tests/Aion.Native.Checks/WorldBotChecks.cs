@@ -76,6 +76,7 @@ static class WorldBotChecks
         for (var k = 0; k < 4; k++) await bots.TickAsync(t += 50);   // LoginsPerSecond 100: one every 10 ms, so one per tick here
         Check(bots.InWorld.Count == 4 && bots.InWorld.All(b => b.Session!.InWorld && b.Session.Bot && presence.Find(b.Name)?.Session == b.Session),
             "world bots log in (0x3613, 0x361b, 0x361f, 0x3622) and are in the world");
+        Check(presence.All.Count == 4 && presence.All.All(e => e.Bot) && presence.Players.Count == 0, "presence marks them as bots (dashboard counts, maintenance kicks skip them)");
         Check(bots.InWorld.All(b => b.Session!.MapId == b.Roam!.Ground!.Map && b.Roam.Ground.Race == b.Race
               && Math.Abs(b.Roam.Ground.Level - b.Level) <= options.LevelsBelow), "each is at a hunting ground of its race and level");
         Check(bots.InWorld.All(b => b.Session!.Defense > 1000 && b.Session.BotDefense > 0), "auto gear and Toughness raise their defense");
@@ -115,6 +116,18 @@ static class WorldBotChecks
         var goal = new GoTo(spot.Centre with { X = spot.Centre.X + 1500 });
         var filler = content.Spawn("Ranger", 2, 25, spot.Map, spot.Centre, _ => goal, name: "Filler");
         Check(content.All.Count == 1 && filler.Content && filler.State == WorldBot.Phase.Pending, "Spawn queues a content bot (no roster with Aion:WorldBots off)");
+        Check(Throws(() => new WorldBotOptions { Count = WorldBotOptions.MaxCount + 1 }.Validated()), "Aion:WorldBots:Count is capped");
+        var namedWorld = new SharedWorld(data);
+        var named = new WorldBots(data, new WorldBotOptions(), namedWorld, new GameSessionOptions { World = namedWorld })
+        {
+            NameTaken = (name, _) => Task.FromResult(name.Equals("Brandon", StringComparison.OrdinalIgnoreCase)),
+        };
+        var lookalike = named.Spawn("Cleric", 1, 20, spot.Map, spot.Centre, name: "Brandon");
+        await named.TickAsync(t + 50);
+        Check(lookalike.State == WorldBot.Phase.InWorld && !lookalike.Name.Equals("Brandon", StringComparison.OrdinalIgnoreCase) && lookalike.Session!.CharacterName == lookalike.Name,
+            $"a bot never takes a stored character's name ({lookalike.Name})");
+        named.Dismiss(lookalike);
+        await named.TickAsync(t + 100);
         await content.TickAsync(t += 50);
         Check(filler.State == WorldBot.Phase.InWorld && filler.Session!.ClassName == "Ranger" && filler.Session.Race == 2 && filler.Level == 25 && filler.Session.MapId == spot.Map
               && filler.Brain!.Wander == goal, "it enters at once at its spot with its class, race and level, and follows the caller's wander");
@@ -164,6 +177,46 @@ static class WorldBotChecks
         canned.Hear(new ChatHeard("WORLD", "Brandon", "kael?", 1));
         clock += 1000;
         Check(await canned.TickAsync(default) is [{ Name: "Kael", Text.Length: > 0 }], "without a model the bots use canned lines");
+        // Cost and privacy: call caps (overall, per player), one direct answer per player per gap, unknown race, what goes to a hosted model.
+        var capped = new FakeModel(_ => "model line");
+        var capOptions = chatOptions with { MaxCallsPerMinute = 3, MaxCallsPerPlayerPerMinute = 2, MinGapSeconds = 4 };
+        var capChat = new BotChatter(capOptions, () => speakers, capped, new Random(2), () => clock);
+        var spamLines = 0;
+        for (var i = 0; i < 20; i++)
+        {
+            capChat.Hear(new ChatHeard("WORLD", "Spammer", $"kael {i}", 1));
+            clock += 1000;
+            spamLines += (await capChat.TickAsync(default)).Count;
+        }
+        Check(capped.Calls.Count == 2 && spamLines <= 6, $"a player spamming a bot's name: one answer per MinGapSeconds, two model calls a minute ({spamLines} lines, {capped.Calls.Count} calls)");
+        for (var i = 0; i < 3; i++)
+        {
+            capChat.Hear(new ChatHeard("WHISPER", $"Friend{i}", "hi", 1, "kael", room, "NORMAL"));
+            clock += 1000;
+            await capChat.TickAsync(default);
+        }
+        Check(capped.Calls.Count == 3 && capChat.Said[^1].Text.Length > 0, "past MaxCallsPerMinute the bots answer with canned lines");
+        var unknown = new BotChatter(chatOptions, () => speakers, model, new Random(3), () => clock);
+        unknown.Hear(new ChatHeard("WORLD", "Dev", "kael mira hello", 0));
+        unknown.Hear(new ChatHeard("WHISPER", "Dev", "hi", 0, "kael", room, "NORMAL"));
+        clock += 2000;
+        Check((await unknown.TickAsync(default)).Count == 0, "a player whose race is unknown gets no bot chat (faction chat)");
+        Check(new BotChatOptions().SharesChat && new BotChatOptions { Endpoint = "http://192.168.1.20:11434/v1" }.SharesChat
+              && !new BotChatOptions { Endpoint = "https://api.groq.com/openai/v1" }.SharesChat && new BotChatOptions { Endpoint = "https://api.groq.com/openai/v1", ShareChat = true }.SharesChat,
+            "players' chat goes to a model on this machine or the LAN by default, not to a hosted one");
+        var hosted = new FakeModel(_ => "ok");
+        var hostedChat = new BotChatter(chatOptions with { Endpoint = "https://api.groq.com/openai/v1", ReplyChance = 1 }, () => speakers, hosted, new Random(5), () => clock);
+        hostedChat.Hear(new ChatHeard("WORLD", "Brandon", "my secret plans for tonight", 1));
+        clock += 5000;
+        var chanceAnswer = await hostedChat.TickAsync(default);
+        hostedChat.Hear(new ChatHeard("WORLD", "Brandon", "kael, you there?", 1));
+        clock += 5000;
+        await hostedChat.TickAsync(default);
+        Check(chanceAnswer.Count == 1 && hosted.Calls.Count == 1 && !hosted.Calls[0][1].Content.Contains("secret plans") && hosted.Calls[0][1].Content.Contains("kael, you there?"),
+            "with a hosted model only lines that address a bot leave the server (a chance answer to another line is canned)");
+        var printed = new BotChatOptions { ApiKey = "sk-very-secret" }.ToString();
+        Check(!printed.Contains("sk-very-secret") && printed.Contains("ApiKey = (set)"), "the options' printed form hides the API key");
+
         // The OpenAI-style call: POST {endpoint}/chat/completions with the model, the messages and the key; the first choice's text.
         string? sentUrl = null, sentBody = null, sentAuth = null;
         var http = new HttpClient(new FakeHttp((request, body) =>

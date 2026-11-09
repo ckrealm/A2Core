@@ -6,7 +6,11 @@ namespace Aion.World;
 /// <summary>Characters currently in the world on this host: name → game session (and its account, when authenticated).</summary>
 public sealed class WorldPresence
 {
-    public sealed record Entry(GameSession Session, Guid? AccountId, DateTimeOffset Since);
+    public sealed record Entry(GameSession Session, Guid? AccountId, DateTimeOffset Since)
+    {
+        /// <summary>A server-played character (playerbot or world bot), not a person.</summary>
+        public bool Bot => Session.Bot;
+    }
 
     readonly ConcurrentDictionary<string, Entry> byName = new(StringComparer.OrdinalIgnoreCase);
     int connections;
@@ -20,6 +24,8 @@ public sealed class WorldPresence
 
     /// <summary>Everyone in the world now (staff overview).</summary>
     public IReadOnlyList<Entry> All => [.. byName.Values];
+    /// <summary>The people in the world now (no bots).</summary>
+    public IReadOnlyList<Entry> Players => [.. byName.Values.Where(e => !e.Bot)];
 
     public void Leave(string name, GameSession session)
     {
