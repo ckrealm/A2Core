@@ -124,7 +124,11 @@ if [[ -z "$TS_IP" ]]; then
   [[ ${#FOUND[@]} -eq 1 ]] || { echo "Found ${#FOUND[@]} Tailscale (100.64.0.0/10) addresses (${FOUND[*]:-none}): pass --public-address (Windows: tailscale ip -4)." >&2; exit 1; }
   TS_IP="${FOUND[0]}"
 fi
-in_tailnet "$TS_IP" || { echo "$TS_IP is not a Tailscale address (100.64.0.0/10)" >&2; exit 2; }
+if ! in_tailnet "$TS_IP"; then
+  # OURS: a local-only test (no friends yet) may use the WSL address, reachable only from this PC.
+  [[ "$TS_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ && ! "$TS_IP" =~ ^127\. ]] || { echo "$TS_IP is not a usable IPv4 address" >&2; exit 2; }
+  echo "Warning: $TS_IP is not a Tailscale address (100.64.0.0/10); only clients on this PC can reach it (local test)." >&2
+fi
 echo "Players connect to $TS_IP"
 
 node_ok() {
