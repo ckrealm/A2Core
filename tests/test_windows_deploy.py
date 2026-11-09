@@ -250,6 +250,17 @@ class WslInstallTests(unittest.TestCase):
                                                  'Aion__Rules__Pvp=false'])
             self.assertEqual((config / 'game.env').stat().st_mode & 0o777, 0o640)
 
+    def test_reset_options(self):
+        with tempfile.TemporaryDirectory() as temp:
+            result = self.run_install(Path(temp), '--rates-only', '--reset-hour', '05', '--reset-day', 'wednesday',
+                                      '--reset-timezone', 'America/Chicago')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            lines = sorted((Path(temp) / 'game.env').read_text(encoding='utf-8').splitlines())
+            self.assertEqual(lines, ['Aion__Resets__Hour=5', 'Aion__Resets__TimeZone=America/Chicago', 'Aion__Resets__WeeklyDay=Wednesday'])
+            for args in (['--rates-only', '--reset-hour', '24'], ['--rates-only', '--reset-day', 'someday'],
+                         ['--rates-only', '--reset-timezone', 'a;b']):
+                self.assertEqual(self.run_install(Path(temp), *args).returncode, 2, args)
+
     def test_public_address_option(self):
         with tempfile.TemporaryDirectory() as temp:
             result = self.run_install(Path(temp), '--public-address', '100.64.0.1', '--rates-only', '--pvp', 'on')

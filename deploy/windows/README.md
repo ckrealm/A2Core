@@ -310,7 +310,10 @@ printed at the end of the install (`grep StaffPath /etc/aion/aion.env`); from th
 
 `wsl-install.sh` writes these options into `/etc/aion/game.env`, replacing only the keys you give (`deploy/linux/README.md`
 "Rates and rules" has their meaning): `--rates-profile official|accelerated`, `--exp-rate`, `--quest-exp-rate`,
-`--kinah-rate`, `--drop-rate` (0-100), `--max-players N` (0: no cap), `--respawn-seconds` (5-3600), `--pvp on|off`.
+`--kinah-rate`, `--drop-rate` (0-100), `--max-players N` (0: no cap), `--respawn-seconds` (5-3600), `--pvp on|off`,
+`--reset-hour N` (0-23, default 5), `--reset-day Wednesday`, `--reset-timezone ZONE`. Resets happen at 05:00 in
+**WSL's** time zone unless you give `--reset-timezone`. Check WSL's zone with `timedatectl` first
+([docs/friends-server/RESETS.md](../../docs/friends-server/RESETS.md)).
 To change them later without reinstalling:
 
 ```bash

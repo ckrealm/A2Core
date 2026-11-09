@@ -18,6 +18,8 @@ var seed = Enumerable.Range(0, 20).Select(i => (byte)i).ToArray();
 var key = Enumerable.Range(0, 32).Select(i => (byte)i).ToArray();
 byte[] Seeds(int n) => seed[..n];
 var checks = 0;
+// Every daily/weekly reset follows Aion:Resets (host local zone by default): the checks pin a UTC clock, 05:00, weeks from Wednesday.
+ResetClock.Current = ResetClock.Utc();
 var built = new Dictionary<string, byte[]>
 {
     ["varint"] = [.. new long[] { 0, 1, 127, 128, 300, 16384, 0xFFFFFFFF }.SelectMany(NativeVarint.Encode)],
@@ -1536,8 +1538,10 @@ Check(limitedOpen.Single().SequenceEqual(new PacketWriter().U16(0x8c01).U16(0).V
       "the shop opens with what was bought of its limited goods (0x8c01 map)");
 Check((await staffSession.HandleAsync(new PacketWriter().U16(0x8c02).Varint(1).Varint((uint)limitedMerchant.Key).Varint(1).I32(110019901).I32(1).ToArray(), Now))[0][2] == 3,
       "buying past the limit is refused (result 3)");
-Check(ShopTables.Period(1, DateTimeOffset.Parse("2026-10-16T06:59:00Z")) == "2026-10-15" && ShopTables.Period(1, DateTimeOffset.Parse("2026-10-16T07:00:00Z")) == "2026-10-16"
-      && ShopTables.Period(2, DateTimeOffset.Parse("2026-10-16T12:00:00Z")) == "w2026-10-14", "limits reset at 07:00 UTC, weekly from Wednesday");
+Check(ShopTables.Period(1, DateTimeOffset.Parse("2026-10-16T04:59:00Z")) == "2026-10-15" && ShopTables.Period(1, DateTimeOffset.Parse("2026-10-16T05:00:00Z")) == "2026-10-16"
+      && ShopTables.Period(2, DateTimeOffset.Parse("2026-10-16T12:00:00Z")) == "w2026-10-14" && ShopTables.Period(2, DateTimeOffset.Parse("2026-10-14T04:59:00Z")) == "w2026-10-07"
+      && ShopTables.Period(3, DateTimeOffset.Parse("2026-11-01T04:59:00Z")) == "2026-10" && ShopTables.Period(3, DateTimeOffset.Parse("2026-11-01T05:00:00Z")) == "2026-11",
+      "limits follow the shared reset clock (Aion:Resets: 05:00 here in UTC), weekly from Wednesday 05:00, monthly from day 1 05:00");
 // Enchanting (0x5622 -> 0x5623): the starter sword goes +0 -> +1 for 125 Kina and 5 enchant coins (Enchant_Common_1);
 // the item update carries the level; at +5 (the Common maximum) the attempt is refused.
 staffStore.Items.AddRange([Stored(110260001, 1, "bag", null, 60), Stored(930100023, 100, "bag", null, 61)]);
@@ -3212,6 +3216,64 @@ checks = 0;
     Check(keepWin.Result == 0 && keepWin.Level == 6 && keepWin.Kina == 10_000_000 - runeStep.Kina, "KeepMaterialsOnFail: a success pays the table's cost");
 }
 Console.WriteLine($"{checks} enchant odds checks passed (Aion:Enchant multipliers, no level loss, kept materials).");
+
+// ---------- Resets (Aion:Resets, OURS): one clock for every daily, weekly and monthly reset ----------
+checks = 0;
+{
+    static long At(string utc) => DateTimeOffset.Parse(utc, System.Globalization.CultureInfo.InvariantCulture).ToUnixTimeMilliseconds();
+    var fresh = new ResetClock();
+    Check(fresh.Hour == 5 && fresh.WeeklyDay == DayOfWeek.Wednesday && fresh.TimeZone == "" && fresh.Validated().Zone == TimeZoneInfo.Local,
+          "Aion:Resets defaults: 05:00, weeks from Wednesday, the host's local zone");
+    var utc = ResetClock.Utc();
+    Check(utc.DayKey(At("2026-11-11T04:59:59Z")) == "2026-11-10" && utc.DayKey(At("2026-11-11T05:00:00Z")) == "2026-11-11"
+          && utc.DayStart(At("2026-11-11T04:59:59Z")) == At("2026-11-10T05:00:00Z") && utc.NextDayStart(At("2026-11-11T04:59:59Z")) == At("2026-11-11T05:00:00Z"),
+          "the day turns at 05:00, not at midnight");
+    Check(utc.WeekKey(At("2026-11-11T04:59:59Z")) == "w2026-11-04" && utc.WeekKey(At("2026-11-11T05:00:00Z")) == "w2026-11-11"
+          && utc.WeekStart(At("2026-11-15T12:00:00Z")) == At("2026-11-11T05:00:00Z") && utc.NextWeekStart(At("2026-11-15T12:00:00Z")) == At("2026-11-18T05:00:00Z"),
+          "the week turns on Wednesday at 05:00 (Tuesday 04:59 the next week has not started)");
+    Check(utc.MonthKey(At("2026-12-01T04:59:00Z")) == "2026-11" && utc.MonthStart(At("2026-12-01T05:00:00Z")) == At("2026-12-01T05:00:00Z"),
+          "the month turns on day 1 at 05:00");
+    Check((utc with { WeeklyDay = DayOfWeek.Monday }).WeekKey(At("2026-11-11T12:00:00Z")) == "w2026-11-09"
+          && ResetClock.Utc(0).DayKey(At("2026-11-11T00:00:00Z")) == "2026-11-11", "the weekly day and the hour are settings");
+    Check(new ResetClock { TimeZone = "UTC" }.Validated().DayStart(At("2026-11-11T12:00:00Z")) == At("2026-11-11T05:00:00Z"), "an explicit TimeZone is read (UTC)");
+    foreach (var bad in new[] { new ResetClock { Hour = 24 }, new ResetClock { Hour = -1 }, new ResetClock { WeeklyDay = (DayOfWeek)9 }, new ResetClock { TimeZone = "Not/A_Zone" } })
+    {
+        var badRefused = false;
+        try { bad.Validated(); } catch (InvalidOperationException) { badRefused = true; }
+        Check(badRefused, "an invalid Aion:Resets value stops the host at startup");
+    }
+    // A zone with daylight saving time (when this machine has the tz database): 05:00 local is 10:00 UTC in winter, 09:00 in summer.
+    TimeZoneInfo? eastern = null;
+    try { eastern = TimeZoneInfo.FindSystemTimeZoneById("America/New_York"); } catch (TimeZoneNotFoundException) { } catch (InvalidTimeZoneException) { }
+    if (eastern is not null)
+    {
+        var ny = new ResetClock { TimeZone = "America/New_York" }.Validated();
+        Check(ny.DayStart(At("2026-03-07T12:00:00Z")) == At("2026-03-07T10:00:00Z") && ny.DayStart(At("2026-03-08T12:00:00Z")) == At("2026-03-08T09:00:00Z")
+              && ny.DayKey(At("2026-03-08T08:59:00Z")) == "2026-03-07" && ny.DayStart(At("2026-11-01T12:00:00Z")) == At("2026-11-01T10:00:00Z"),
+              "in a daylight-saving zone the reset stays at 05:00 local across the clock changes");
+    }
+    // The sharedHour clock drives the dungeon day (Aion:Dungeons:ResetHour unset), the mission cycles, the battle pass week,
+    // the shop periods and the collection book; Aion:Dungeons:ResetHour still overrides the hour for entry counts.
+    var sharedHour = new DungeonOptions { EntryLimits = true, Zone = TimeZoneInfo.Utc };
+    Check(sharedHour.EffectiveResetHour == 5 && sharedHour.Period(At("2026-11-11T04:59:00Z")) == "2026-11-10" && sharedHour.Period(At("2026-11-11T05:00:00Z")) == "2026-11-11"
+          && (sharedHour with { ResetHour = 9 }).Period(At("2026-11-11T08:59:00Z")) == "2026-11-10", "dungeon entry days follow the sharedHour hour unless Aion:Dungeons:ResetHour is set");
+    var before = ResetClock.Current;
+    ResetClock.Current = ResetClock.Utc(7, DayOfWeek.Friday);
+    Check(sharedHour.Period(At("2026-11-11T06:59:00Z")) == "2026-11-10" && sharedHour.ToString().Contains("reset at 07:00")
+          && ShopTables.Period(2, DateTimeOffset.Parse("2026-11-11T12:00:00Z")) == "w2026-11-06", "changing Aion:Resets moves the dungeon day and the shop week with it");
+    ResetClock.Current = before;
+    Check(GameSession.CycleStart(1, At("2026-11-11T04:59:00Z")) == At("2026-11-10T05:00:00Z") && GameSession.CycleStart(2, At("2026-11-11T04:59:00Z")) == At("2026-11-04T05:00:00Z")
+          && GameSession.CycleStart(2, At("2026-11-11T05:00:00Z")) == At("2026-11-11T05:00:00Z"),
+          "daily missions and attendance turn at 05:00, weekly missions on Wednesday 05:00 (were UTC midnight and Monday)");
+    var resetBook = CollectionTables.Embedded;
+    var season = resetBook.Window.FromMs;   // Wednesday 2026-07-15 07:00 UTC
+    Check(resetBook.At(season) == (0, 1, 0) && resetBook.At(At("2026-07-16T04:59:00Z")) == (0, 1, 0) && resetBook.At(At("2026-07-16T05:00:00Z")) == (1, 1, 1)
+          && resetBook.At(At("2026-07-22T05:00:00Z")) == (7, 2, 0) && resetBook.At(season - 1) == (-1, -1, -1),
+          "the collection book's days and weeks turn with the clock (a new day at 05:00, a new week on Wednesday)");
+    var daily = resetBook.Open(1, At("2026-10-13T15:00:00Z")).First(o => o.Collection.Kind == 1);
+    Check(daily.From == At("2026-10-13T05:00:00Z") && daily.To == At("2026-10-14T05:00:00Z") - 1, "a daily collection's window is the reset day");
+}
+Console.WriteLine($"{checks} reset clock checks passed (Aion:Resets: missions, attendance, battle pass, shop limits, collections, dungeon entries).");
 
 // ---------- Playerbots (docs/PLAYERBOTS.md): sessions without a connection, driven by BotBrain ----------
 checks = 0;

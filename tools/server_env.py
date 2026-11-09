@@ -108,8 +108,8 @@ def environment(args, credentials):
 # Rates and host switches (OURS: the server owner's choice). Each is written only when given, so the host's defaults
 # (official rates, PvP on, 30 s respawn, round-robin party loot, fallback loot on, no player cap, no dungeon entry limits,
 # untracked objectives done after 30 s, enchanting at the friends-server odds: chance x2, correction x2, no level lost,
-# materials spent, small-group dungeon scaling on: -10% HP / -7% damage per member short of 4, at least 70% / 80%) apply
-# otherwise.
+# materials spent, small-group dungeon scaling on: -10% HP / -7% damage per member short of 4, at least 70% / 80%,
+# resets daily at 05:00 host time and weekly on Wednesday) apply otherwise.
 GAMEPLAY = {
     'rates_profile': 'Aion__Rates__Profile',
     'exp_rate': 'Aion__Rates__Experience',
@@ -134,8 +134,12 @@ GAMEPLAY = {
     'scaling_damage_percent': 'Aion__DungeonScaling__DamagePercentPerMissing',
     'scaling_min_hp': 'Aion__DungeonScaling__MinHpPercent',
     'scaling_min_damage': 'Aion__DungeonScaling__MinDamagePercent',
+    'reset_hour': 'Aion__Resets__Hour',
+    'reset_day': 'Aion__Resets__WeeklyDay',
+    'reset_timezone': 'Aion__Resets__TimeZone',
 }
 ON_OFF = ('pvp', 'fallback_loot', 'dungeon_limits', 'dungeon_scaling', 'enchant_no_downgrade', 'enchant_keep_materials')
+DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
 
 def gameplay(args):
@@ -208,7 +212,8 @@ def main(argv=None):
     dungeons.add_argument('--dungeon-entries', type=int, help='entries a day per limited dungeon (default 3; 0 no limit)')
     dungeons.add_argument('--dungeon-entry', type=dungeon_entry, action='append', metavar='DUNGEON=N',
                           help='entries a day for one dungeon (Dungeon.dat id or name; 0 no limit); repeatable')
-    dungeons.add_argument('--dungeon-reset-hour', type=int, help='server local hour the daily counts reset (0-23, default 9)')
+    dungeons.add_argument('--dungeon-reset-hour', type=int,
+                          help='hour the daily entry counts reset (0-23; default: the shared --reset-hour)')
     dungeons.add_argument('--untracked-objective-seconds', type=int,
                           help='map-event objectives the server cannot follow count as done after this long (1-3600, default 30)')
     enchant = parser.add_argument_group('enchanting (unset: the friends-server odds; 1, 1, off, off is official)')
@@ -226,6 +231,10 @@ def main(argv=None):
     dungeons.add_argument('--scaling-damage-percent', type=int, help='monster damage lost per missing member (0-50, default 7)')
     dungeons.add_argument('--scaling-min-hp', type=int, help='lowest monster HP percent (10-100, default 70)')
     dungeons.add_argument('--scaling-min-damage', type=int, help='lowest monster damage percent (10-100, default 80)')
+    resets = parser.add_argument_group('resets (unset: daily at 05:00 host time, weekly on Wednesday)')
+    resets.add_argument('--reset-hour', type=int, help='hour every daily and weekly reset happens (0-23, default 5)')
+    resets.add_argument('--reset-day', type=str.capitalize, choices=DAYS, help='day of the weekly resets (default Wednesday)')
+    resets.add_argument('--reset-timezone', help='time zone of the reset hour (IANA id such as America/Chicago; default the host zone)')
     parser.add_argument('--geolocation', default='59.9139,10.7522,NO', metavar='LAT,LON,CC',
                         help="server location for the region screen ('off' to omit)")
     args = parser.parse_args(argv)
@@ -245,6 +254,11 @@ def main(argv=None):
         parser.error('--dungeon-entries must be between 0 and 1000')
     if args.dungeon_reset_hour is not None and not 0 <= args.dungeon_reset_hour <= 23:
         parser.error('--dungeon-reset-hour must be between 0 and 23')
+    if args.reset_hour is not None and not 0 <= args.reset_hour <= 23:
+        parser.error('--reset-hour must be between 0 and 23')
+    if args.reset_timezone is not None and (not args.reset_timezone or len(args.reset_timezone) > 64
+                                            or not all(c.isalnum() or c in '_+-./' for c in args.reset_timezone)):
+        parser.error('--reset-timezone must be a zone id such as America/Chicago')
     if args.untracked_objective_seconds is not None and not 1 <= args.untracked_objective_seconds <= 3600:
         parser.error('--untracked-objective-seconds must be between 1 and 3600')
     if args.enchant_success is not None and args.enchant_success <= 0:

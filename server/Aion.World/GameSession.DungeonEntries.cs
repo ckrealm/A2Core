@@ -6,7 +6,7 @@ namespace Aion.World;
 // (EnterDungeon: refused like the MapEntrance rules, nothing sent) and counted once the copy is joined at the map load,
 // once per copy: going back into the party copy already counted is free, a fresh copy counts again. Counts are kept per
 // character, dungeon and counting day (game.character_dungeon_entries, migration 039); a new day starts at
-// Aion:Dungeons:ResetHour. Staff are neither limited nor counted.
+// the shared reset hour (Aion:Resets, ResetClock; Aion:Dungeons:ResetHour overrides it). Staff are neither limited nor counted.
 public sealed partial class GameSession
 {
     readonly Dictionary<int, int> dungeonEntries = [];
@@ -51,7 +51,7 @@ public sealed partial class GameSession
         if (joining is not null && ReferenceEquals(joining, countedCopy)) return true;   // back into the copy already counted
         RollEntryPeriod(now);
         var used = dungeonEntries.GetValueOrDefault(dungeonId);
-        if (used >= limit) { why = $"{used} of {limit} daily entries used; the count resets at {DungeonRules.ResetHour:00}:00"; return false; }
+        if (used >= limit) { why = $"{used} of {limit} daily entries used; the count resets at {DungeonRules.EffectiveResetHour:00}:00"; return false; }
         pendingEntryCount = dungeonId;
         return true;
     }

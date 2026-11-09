@@ -51,29 +51,35 @@ public sealed class CollectionTables
     public IReadOnlyList<ListEntry> ListsOf(string group) => listsByGroup.GetValueOrDefault(group) ?? [];
     public ListEntry? List(string group, int listId) => ListsOf(group).FirstOrDefault(l => l.Id == listId);
 
-    const long DayMs = 86_400_000L;
-
-    /// <summary>The season day index (0-based) and week index (1-based) of a moment; -1 outside the season.</summary>
-    public (int Day, int Week) At(long nowMs)
+    /// <summary>
+    /// The season day index (0-based), week index (1-based) and day of that week (0-based) of a moment; -1 outside the season.
+    /// Days and weeks turn with the shared reset clock (Aion:Resets, OURS: 05:00 host time, weeks from Wednesday; the season
+    /// starts on a Wednesday at the official 07:00 UTC, its reset_hour_utc, which the server no longer reads).
+    /// </summary>
+    public (int Day, int Week, int WeekDay) At(long nowMs, ResetClock? clock = null)
     {
-        if (nowMs < file.Season.FromMs || nowMs > file.Season.ToMs) return (-1, -1);
-        var day = (int)((nowMs - file.Season.FromMs) / DayMs);
-        return (day, day / 7 + 1);
+        clock ??= ResetClock.Current;
+        if (nowMs < file.Season.FromMs || nowMs > file.Season.ToMs) return (-1, -1, -1);
+        var today = clock.Day(nowMs);
+        var week = clock.Week(nowMs);
+        return (today.DayNumber - clock.Day(file.Season.FromMs).DayNumber, (week.DayNumber - clock.Week(file.Season.FromMs).DayNumber) / 7 + 1, today.DayNumber - week.DayNumber);
     }
 
     /// <summary>The collections open now for a race with their windows: today's daily, this week's weekly, the season-long ones.</summary>
-    public List<(Collection Collection, long From, long To)> Open(int race, long nowMs)
+    public List<(Collection Collection, long From, long To)> Open(int race, long nowMs, ResetClock? clock = null)
     {
-        var (day, week) = At(nowMs);
+        clock ??= ResetClock.Current;
+        var (day, week, weekDay) = At(nowMs, clock);
         var open = new List<(Collection, long, long)>();
         if (day < 0) return open;
-        var dayStart = file.Season.FromMs + day * DayMs;
-        var weekStart = file.Season.FromMs + (week - 1) * 7 * DayMs;
+        long Clamp(long ms) => Math.Clamp(ms, file.Season.FromMs, file.Season.ToMs);
+        var (dayFrom, dayTo) = (Clamp(clock.DayStart(nowMs)), Clamp(clock.NextDayStart(nowMs) - 1));
+        var (weekFrom, weekTo) = (Clamp(clock.WeekStart(nowMs)), Clamp(clock.NextWeekStart(nowMs) - 1));
         foreach (var c in byId.Values.Where(c => c.Race == 0 || c.Race == race))
         {
             if (!c.Dated) open.Add((c, file.Season.FromMs, file.Season.ToMs));
-            else if (c.Kind == 1 && c.Week == week && c.Day == day % 7 + 1) open.Add((c, dayStart, dayStart + DayMs - 1));
-            else if (c.Kind == 2 && c.Week == week) open.Add((c, weekStart, weekStart + 7 * DayMs - 1));
+            else if (c.Kind == 1 && c.Week == week && c.Day == weekDay + 1) open.Add((c, dayFrom, dayTo));
+            else if (c.Kind == 2 && c.Week == week) open.Add((c, weekFrom, weekTo));
         }
         return open.OrderBy(o => o.Item1.Tab).ToList();
     }

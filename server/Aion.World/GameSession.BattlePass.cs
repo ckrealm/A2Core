@@ -43,7 +43,7 @@ public sealed partial class GameSession
         {
             var free = group.Passes.FirstOrDefault(p => p.Length >= 3 && p[2] == 0) ?? group.Passes.FirstOrDefault();
             var total = free is null ? 0 : AchievementCount((int)free[1]);
-            w.I32(group.Id).I32(total).I32(total).I64(CycleStart(2, now) + 7 * 86_400_000L).I64(0).Varint((uint)group.Passes.Length);
+            w.I32(group.Id).I32(total).I32(total).I64(ResetClock.Current.NextWeekStart(now)).I64(0).Varint((uint)group.Passes.Length);
             foreach (var pass in group.Passes) w.I32((int)pass[0]);
             w.Varint((uint)group.Passes.Length);
             foreach (var pass in group.Passes) w.I32((int)pass[0]).U8((byte)(achievements.GetValueOrDefault((int)pass[1])?.RewardedStep ?? 0));

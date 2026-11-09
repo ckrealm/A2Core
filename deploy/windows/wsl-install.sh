@@ -27,6 +27,8 @@ Options:
   --certificate FILE --key FILE   account-site certificate (tailscale cert); or --self-signed
   --rates-profile official|accelerated, --exp-rate N, --quest-exp-rate N, --kinah-rate N, --drop-rate N (0-100)
   --max-players N (0: no cap), --respawn-seconds N (5-3600), --pvp on|off
+  --reset-hour N (0-23, default 5), --reset-day Wednesday (weekly resets), --reset-timezone ZONE (IANA id, e.g.
+                               America/Chicago; default this WSL's zone, see docs/friends-server/RESETS.md)
   --rates-only                 write game.env and restart aion-host; no install
   --skip-packages              do not run apt-get
 EOF
@@ -62,6 +64,15 @@ while [[ $# -gt 0 ]]; do
     --pvp)
       [[ "$2" == on || "$2" == off ]] || { echo "--pvp is on or off" >&2; exit 2; }
       if [[ "$2" == on ]]; then GAME[Aion__Rules__Pvp]=true; else GAME[Aion__Rules__Pvp]=false; fi; shift 2 ;;
+    --reset-hour)
+      if ! [[ "$2" =~ ^[0-9]{1,2}$ ]] || ((10#$2 > 23)); then echo "--reset-hour must be 0-23" >&2; exit 2; fi
+      GAME[Aion__Resets__Hour]="$((10#$2))"; shift 2 ;;
+    --reset-day)
+      [[ "${2,,}" =~ ^(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$ ]] || { echo "--reset-day is a day name (Wednesday)" >&2; exit 2; }
+      day="${2,,}"; GAME[Aion__Resets__WeeklyDay]="${day^}"; shift 2 ;;
+    --reset-timezone)
+      [[ "$2" =~ ^[A-Za-z0-9_+./-]{1,64}$ ]] || { echo "--reset-timezone is a zone id such as America/Chicago" >&2; exit 2; }
+      GAME[Aion__Resets__TimeZone]="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option $1" >&2; exit 2 ;;
   esac
@@ -91,7 +102,7 @@ write_game_env() {
   chmod 640 "$tmp"
   mv -- "$tmp" "$file"
   echo "Rates and rules in $file:"
-  grep -E '^Aion__(Rates|Rules|Native__MaxPlayers)' "$file" | sed 's/^/  /'
+  grep -E '^Aion__(Rates|Rules|Resets|Native__MaxPlayers)' "$file" | sed 's/^/  /'
 }
 
 if [[ $RATES_ONLY -eq 1 ]]; then

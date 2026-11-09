@@ -46,7 +46,7 @@ class ServerEnvTests(unittest.TestCase):
         self.assertNotIn('Aion__ChatDevelopmentLogins', env)
         self.assertNotIn('Aion__NcGuard__RewriteHosts', env)
         # Rates and rules are written only when given: the host's defaults apply.
-        self.assertFalse([key for key in env if key.startswith(('Aion__Rates__', 'Aion__Rules__', 'Aion__Dungeons__', 'Aion__Enchant__')) or key == 'Aion__Native__MaxPlayers'])
+        self.assertFalse([key for key in env if key.startswith(('Aion__Rates__', 'Aion__Rules__', 'Aion__Dungeons__', 'Aion__Enchant__', 'Aion__DungeonScaling__', 'Aion__Resets__')) or key == 'Aion__Native__MaxPlayers'])
 
     def test_rates_and_rules(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -103,6 +103,19 @@ class ServerEnvTests(unittest.TestCase):
         self.assertEqual(env['Aion__Enchant__NoDowngrade'], 'false')
         self.assertEqual(env['Aion__Enchant__KeepMaterialsOnFail'], 'false')
         for argv in (['--enchant-success', '0'], ['--enchant-success', '101'], ['--enchant-pity', '-1'], ['--enchant-no-downgrade', 'yes']):
+            with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+                server_env.main(['--public-address', '203.0.113.5', '--data', '.', '--state', '.', '--proxy', *argv])
+
+    def test_reset_settings(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            server_data(root / 'data')
+            env = server_env.environment(self.args(root, reset_hour=5, reset_day='Wednesday', reset_timezone='America/Chicago'),
+                                         {'aion_app': 'a', 'aion_auth': 'b'})
+        self.assertEqual(env['Aion__Resets__Hour'], 5)
+        self.assertEqual(env['Aion__Resets__WeeklyDay'], 'Wednesday')
+        self.assertEqual(env['Aion__Resets__TimeZone'], 'America/Chicago')
+        for argv in (['--reset-hour', '24'], ['--reset-day', 'Someday'], ['--reset-timezone', 'a b']):
             with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
                 server_env.main(['--public-address', '203.0.113.5', '--data', '.', '--state', '.', '--proxy', *argv])
 

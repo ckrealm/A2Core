@@ -154,7 +154,8 @@ journalctl -u aion-host | grep "Playerbots on"
 
 Dungeon entry limits are our own rule too and are off unless `Aion__Dungeons__EntryLimits=true`. Then each character may
 enter each expedition, awakening dungeon, daily dungeon and raid `Aion__Dungeons__DailyEntries` times a day (default 3;
-0 no limit); the day starts at `Aion__Dungeons__ResetHour` (server local time, default 9). `Aion__Dungeons__Entries__<id or
+0 no limit); the day starts at the shared reset hour (`Aion__Resets__Hour`, default 05:00 host time, see
+docs/friends-server/RESETS.md), or at `Aion__Dungeons__ResetHour` if you set it. `Aion__Dungeons__Entries__<id or
 name>=<n>` sets one dungeon's count (Dungeon.dat id or name, e.g. `Aion__Dungeons__Entries__KraoCave_Hard=1`; 0 lifts its
 limit; it also limits a dungeon of another type). A refused entry simply does not move the player (as for the level and
 item level rules). Going back into the party copy already counted is free. Staff are not limited; the builder command
@@ -165,6 +166,12 @@ done; each one is logged. Some expedition and raid final bosses hit everyone wit
 (tools/data/boss-area-skills.json, our own table until the skills' target shapes are extracted). `tools/server_env.py`
 options: `--dungeon-limits on|off`, `--dungeon-entries`, `--dungeon-entry DUNGEON=N` (repeatable), `--dungeon-reset-hour`,
 `--untracked-objective-seconds`.
+
+Every daily, weekly and monthly reset (daily and weekly missions, attendance, the battle pass week, shop purchase limits,
+period collections, dungeon entries) follows one clock: `Aion__Resets__Hour` (default 5), `Aion__Resets__WeeklyDay`
+(default Wednesday) and `Aion__Resets__TimeZone` (default empty: the host's zone; else an IANA id such as
+`America/Chicago`). `tools/server_env.py` options: `--reset-hour`, `--reset-day`, `--reset-timezone`. See
+[docs/friends-server/RESETS.md](../../docs/friends-server/RESETS.md).
 
 ## Updating
 

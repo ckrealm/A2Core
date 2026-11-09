@@ -31,3 +31,6 @@
 ## 2026-11-09 — progression merged; pushed to the fork
 - Skills unlock to level 100 (OURS spread of the client's dev-menu class kits over 26–100), +10% damage/heal per skill level, fallback damage rows for skills without data, MP max by level and class, combat power computed and sent in the existing appear-message field. 17 checks. See PROGRESSION.md.
 - `dev` pushed to `BrandonGWoW/A2Core` as branch `friends-server`.
+
+## 2026-11-09 — one reset clock
+- **`Aion:Resets`** (`Hour` 5, `WeeklyDay` Wednesday, `TimeZone` empty = host zone): daily/weekly missions, attendance, the battle pass week, shop purchase limits (daily/weekly/monthly), the period collection book and dungeon entry counts all reset on it. Before, they used UTC midnight with Monday weeks, 07:00 UTC, 24-hour steps from the season start, or 09:00 host time. `Aion:Dungeons:ResetHour` now defaults to the shared hour and still overrides it if set. Daily and weekly missions also start over for players who are online at the reset. Flags `--reset-hour`, `--reset-day`, `--reset-timezone` in `wsl-install.sh` and `tools/server_env.py`. Counts in the current period move one time when this is first deployed. See RESETS.md, which also covers checking WSL's time zone. 16 checks.

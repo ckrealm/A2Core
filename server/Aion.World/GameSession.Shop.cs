@@ -44,17 +44,19 @@ public sealed class ShopTables
             : [];
 
     /// <summary>
-    /// The reset period a purchase counts in (GlobalSetting npc_shop_limited_goods_reset_time 57600 s KST = 07:00 UTC,
-    /// weekly on reset_week 3 = Wednesday CANDIDATE, monthly on day 1): "all", a day, "w" + the week's first day, or a month.
+    /// The reset period a purchase counts in: "all", a day, "w" + the week's first day, or a month, on the shared reset clock
+    /// (Aion:Resets, OURS: 05:00 host time, weeks from Wednesday, months from day 1). The official one is GlobalSetting
+    /// npc_shop_limited_goods_reset_time 57600 s KST = 07:00 UTC, weekly on reset_week 3 = Wednesday (CANDIDATE).
     /// </summary>
-    public static string Period(int kind, DateTimeOffset now)
+    public static string Period(int kind, DateTimeOffset now, ResetClock? clock = null)
     {
-        var day = now.UtcDateTime.AddHours(-7).Date;
+        clock ??= ResetClock.Current;
+        var ms = now.ToUnixTimeMilliseconds();
         return kind switch
         {
-            1 => day.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
-            2 => "w" + day.AddDays(-(((int)day.DayOfWeek - (int)DayOfWeek.Wednesday + 7) % 7)).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
-            3 => day.ToString("yyyy-MM", System.Globalization.CultureInfo.InvariantCulture),
+            1 => clock.DayKey(ms),
+            2 => clock.WeekKey(ms),
+            3 => clock.MonthKey(ms),
             _ => "all",
         };
     }

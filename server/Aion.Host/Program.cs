@@ -85,8 +85,14 @@ if (native.MaxPlayers is < 0) throw new InvalidOperationException("Aion:Native:M
 // Drop, QuestExperience) and Aion:Rules (Pvp, RespawnSeconds, PartyLoot freeforall|roundrobin|killer, FallbackLoot). Scheduled dashboard events multiply on top of the rates.
 var rates = (builder.Configuration.GetSection("Aion:Rates").Get<Aion.World.RatesOptions>() ?? new Aion.World.RatesOptions()).Resolve();
 var rules = (builder.Configuration.GetSection("Aion:Rules").Get<Aion.World.WorldRules>() ?? Aion.World.WorldRules.Default).Validated();
-// Aion:Dungeons (OURS): EntryLimits (default off), DailyEntries, Entries:<dungeon id or name> overrides, ResetHour (server
-// local time), UntrackedObjectiveSeconds (the map-event objectives the server cannot follow).
+// Aion:Resets (OURS, docs/friends-server/RESETS.md): the one reset clock of daily/weekly missions, attendance, the battle
+// pass week, shop purchase limits, period collections and dungeon entries. Hour (default 5), WeeklyDay (default Wednesday),
+// TimeZone (default empty: the host's local zone; else an IANA or Windows id).
+var resets = (builder.Configuration.GetSection("Aion:Resets").Get<Aion.World.ResetClock>() ?? new Aion.World.ResetClock()).Validated();
+Aion.World.ResetClock.Current = resets;
+// Aion:Dungeons (OURS): EntryLimits (default off), DailyEntries, Entries:<dungeon id or name> overrides, ResetHour (an
+// override of the Aion:Resets hour for entry counts; unset: the shared hour), UntrackedObjectiveSeconds (the map-event
+// objectives the server cannot follow).
 var dungeonRules = (builder.Configuration.GetSection("Aion:Dungeons").Get<Aion.World.DungeonOptions>() ?? Aion.World.DungeonOptions.Default)
     .Validated(Aion.World.DungeonOptions.KnownDungeon);
 // Aion:Enchant (OURS, docs/friends-server/ENCHANT.md): SuccessMultiplier, PityMultiplier, NoDowngrade, KeepMaterialsOnFail.
@@ -264,8 +270,8 @@ builder.WebHost.ConfigureKestrel(options =>
 builder.Services.AddSingleton<WardrobeAccess>();
 var app = builder.Build();
 if (native.LoginPort is not null || native.GamePort is not null)
-    app.Logger.LogInformation("World rates: {Rates} (scheduled events multiply on top, each 0.1-10). Rules: {Rules}. Players: {Players}. Dungeons: {Dungeons}; {Scaling}. Enchant: {Enchant}. Friends: {Friends}.",
-        rates, rules, native.MaxPlayers is > 0 and var maxPlayers ? $"at most {maxPlayers}" : $"no cap beyond {native.MaxConnections} connections per port", dungeonRules, dungeonScaling, enchantRules, friends.Describe());
+    app.Logger.LogInformation("World rates: {Rates} (scheduled events multiply on top, each 0.1-10). Rules: {Rules}. Players: {Players}. Dungeons: {Dungeons}; {Scaling}. Enchant: {Enchant}. Friends: {Friends}. Resets: {Resets}.",
+        rates, rules, native.MaxPlayers is > 0 and var maxPlayers ? $"at most {maxPlayers}" : $"no cap beyond {native.MaxConnections} connections per port", dungeonRules, dungeonScaling, enchantRules, friends.Describe(), resets);
 // Chat mutes and the chat log go through the staff tools when both exist.
 if (app.Services.GetService<Aion.Host.Authentication.ServerControl>() is { } serverControl && app.Services.GetService<ChatRelay>() is { } chatRelay)
     chatRelay.Moderation = serverControl;

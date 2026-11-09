@@ -152,19 +152,22 @@ public sealed partial class GameSession
         foreach (var record in stored)
         {
             var state = new AchievementState { Count = record.Count, CompletedMs = record.CompletedAt?.ToUnixTimeMilliseconds() ?? 0, RewardedStep = record.RewardedStep, UpdatedMs = record.UpdatedAt.ToUnixTimeMilliseconds() };
-            // Daily and weekly missions start over after their cycle (UTC days; weeks from Monday).
-            if (Achievements.Of(record.Id) is { Reset: 1 or 2 } entry && CycleStart(entry.Reset, now) > state.UpdatedMs)
+            // Daily and weekly missions start over after their cycle (the shared reset clock, Aion:Resets).
+            if (Achievements.Of(record.Id) is { } entry && CycleOver(entry, state, now))
                 state = new AchievementState { UpdatedMs = now };
             achievements[record.Id] = state;
         }
     }
 
-    static long CycleStart(int reset, long nowMs)
-    {
-        var day = DateTimeOffset.FromUnixTimeMilliseconds(nowMs).UtcDateTime.Date;
-        if (reset == 2) day = day.AddDays(-(((int)day.DayOfWeek + 6) % 7));
-        return new DateTimeOffset(day, TimeSpan.Zero).ToUnixTimeMilliseconds();
-    }
+    /// <summary>
+    /// The start of the current cycle of a daily (reset 1) or weekly (reset 2) achievement: the day or the week of the shared
+    /// reset clock (Aion:Resets, OURS: 05:00 host time, weeks from Wednesday; was UTC midnight, weeks from Monday).
+    /// </summary>
+    internal static long CycleStart(int reset, long nowMs) => reset == 2 ? ResetClock.Current.WeekStart(nowMs) : ResetClock.Current.DayStart(nowMs);
+
+    /// <summary>Whether a daily or weekly achievement's state belongs to an earlier cycle (it starts over).</summary>
+    static bool CycleOver(AchievementTables.Entry entry, AchievementState state, long now) =>
+        entry.Reset is 1 or 2 && state.UpdatedMs > 0 && CycleStart(entry.Reset, now) > state.UpdatedMs;
 
     /// <summary>Whether the character's list carries this achievement (race, category, open attendance boards).</summary>
     bool Listed(AchievementTables.Entry entry, long now)
@@ -213,7 +216,7 @@ public sealed partial class GameSession
             if (match is not null && !match(entry)) continue;
             if (!Listed(entry, now)) continue;
             if (entry.Unlock != 0 && (achievements.GetValueOrDefault(entry.Unlock)?.CompletedMs ?? 0) == 0) continue;
-            if (!achievements.TryGetValue(entry.Id, out var state)) achievements[entry.Id] = state = new AchievementState();
+            if (!achievements.TryGetValue(entry.Id, out var state) || CycleOver(entry, state, now)) achievements[entry.Id] = state = new AchievementState();
             if (state.CompletedMs != 0 && state.Count >= entry.Target) continue;
             var value = Math.Min(entry.Target, next(state));
             if (value == state.Count) continue;
@@ -393,7 +396,7 @@ public sealed partial class GameSession
 
     // ---------- Attendance and the close reports ----------
 
-    /// <summary>0xe2e6 Attendance_RQ: today's check-in on every open board (one day per UTC day); result 1 when already checked in.</summary>
+    /// <summary>0xe2e6 Attendance_RQ: today's check-in on every open board (one per reset day, Aion:Resets); result 1 when already checked in.</summary>
     List<byte[]> Attendance(long now)
     {
         var replies = new List<byte[]>();
