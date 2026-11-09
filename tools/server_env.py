@@ -140,11 +140,16 @@ GAMEPLAY = {
     'dungeon_entries': 'Aion__Dungeons__DailyEntries',
     'dungeon_reset_hour': 'Aion__Dungeons__ResetHour',
     'untracked_objective_seconds': 'Aion__Dungeons__UntrackedObjectiveSeconds',
+    'dungeon_level_gates': 'Aion__Dungeons__LevelGates',
+    'dungeon_global_level': 'Aion__Dungeons__GlobalLevel',
+    'korea_only_dungeons': 'Aion__Dungeons__KoreaOnly',
+    'korea_only_level': 'Aion__Dungeons__KoreaOnlyLevel',
+    'hard_mode_revives': 'Aion__Dungeons__HardModeRevives',
 }
 
 
 SWITCHES = ('pvp', 'fallback_loot', 'dungeon_limits', 'shop_limits', 'dungeon_timers', 'collection_rotation',
-            'all_skins', 'all_pets', 'all_wings', 'craft_always_succeeds', 'boost')
+            'all_skins', 'all_pets', 'all_wings', 'craft_always_succeeds', 'boost', 'korea_only_dungeons')
 
 
 def gameplay(args):
@@ -221,6 +226,12 @@ def main(argv=None):
     dungeons.add_argument('--dungeon-reset-hour', type=int, help='server local hour the daily counts reset (0-23, default 9)')
     dungeons.add_argument('--untracked-objective-seconds', type=int,
                           help='map-event objectives the server cannot follow count as done after this long (1-3600, default 30)')
+    dungeons.add_argument('--dungeon-level-gates', choices=['global', 'client'],
+                          help="the client's placeholder level 99: global's entry level (default) or kept")
+    dungeons.add_argument('--dungeon-global-level', type=int, help='the entry level that replaces 99 on global content (1-99, default 45)')
+    dungeons.add_argument('--korea-only-dungeons', choices=['on', 'off'], help='open the dungeons and raids global does not have yet (default off)')
+    dungeons.add_argument('--korea-only-level', type=int, help='their entry level when open (1-99, default 45)')
+    dungeons.add_argument('--hard-mode-revives', type=int, help='revives per player in Expedition hard modes (0 no limit, default 3)')
     gates = parser.add_argument_group('time gates (unset: the host defaults, all off)')
     gates.add_argument('--shop-limits', choices=['on', 'off'], help="merchants' daily/weekly/monthly/one-time purchase caps")
     gates.add_argument('--dungeon-timers', choices=['on', 'off'], help='timed dungeons fail when their timer runs out')
@@ -267,6 +278,10 @@ def main(argv=None):
         parser.error('--pet-soul-cost must be between 0 and 10')
     if args.untracked_objective_seconds is not None and not 1 <= args.untracked_objective_seconds <= 3600:
         parser.error('--untracked-objective-seconds must be between 1 and 3600')
+    for flag, value, low in (('--dungeon-global-level', args.dungeon_global_level, 1), ('--korea-only-level', args.korea_only_level, 1),
+                             ('--hard-mode-revives', args.hard_mode_revives, 0)):
+        if value is not None and not low <= value <= (99 if flag != '--hard-mode-revives' else 1000):
+            parser.error(f'{flag} is out of range')
     if args.staff_path is not None and (len(args.staff_path) < 9 or not args.staff_path.startswith('/')
                                         or not all(c.isalnum() or c in '-_' for c in args.staff_path[1:])):
         parser.error('--staff-path must be / followed by at least 8 letters, digits, - or _')
