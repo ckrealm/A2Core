@@ -111,6 +111,7 @@ class ServerEnvTests(unittest.TestCase):
         self.assertEqual(env['Aion__TimeGates__ReviveSeconds'], 3)
         self.assertEqual(env['Aion__Boost__Enabled'], 'true')
         self.assertEqual(env['Aion__Boost__Level'], 40)
+        self.assertEqual(env['Aion__Boost__RequiredLevel'], 40)
         self.assertEqual(env['Aion__Boost__Price'], 250000)
         for argv in (['--shop-limits', 'yes'], ['--gather-respawn-seconds', '-1'], ['--gather-respawn-seconds', '3601'],
                      ['--pet-soul-cost', '11'], ['--kinah-chance', '101'], ['--all-pets', 'maybe'], ['--revive-seconds', '0'],

@@ -76,7 +76,8 @@ on (below level 45) pays 10,000,000 Kinah (`Aion__Boost__Price`) and gets:
   1,412 item level (`Aion__Boost__Gear`);
 - the whole world map revealed.
 
-Then go to character select and back in so the quest journal refreshes. `Aion__Boost__Enabled=false` turns it off. The
+If a save fails part way (the database drops out), the payment stays on record and `//boost confirm` finishes the boost
+without charging again; a character is boosted once. Then go to character select and back in so the quest journal refreshes. `Aion__Boost__Enabled=false` turns it off. The
 Kinah price is meant to be hard to earn even at 10x Kinah (our guess, not measured); change it freely.
 
 ## Not tested in the client yet

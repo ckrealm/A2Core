@@ -156,6 +156,9 @@ def gameplay(args):
         if name in SWITCHES:
             value = 'true' if value == 'on' else 'false'
         env[key] = value
+    # The boost level is also the level an account needs before it can boost (as wsl-install.sh --boost-level).
+    if getattr(args, 'boost_level', None) is not None:
+        env['Aion__Boost__RequiredLevel'] = args.boost_level
     # Per-dungeon daily entries (Dungeon.dat id or name = count, 0 no limit): Aion:Dungeons:Entries:<dungeon>.
     for dungeon, count in getattr(args, 'dungeon_entry', None) or []:
         env[f'Aion__Dungeons__Entries__{dungeon}'] = count
@@ -192,7 +195,7 @@ def main(argv=None):
     parser.add_argument('--preload', type=int, nargs='*', default=[1000], help='maps loaded at startup')
     rates = parser.add_argument_group('rates and rules (unset: the host defaults)')
     rates.add_argument('--rates-profile', choices=['friends', 'official', 'accelerated'],
-                       help='friends (the host default): experience 10, Kinah 10, Kinah chance 2, drops 3, professions and pets 5; '
+                       help='friends (the host default): experience 5, Kinah 10, Kinah chance 2, drops 4, professions and pets 10; '
                             'official: all rates 1; accelerated: experience 5, Kinah 3, drops 3 (explicit rates override)')
     rates.add_argument('--exp-rate', type=rate, help='kill experience multiplier')
     rates.add_argument('--quest-exp-rate', type=rate, help='quest experience multiplier (default: the experience rate)')

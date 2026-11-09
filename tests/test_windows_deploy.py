@@ -272,7 +272,7 @@ class WslInstallTests(unittest.TestCase):
             self.assertIn('Aion__TimeGates__ShopLimits=true', result.stdout)
             for args in (['--rates-only', '--shop-limits', 'yes'], ['--rates-only', '--gather-respawn-seconds', '3601'],
                          ['--rates-only', '--pet-soul-cost', '11'], ['--rates-only', '--all-pets', 'maybe'],
-                         ['--rates-only', '--revive-seconds', '0'], ['--rates-only', '--boost-level', '1'], ['--rates-only', '--boost-price', 'lots']):
+                         ['--rates-only', '--revive-seconds', '0'], ['--rates-only', '--boost-level', '1'], ['--rates-only', '--boost-price', 'lots'], ['--rates-only', '--boost-price', '10000000001']):
                 self.assertEqual(self.run_install(Path(temp) / 'other', *args).returncode, 2, args)
 
     def test_public_address_option(self):

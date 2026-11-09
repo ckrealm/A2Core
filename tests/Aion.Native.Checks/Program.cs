@@ -3536,13 +3536,20 @@ checks = 0;
     await boostSession.InventoryChangesAsync(default);
     var gearCount = GameSession.BoostGear(data, "Gladiator", 1, 45).Count;
     var bagBefore = boostStore.Items.Count;
+    long KinahLeft() => boostStore.Items.Where(i => i.TemplateId == GameSession.KinaItemId).Sum(i => i.Quantity);
+    boostStore.FailProgress = true;
+    var (halfway, halfwayPackets) = await boostSession.BoostCommandAsync("confirm", default);
+    boostStore.FailProgress = false;
+    var (pendingInfo, _) = await boostSession.BoostCommandAsync("", default);
+    Check(halfway.Contains("could not be saved") && halfway.Contains("no extra charge") && boostSession.Level < 45 && KinahLeft() == 100_000
+          && pendingInfo.Contains("paid but did not finish"), "//boost: a failed level save keeps the payment on record and offers to finish it");
     var (boostBought, boostPackets) = await boostSession.BoostCommandAsync("confirm", default);
     var heroDone = lightQuests.Where(c => c.StartsWith("HQ1")).All(c => boostSession.QuestStatus(c) == QuestLog.Rewarded);
     Check(boostBought.StartsWith("Boosted to level 45") && boostSession.Level == 45 && boostStore.Items.Where(i => i.TemplateId == GameSession.KinaItemId).Sum(i => i.Quantity) == 100_000
           && boostStore.Items.Count >= bagBefore + gearCount - 1 && heroDone && boostStore.Settings.ContainsKey(GameSession.BoostedSetting)
-          && boostPackets.Any(b => b[0] == 0x1b && b[1] == 0x56) , "//boost confirm: level 45, 500,000 Kinah paid, gear in the bag, the main story done, recorded");
+          && halfwayPackets.Concat(boostPackets).Any(b => b[0] == 0x1b && b[1] == 0x56), "//boost confirm: level 45, 500,000 Kinah paid once, gear in the bag, the main story done, recorded");
     var (boostAgain, _) = await boostSession.BoostCommandAsync("confirm", default);
-    Check(boostAgain.Contains("already level 45"), "a boosted character cannot be boosted again");
+    Check(boostAgain.Contains("already been boosted") && KinahLeft() == 100_000, "a boosted character cannot be boosted again, and the finished boost charged once");
     var (off, _) = await new GameSession(data, new GameSessionOptions(), new Random(1)).BoostCommandAsync("confirm", default);
     Check(off.Contains("off on this server"), "the boost is off for a session without host options");
 }
@@ -3985,7 +3992,8 @@ sealed class FakeStore : INativeCharacterStore
         return Task.FromResult(true);
     }
     public (int Level, long Experience)? Progress { get; private set; }
-    public Task<bool> SaveProgressAsync(Guid character, int level, long experience, CancellationToken ct) { Progress = (level, experience); return Task.FromResult(true); }
+    public bool FailProgress { get; set; }
+    public Task<bool> SaveProgressAsync(Guid character, int level, long experience, CancellationToken ct) { if (FailProgress) throw new FakeDbException(); Progress = (level, experience); return Task.FromResult(true); }
     public Task<RideRecord?> AddRideSoulsAsync(Guid character, Guid item, long revision, int rideId, int souls, CancellationToken ct)
     {
         if (!Consume(item, revision, 1)) return Task.FromResult<RideRecord?>(null);

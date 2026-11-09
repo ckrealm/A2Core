@@ -141,6 +141,13 @@ public interface INativeCharacterStore : IAsyncDisposable
         CancellationToken ct) => Task.FromResult(false);
     Task<IReadOnlyList<QuestRecord>> QuestsAsync(Guid character, CancellationToken ct);
     Task<QuestRecord> SaveQuestAsync(Guid character, QuestRecord quest, CancellationToken ct);
+    /// <summary>Several quests at once (Aion:Boost: one transaction where the store has one); the stored records in order.</summary>
+    async Task<IReadOnlyList<QuestRecord>> SaveQuestsAsync(Guid character, IReadOnlyList<QuestRecord> quests, CancellationToken ct)
+    {
+        var saved = new List<QuestRecord>();
+        foreach (var quest in quests) saved.Add(await SaveQuestAsync(character, quest, ct));
+        return saved;
+    }
     Task<bool> RemoveQuestAsync(Guid character, string code, CancellationToken ct);
     /// <summary>Pays a Complete quest once (experience and items); the new experience, or null when nothing was paid.</summary>
     Task<long?> RewardQuestAsync(Guid character, string code, long experience, IReadOnlyList<(int TemplateId, long Count)> items, CancellationToken ct);

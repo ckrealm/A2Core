@@ -89,6 +89,12 @@ public sealed class ServiceNativeCharacterStore(string token, WorldIdentity iden
         return await game.SaveQuestAsync(identity.Account, character, quest, ct);
     }
 
+    public async Task<IReadOnlyList<QuestRecord>> SaveQuestsAsync(Guid character, IReadOnlyList<QuestRecord> quests, CancellationToken ct)
+    {
+        await ValidateAsync(ct);
+        return await game.SaveQuestsAsync(identity.Account, character, quests, ct);
+    }
+
     public async Task<bool> RemoveQuestAsync(Guid character, string code, CancellationToken ct)
     {
         await ValidateAsync(ct);

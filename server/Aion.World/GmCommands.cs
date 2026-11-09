@@ -110,7 +110,8 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
             if (line.StartsWith("boost", StringComparison.OrdinalIgnoreCase) && (line.Length == 5 || char.IsWhiteSpace(line[5])))
             {
                 var boostArgs = line[5..].Trim();
-                return await actor.Session.InvokeAsync(async _ => await actor.Session.BoostCommandAsync(boostArgs, ct)).WaitAsync(TimeSpan.FromSeconds(30), ct);
+                try { return await actor.Session.InvokeAsync(async _ => await actor.Session.BoostCommandAsync(boostArgs, ct)).WaitAsync(TimeSpan.FromSeconds(30), ct); }
+                catch (TimeoutException) { return "The boost is still being saved. Type //boost in a moment to see whether it finished; you are never charged twice."; }
             }
             if (line.Length == 0 || line.Equals("help", StringComparison.OrdinalIgnoreCase))
                 return await builder.AllowedAsync(actor.Session, ct)

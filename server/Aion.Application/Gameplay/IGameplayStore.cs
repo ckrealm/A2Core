@@ -277,6 +277,13 @@ public interface IGameplayStore
     Task<IReadOnlyList<QuestRecord>?> QuestsAsync(VerifiedAccount account, Guid character, CancellationToken ct = default);
     // Insert or update one quest by code (uid assigned on insert); the stored record.
     Task<QuestRecord> SaveQuestAsync(VerifiedAccount account, Guid character, QuestRecord quest, CancellationToken ct = default);
+    // Several quests in one transaction (Aion:Boost); the stored records in the same order.
+    async Task<IReadOnlyList<QuestRecord>> SaveQuestsAsync(VerifiedAccount account, Guid character, IReadOnlyList<QuestRecord> quests, CancellationToken ct = default)
+    {
+        var saved = new List<QuestRecord>();
+        foreach (var quest in quests) saved.Add(await SaveQuestAsync(account, character, quest, ct));
+        return saved;
+    }
     Task<bool> RemoveQuestAsync(VerifiedAccount account, Guid character, string code, CancellationToken ct = default);
     // Server-decided reward of a completed quest: marks it rewarded, adds experience and grants the
     // items once (repeating the call for a rewarded quest grants nothing). Returns the new experience.

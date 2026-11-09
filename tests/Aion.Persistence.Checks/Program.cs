@@ -213,6 +213,11 @@ await using(var source=NpgsqlDataSource.Create(connectionString))
     Check(await game.RewardQuestAsync(first,id,"HQ1101010",1133,[]) is long xp && xp>=1133,"a complete quest pays its experience");
     Check(await game.RewardQuestAsync(first,id,"HQ1101010",1133,[]) is null && (await game.QuestsAsync(first,id))!.Single().Status==4,"and only once (Rewarded)");
     await Reject(()=>game.SaveQuestAsync(first,id,quest with {Goals=[1]}),"invalid_quest");
+    // Several quests in one transaction (Aion:Boost): updates keep their uid, new ones get one; one bad record saves none.
+    var batch=await game.SaveQuestsAsync(first,id,[new QuestRecord("HQ1101010",1101010,0,4,3,[0,0,0,0,0,0]),new QuestRecord("HQ1101020",1101020,0,4,1,[0,0,0,0,0,0])]);
+    Check(batch.Count==2 && batch[0].Uid==quest.Uid && batch[1].Uid>0 && (await game.QuestsAsync(first,id))!.Count==2,"quests saved together, uid kept for an existing one");
+    await Reject(()=>game.SaveQuestsAsync(first,id,[new QuestRecord("HQ1101030",1101030,0,4,1,[0,0,0,0,0,0]),new QuestRecord("HQ1101040",1101040,0,4,1,[1])]),"invalid_quest");
+    Check((await game.QuestsAsync(first,id))!.Count==2,"a batch with a bad record saves nothing");
     // Wings: staff registration, stored once per wing, read back with the owner's inventory.
     await Reject(()=>game.AdminAsync(second,new(Guid.NewGuid(),id,"wings",Wings:[])),"invalid_wings");
     await Reject(()=>game.AdminAsync(first,new(Guid.NewGuid(),id,"wings",Wings:[30200600])),"forbidden");

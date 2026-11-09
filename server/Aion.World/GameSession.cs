@@ -1634,7 +1634,10 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
                 selected = state;
                 StaffRole = state.Staff ? accountRole : null;
                 experience = state.Progress.Experience;
-                var unlocked = await GrantUnlocksAsync(store, state.Summary.CharacterId, state.Race, ct);   // Aion:Unlocks (OURS), before the loads below
+                // Aion:Unlocks (OURS), before the loads below. A failed grant is logged and tried again at the next entry; it never blocks entering the world.
+                (bool Skins, bool Pets) unlocked = (false, false);
+                try { unlocked = await GrantUnlocksAsync(store, state.Summary.CharacterId, state.Race, ct); }
+                catch (Exception error) when (error is not OperationCanceledException) { Note($"Aion:Unlocks not given: {error.GetType().Name}: {error.Message}"); }
                 registeredWings.Clear();
                 registeredWings.UnionWith(await store.WingsAsync(state.Summary.CharacterId, ct));
                 var extras = await store.ExtrasAsync(state.Summary.CharacterId, ct);
@@ -1647,7 +1650,9 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
                 LoadSkins(extras);
                 LoadMasteries(extras);
                 await LoadRidesAsync(store, state.Summary.CharacterId, ct);
-                if (unlocked.Pets) await MaxBoardsAsync(store, state.Summary.CharacterId, ct);
+                if (unlocked.Pets)
+                    try { await MaxBoardsAsync(store, state.Summary.CharacterId, ct); }
+                    catch (Exception error) when (error is not OperationCanceledException) { Note($"Aion:Unlocks boards not raised: {error.GetType().Name}: {error.Message}"); }
                 await LoadQuickSlotsAsync(store, state.Summary.CharacterId, ct);
                 LoadSettings(await store.CharacterSettingsAsync(state.Summary.CharacterId, ct));
                 await LoadBuybackAsync(store, state.Summary.CharacterId, ct);
