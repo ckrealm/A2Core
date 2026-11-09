@@ -79,7 +79,8 @@ public sealed class LoginSession(LoginSessionOptions options, Func<ClientIdentit
                 SentAccount = true;
                 // The server list opens on the account's race's world: its characters' race (one race per account), else the
                 // world it last picked, else the first (always Light 1361 before, also for an Asmodian account).
-                var race = races.Count > 0 ? races[0] : options.LastPickedRace?.Invoke(accountId);
+                // An account with both races (Aion:Friends:BothFactions) opens on the world it last picked.
+                var race = races.Count == 1 ? races[0] : options.LastPickedRace?.Invoke(accountId) ?? (races.Count > 0 ? races[0] : null);
                 var home = options.Worlds.FirstOrDefault(w => w.Group == race) ?? options.Worlds[0];
                 return SessionStep.Of(LoginPackets.Account(accountId, guid, home.Id,
                     (options.Worlds.FirstOrDefault(w => w.Group == 1) ?? home).Id, options.Worlds.FirstOrDefault(w => w.Group == 2)?.Id ?? 0x0903));

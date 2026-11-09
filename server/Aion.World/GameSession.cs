@@ -38,6 +38,8 @@ public sealed record GameSessionOptions
     public WorldRules Rules { get; init; } = WorldRules.Default;
     /// <summary>Aion:Dungeons: daily entry limits (off by default) and the untracked-objective fallback delay.</summary>
     public DungeonOptions Dungeons { get; init; } = DungeonOptions.Default;
+    /// <summary>The friends server's switches (Aion:Friends): free premium pass, both races per account, longer flight.</summary>
+    public FriendsOptions Friends { get; init; } = FriendsOptions.Official;   // the host binds Aion:Friends (default on)
     /// <summary>Heal/buff/debuff effects of class skills; null: the embedded tools/data/skill-effects.json (OURS values).</summary>
     public SkillEffectTable? SkillEffects { get; init; }
 }
@@ -452,7 +454,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
             case PeriodCollectionListRq: return PeriodCollectionListRequest(plain, now);
             case RegisterPeriodCollectionRq when plain.Length >= 11: return await RegisterCollectionAsync(plain, now, ct);
             case BossChallengeEnterRq: return BossChallengeEnter(plain, now);
-            case BattlePassPurchaseRq when plain.Length >= 6: return [PacketWriter.Opcode(BattlePassPurchaseRs).U16(1).I32(BitConverter.ToInt32(plain, 2)).ToArray()];
+            case BattlePassPurchaseRq when plain.Length >= 6: return BattlePassPurchase(plain, now);
             case CloseNpcAchievementRq: return CloseNpcAchievement(plain);
             case CloseEnvObjAchievementRq: return CloseEnvObjAchievement(plain);
             case SkillLevelDownRq: return await SkillLevelDownAsync(plain, ct);
@@ -1068,7 +1070,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         if (selected is { } state) selected = state with { Ascension = grade };
         wingId = GamePackets.DefaultWing(profileRace);
         if (resources is null) return [];
-        resources.FpMax = resources.Fp = FpMax;
+        resources.FpMax = resources.Fp = options.Friends.FlightMax(FpMax);   // Aion:Friends:FlightMultiplier
         return [GamePackets.CharPoints(playerKey, [(CharPoint.MaxFp, resources.FpMax), (CharPoint.Fp, resources.Fp)]),
                 GamePackets.WingChangeNotice(playerKey, wingId, false), GamePackets.WingList(OwnedWings()), GamePackets.GlideCooltime(playerKey)];
     }
@@ -1539,8 +1541,9 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
     /// A creation of the other race than the account's characters: one race per account on this server (an official
     /// server holds one race; this one holds both), so the other race needs every character of this one deleted first.
     /// </summary>
-    static bool OtherRace(IReadOnlyList<CharacterState> lobby, int race)
+    bool OtherRace(IReadOnlyList<CharacterState> lobby, int race)
     {
+        if (options.Friends.BothFactions) return false;   // Aion:Friends:BothFactions: both races on one account
         var races = lobby.Select(s => s.Race).Distinct().ToList();
         return races.Count == 1 && races[0] != race;
     }
@@ -1557,7 +1560,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
             if (profile is null) return GamePackets.CreateInvalidPcData;
             var lobby = await store.LobbyAsync(ct);
             if (OtherRace(lobby, profile.Race)) return GamePackets.CreateInvalidServerRace;
-            if (lobby.Any(s => s.LobbySlot == refused.SlotNo)) return GamePackets.CreateInvalidSlot;
+            if (lobby.Any(s => s.LobbySlot == refused.SlotNo && (!options.Friends.BothFactions || s.Race == profile.Race))) return GamePackets.CreateInvalidSlot;
             return GamePackets.CreateErrorInternal;
         }
         catch (Exception error) when (error is ArgumentException or InvalidOperationException or GameplayException or System.Data.Common.DbException)
@@ -1758,7 +1761,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         // flight gauge (OBSERVED 250,000 at the ascension; drained and refilled on the ticks).
         var race = profileRace = profile?.Race ?? 1;
         wingId = IsAdmin || (selected?.Ascension ?? 1) >= 2 ? GamePackets.DefaultWing(race) : 0;
-        resources.FpMax = resources.Fp = wingId != 0 ? FpMax : 0;
+        resources.FpMax = resources.Fp = wingId != 0 ? options.Friends.FlightMax(FpMax) : 0;   // Aion:Friends:FlightMultiplier
         // An instance-layer move in or out (the level stays loaded): the official load is the short list, not the world-entry
         // set (OBSERVED entry #9676-9702: 0x3623, 0x3633, 0x3646, 0x382a, 0x364a, 0x8d00, 0x4001, 0x4002, 0x6100.., 0x922e, spawns;
         // exit #14305-14345: the same with 0x3722 and 0x3742 after 0x4002 and no dungeon state). Live 2026-10-19: with the

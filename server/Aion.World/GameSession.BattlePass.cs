@@ -9,7 +9,7 @@ namespace Aion.World;
 // the exp achievement (type BattlePassExp, 101 steps = levels) of every pass of the group; level rewards come through
 // TakeAchievementReward on that achievement, the paid pass's only after a purchase (none is sold here).
 // BattlePassInfoList_NT 0xe2bd at entry, TakeBattlePassReward 0xe2bb/0xe2bc (acknowledged), BattlePassPurchase
-// 0xe2c6/0xe2c7 (refused): the 0xe2 run, bodies from the usmap (CANDIDATE). The weekly exp limit is not applied.
+// 0xe2c6/0xe2c7 (refused; free and accepted with Aion:Friends:FreePremiumPass): the 0xe2 run, bodies from the usmap (CANDIDATE). The weekly exp limit is not applied.
 public sealed partial class GameSession
 {
     public const ushort BattlePassInfoListNt = 0xe2bd, TakeBattlePassRewardRq = 0xe2bb, TakeBattlePassRewardRs = 0xe2bc, BattlePassPurchaseRq = 0xe2c6, BattlePassPurchaseRs = 0xe2c7;
@@ -21,8 +21,9 @@ public sealed partial class GameSession
     AchievementTables.PassGroup? PassOfMission(AchievementTables.Entry entry, long now) =>
         ActivePasses(now).FirstOrDefault(g => g.Missions is { } missions && string.Equals(missions, entry.Group, StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>The paid pass's levels need a purchase (none is sold), unless Aion:Friends:FreePremiumPass opens them for everyone.</summary>
     bool PaidPassLocked(int achievementId) =>
-        Achievements.PassGroups.Any(g => g.Passes.Any(p => p.Length >= 3 && p[1] == achievementId && p[2] != 0));
+        !options.Friends.FreePremiumPass && Achievements.PassGroups.Any(g => g.Passes.Any(p => p.Length >= 3 && p[1] == achievementId && p[2] != 0));
 
     /// <summary>A mission step completed: its exp to the group's passes.</summary>
     List<byte[]> BattlePassExp(AchievementTables.Entry mission, int step, long now)
@@ -46,7 +47,10 @@ public sealed partial class GameSession
             foreach (var pass in group.Passes) w.I32((int)pass[0]);
             w.Varint((uint)group.Passes.Length);
             foreach (var pass in group.Passes) w.I32((int)pass[0]).U8((byte)(achievements.GetValueOrDefault((int)pass[1])?.RewardedStep ?? 0));
-            w.Varint(0).Bool(false).I32(0).Bool(false);
+            // _repeat_reward_exp_list, _pending_reward_claimed, _subscribed_character_count, _is_subscribed: with a free premium
+            // pass the character counts as subscribed (CANDIDATE: the usmap's field names; the client's reaction is unrecorded).
+            var subscribed = options.Friends.FreePremiumPass;
+            w.Varint(0).Bool(false).I32(subscribed ? 1 : 0).Bool(subscribed);
         }
         return w.ToArray();
     }
@@ -64,5 +68,17 @@ public sealed partial class GameSession
         var w = PacketWriter.Opcode(TakeBattlePassRewardRs).U16(ok ? 0 : 1).I32(groupId).I32(achievementId).U8(step).Varint(ok ? 1u : 0u);
         if (ok) w.I32(achievementId).U8(step);
         return ok ? [w.ToArray(), AchievementUpdate([achievementId]), BattlePassInfoList(now)] : [w.ToArray()];
+    }
+
+    /// <summary>
+    /// 0xe2c6 BattlePassPurchase_RQ {_item_id}: refused (result 1, nothing is sold); with Aion:Friends:FreePremiumPass accepted
+    /// for free (result 0) and the pass list sent again, the premium levels being open to everyone anyway.
+    /// </summary>
+    List<byte[]> BattlePassPurchase(byte[] plain, long now)
+    {
+        var item = BitConverter.ToInt32(plain, 2);
+        var free = options.Friends.FreePremiumPass;
+        var reply = PacketWriter.Opcode(BattlePassPurchaseRs).U16(free ? 0 : 1).I32(item).ToArray();
+        return free ? [reply, BattlePassInfoList(now)] : [reply];
     }
 }

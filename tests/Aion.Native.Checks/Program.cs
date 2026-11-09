@@ -1007,6 +1007,24 @@ Check(Refused(await stored.HandleAsync(darkCreate, Now), GamePackets.CreateInval
           "an account with a Light character sees an empty Dark lobby (race 2): races never mix in a lobby");
     Check(Refused(await lightOnDark.HandleAsync(darkCreate, Now), GamePackets.CreateInvalidServerRace) && lightStore.States.Count == 1,
           "its Dark creation is refused until the Light characters are deleted (kCharCreate_InvalidServerRace)");
+    // Aion:Friends:BothFactions (the friends server's default): the same account creates a Dark character on the Dark world,
+    // even in the lobby slot its Light character holds (each race's world has its own slots).
+    var bothOnDark = new GameSession(data, new GameSessionOptions { WorldRace = choices.Race, Friends = FriendsOptions.Default }, new Random(8)) { Store = lightStore };
+    await bothOnDark.HandleAsync(gameLogin, Now);
+    Check((await bothOnDark.HandleAsync(darkCreate, Now)).Single()[0] == 0x1c && lightStore.States.Count == 2 && lightStore.States.Select(c => c.Race).Distinct().Count() == 2,
+          "Aion:Friends:BothFactions: an account with a Light character creates a Dark one too");
+}
+// Aion:Friends: the options' defaults (on) and their official values.
+Check(FriendsOptions.Default is { FreePremiumPass: true, BothFactions: true } && FriendsOptions.Default.FlightMax(GameSession.FpMax) == 500_000
+      && FriendsOptions.Official.FlightMax(GameSession.FpMax) == GameSession.FpMax, "Aion:Friends: free premium pass, both races and twice the flight gauge by default; Official keeps 250,000");
+static bool FriendsRefused(double multiplier) { try { new FriendsOptions { FlightMultiplier = multiplier }.Validated(); return false; } catch (InvalidOperationException) { return true; } }
+Check(FriendsRefused(0.5) && FriendsRefused(double.NaN) && !FriendsRefused(1.0),
+      "Aion:Friends:FlightMultiplier below 1 (or not a number) stops the host");
+{
+    var freePass = new GameSession(data, new GameSessionOptions { Friends = FriendsOptions.Default }, new Random(9));
+    var passBought = await freePass.HandleAsync(new PacketWriter().U16(GameSession.BattlePassPurchaseRq).I32(7).ToArray(), Now);
+    Check(BitConverter.ToUInt16(passBought[0], 2) == 0 && BitConverter.ToInt32(passBought[0], 4) == 7 && passBought.Skip(1).Any(b => Op(b) == GameSession.BattlePassInfoListNt),
+          "Aion:Friends:FreePremiumPass: the pass purchase succeeds for free and the pass list follows");
 }
 Check(Refused(await stored.HandleAsync(create, Now), GamePackets.CreateDuplicateName) && store.Created.Count == 1, "the same name again is refused as a duplicate (kCharCreate_DuplicateCharName)");
 Check(BitConverter.ToUInt16((await stored.HandleAsync(NameRequest("Player1"), Now)).Single(), 2) == GamePackets.NameDuplicate, "the name check says duplicate (kCharCheckName_DuplicateCharName)");

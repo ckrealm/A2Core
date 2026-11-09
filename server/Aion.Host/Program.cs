@@ -95,6 +95,9 @@ builder.Services.AddSingleton(rules);
 var bots = (builder.Configuration.GetSection("Aion:Bots").Get<Aion.World.BotOptions>() ?? new Aion.World.BotOptions()).Validated();
 
 builder.Services.AddSingleton(dungeonRules);
+// Aion:Friends (OURS, docs/friends-server/FRIENDS.md): FreePremiumPass, BothFactions, FlightMultiplier.
+var friends = (builder.Configuration.GetSection("Aion:Friends").Get<Aion.World.FriendsOptions>() ?? Aion.World.FriendsOptions.Default).Validated();
+builder.Services.AddSingleton(friends);
 if (native.LoginPort is not null || native.GamePort is not null)
 {
     if (!native.Development && !accountsReady)
