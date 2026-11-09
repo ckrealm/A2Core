@@ -2212,8 +2212,8 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
     /// An NPC hit lands on the player: combat starts, HP drops (official 0x8d00 for the player's key).
     /// At HP 0 the player dies (see Die); invincible HP holds.
     /// </summary>
-    /// <summary>OURS: a blocked hit deals this share; the block chance is the weapon's Block stat / 1000 (Item.dat: Sword 200,
-    /// Greatsword 150, Staff 125, Dagger and Mace 50), at most <see cref="BlockCap"/>.</summary>
+    /// <summary>OURS: a blocked hit deals this share; the block chance is the equipped gear's Block stat / 1000 (as the stats
+    /// window sums it; Item.dat weapons: Sword 200, Greatsword 150, Staff 125, Dagger and Mace 50), at most <see cref="BlockCap"/>.</summary>
     public const double BlockTaken = 0.5, BlockCap = 0.4;
     /// <summary>OURS: the chance to evade a monster's hit outright (no evasion stat is extracted yet): leather classes more.</summary>
     public static double EvasionChance(string? className) => className switch { "Assassin" => 0.12, "Ranger" => 0.10, _ => 0.05 };
@@ -2236,14 +2236,17 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
     internal int GuardHit(int damage, long now)
     {
         if (resources is null || dead || damage <= 0) return damage;
-        if (now < dodgingUntil || rng.NextDouble() < EvasionChance(className))
+        // Random.Shared: the shared map's AI tick calls this from another player's loop, so this session's rng is not safe here.
+        if (now < dodgingUntil || Random.Shared.NextDouble() < EvasionChance(className))
         {
             LastEvadeAt = now;
             Evasions++;
             return 0;
         }
-        var block = Math.Min(BlockCap, (data.Item(equippedWeapon)?.Stat("Block") ?? 0) / 1000.0);
-        if (block > 0 && rng.NextDouble() < block)
+        // The equipped gear's Block, plus the starter weapon a development login holds outside the inventory.
+        var starter = inventory.Values.Any(i => i.Container == InventoryItem.Equipped && i.Slot == 1) ? 0 : data.Item(equippedWeapon)?.Stat("Block") ?? 0;
+        var block = Math.Min(BlockCap, (EquippedItems().Sum(i => i.Stat("Block")) + starter) / 1000.0);
+        if (block > 0 && Random.Shared.NextDouble() < block)
         {
             LastBlockAt = now;
             Blocks++;

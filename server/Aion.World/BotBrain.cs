@@ -220,7 +220,10 @@ public sealed class BotBrain(GameData data, GameSession bot, GameSession leader,
             return StopMoving(me, now);
         var group = Group();
         var threats = Threats(group, lead);
-        // Boss mechanics first: out of an area special being wound up (unless the bot is its victim, who takes it anyway).
+        // Boss mechanics first. The victim of a special about to land dodges through it (a Dodge evades the hits during it,
+        // GameSession.GuardHit), even while it is stepping out of another monster's area.
+        if (DodgeSpecial(me, threats, now) is { } dodge) return dodge;
+        // Out of an area special being wound up (unless the bot is its victim, who takes it anyway).
         var hold = false;
         if (Escape(me, threats) is { } safe)
         {
@@ -231,8 +234,6 @@ public sealed class BotBrain(GameData data, GameSession bot, GameSession leader,
             }
             hold = true;
         }
-        // The victim of a special about to land dodges through it (a Dodge evades the hits during it, GameSession.GuardHit).
-        if (DodgeSpecial(me, threats, now) is { } dodge) return dodge;
         // Held just outside an area special: casts from where the bot stands, no steps.
         List<byte[]> MoveToward(Vector3d from, Vector3d to, double within, long at) => hold ? StopMoving(from, at) : this.MoveToward(from, to, within, at);
         // A monster on a non-tank bot: bring it to the group's tank bot (mod-playerbots' "flee to tank"), so the tank picks it up

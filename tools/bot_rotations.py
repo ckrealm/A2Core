@@ -147,9 +147,9 @@ PLAN = {
     ],
     'Assassin': [
         E(13070000, target_casting=True),                                  # Shadowstrike: behind the target and stun
-        E(13070000, target_distance_above=500),
+        E(13070000, target_distance_above=500),                            # ... and the opener from up to 20 m
         E(13360000, after_dodge=True),                                     # Infiltrate: right after a Dodge
-        E(13210000, after_evasion=True),                                   # Whirlwind Slice: right after an evasion                            # ... and the opener from up to 20 m
+        E(13210000, after_evasion=True),                                   # Whirlwind Slice: right after an evasion
         E(13220000, target_stunned=True),                                  # Shadow Fall: knockdown on a stunned target
         E(13220000, after=[13070000, 13130000]),
         E(13340000, target_stunned=True),                                  # Storm Rampage: staggered targets only
