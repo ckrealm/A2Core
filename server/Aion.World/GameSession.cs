@@ -2313,7 +2313,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
 
     /// <summary>Defense against NPC hits: PcStatLevel Defense plus the equipped items' ArmorDefense.</summary>
     public int Defense => data.BaseStats(className, level).GetValueOrDefault("Defense") + EquippedItems().Sum(i => i.Stat("ArmorDefense")) + EnchantStat("ArmorDefense") + BuffStat("Defense")
-        + BoardStat("Defense") + TitleStat("Defense");
+        + BoardStat("Defense") + TitleStat("Defense") + BotDefense;
 
     /// <summary>The MP pool: the class and level's MPMax (progression.json mp_max, OURS; 1500 at level 1 as observed) plus buffs.</summary>
     int MpMax => data.Progression.MpMax(className, level) + BuffStat("MPMax") + BoardStat("MPMax") + TitleStat("MPMax");

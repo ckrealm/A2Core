@@ -3520,6 +3520,7 @@ checks = 0;
     await team.OwnerLeftAsync(lead);
 }
 Console.WriteLine($"{checks} playerbot checks passed (Aion:Bots).");
+Console.WriteLine($"{await WorldBotChecks.RunAsync(data, Check)} world bot and bot chat checks passed (Aion:WorldBots, Aion:BotChat).");
 
 // ---------- Progression past the recovered tables (progression.json, OURS; docs/PROGRESSION.md) ----------
 checks = 0;

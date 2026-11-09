@@ -29,7 +29,7 @@ public sealed class WorldChatDirectory(WorldPresence presence, IWireCharacterRep
         var session = entry.Session;
         // CharacterName is the stored name (WorldPresence is keyed by it); the shown name adds the staff tag.
         return session.CharacterName is { Length: > 0 } name
-            ? new ChatCharacter(character, name, CharacterNames.Display(name, session.StaffRole), session.Guild?.Id ?? 0)
+            ? new ChatCharacter(character, name, CharacterNames.Display(name, session.StaffRole), session.Guild?.Id ?? 0, session.Race)
             : null;
     }
 }

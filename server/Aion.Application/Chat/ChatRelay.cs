@@ -109,7 +109,85 @@ public sealed class ChatRelay(TimeProvider clock, IChatDirectory? directory = nu
         var targets = sessions.Where(pair => { lock (pair.Value) return pair.Value.Rooms.Contains(room); })
             .Where(pair => legion == 0 || GuildOf(pair.Value) == legion)
             .Select(pair => new ChatDelivery(pair.Key, notification)).ToList();
+        if (room.Type is "WORLD" or "REGION") Tell(new ChatHeard(room.Type, speaker.Name, message.Content, RaceOf(sender)));
         return (notification.Guid, targets);
+    }
+
+    /// <summary>Messages players said in the shared rooms and whispers to bots (bot chat listens). Handlers must be quick.</summary>
+    public event Action<ChatHeard>? Heard;
+
+    /// <summary>Bot chat: whether a name is a bot that may be whispered to (it has no chat session of its own).</summary>
+    public Func<string, bool>? IsBot { get; set; }
+
+    void Tell(ChatHeard heard)
+    {
+        try { Heard?.Invoke(heard); }
+        catch (Exception) { /* a listener's failure never breaks chat */ }
+    }
+
+    /// <summary>The race of a session's character now (1 or 2), 0 when unknown (development identities).</summary>
+    int RaceOf(Session session) =>
+        session.Identity is { AccountId: { } account, Character: { } character } ? directory?.Current(character.Id, account)?.Race ?? 0 : 0;
+
+    /// <summary>
+    /// A bot (a server-played character with no chat session) says <paramref name="text"/> in the shared room of this type
+    /// (WORLD, or REGION for the common region room) to every session that joined it. With <paramref name="race"/> 1 or 2 only
+    /// players of that race (and those whose race is unknown) get it: faction chat. The text is cut to the chat limit.
+    /// </summary>
+    public IReadOnlyList<ChatDelivery> Speak(string name, string roomType, string text, int race = 0)
+    {
+        text = Clip(text);
+        if (text.Length == 0) return [];
+        var deliveries = new List<ChatDelivery>();
+        foreach (var (token, session) in sessions)
+        {
+            ChatRoomKey? room;
+            lock (session) room = session.Rooms.FirstOrDefault(r => r.Type == roomType && (roomType != "REGION" || r.RoomKey == "RG"));
+            if (room is null || race != 0 && RaceOf(session) is var theirs && theirs != 0 && theirs != race) continue;
+            deliveries.Add(new ChatDelivery(token, Notify(BotIdentity(name, session.Identity), new Speaker(name, name), room,
+                new ChatMessage(name, "PUBLISH", "NORMAL", text, ""))));
+        }
+        Moderation?.Logged(new(roomType == "REGION" ? "REGION/RG" : roomType, null, name, null, text));
+        return deliveries;
+    }
+
+    /// <summary>
+    /// A bot whispers <paramref name="text"/> to the named character (its chat sessions); nothing when it is not online. The answer
+    /// to a player's whisper goes back on the room and subtype that player's client whispered with (the official ones are unknown).
+    /// </summary>
+    public IReadOnlyList<ChatDelivery> WhisperFromBot(string name, string to, string text, ChatRoomKey? whisperRoom = null, string subType = "NORMAL")
+    {
+        text = Clip(text);
+        var stored = CharacterNames.Stored(to);
+        if (text.Length == 0 || stored.Length == 0) return [];
+        var deliveries = new List<ChatDelivery>();
+        foreach (var (token, session) in sessions)
+        {
+            if (!Addressed(session, stored, "")) continue;
+            ChatRoomKey? room;
+            lock (session) room = whisperRoom ?? session.Rooms.FirstOrDefault(r => r.Type == "WORLD") ?? session.Rooms.FirstOrDefault();
+            if (room is null) continue;
+            deliveries.Add(new ChatDelivery(token, Notify(BotIdentity(name, session.Identity), new Speaker(name, name), room,
+                new ChatMessage(name, "PUBLISH", subType, text, "", session.Identity.CharacterId, session.Identity.Character?.Name ?? session.DeclaredName ?? stored,
+                    session.Identity.ServerKey))));
+        }
+        if (deliveries.Count > 0) Moderation?.Logged(new("WHISPER", null, name, stored, text));
+        return deliveries;
+    }
+
+    /// <summary>A bot's identity on a notification: a stable numeric character ID from its name, the receiver's server key.</summary>
+    static ChatIdentity BotIdentity(string name, ChatIdentity receiver) =>
+        new((900_000_000 + (int)(BitConverter.ToUInt32(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(name.ToLowerInvariant())), 0) % 99_999_999)).ToString(CultureInfo.InvariantCulture),
+            receiver.ServerKey, "en_US");
+
+    /// <summary>Bot text within the chat rules: no control characters, one line, at most 100 characters (cut at a word).</summary>
+    public static string Clip(string text)
+    {
+        var plain = new string(text.Select(c => char.GetUnicodeCategory(c) is UnicodeCategory.Control or UnicodeCategory.Format ? ' ' : c).ToArray());
+        plain = string.Join(' ', plain.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        if (plain.Length <= MaxLength) return plain;
+        var cut = plain.LastIndexOf(' ', MaxLength - 1);
+        return (cut > MaxLength / 2 ? plain[..cut] : plain[..MaxLength]).TrimEnd();
     }
 
     /// <summary>A server announcement (e.g. a restart warning) to every session, in its joined WORLD room.</summary>
@@ -142,6 +220,16 @@ public sealed class ChatRelay(TimeProvider clock, IChatDirectory? directory = nu
         if (name.Length == 0 && string.IsNullOrEmpty(message.ReceiverCharacterId))
             throw new ChatRejectedException("Choose whom to whisper.");
         var receivers = sessions.Where(pair => pair.Key != token && Addressed(pair.Value, name, message.ReceiverCharacterId)).ToList();
+        if (receivers.Count == 0 && name.Length > 0 && IsBot?.Invoke(name) == true)
+        {
+            // A whisper to a bot: it has no chat session, so the sender gets the echo and bot chat answers it.
+            CheckMute(sender.Identity);
+            Validate(sender.Identity, message.Content);
+            var echo = Notify(sender.Identity, speaker, room, message with { ReceiverUserName = name });
+            Moderation?.Logged(new("WHISPER", sender.Identity.AccountId, speaker.Name, name, message.Content));
+            Tell(new ChatHeard("WHISPER", speaker.Name, message.Content, RaceOf(sender), name, room, SubType(message.SubType)));
+            return (echo.Guid, [new ChatDelivery(token, echo)]);
+        }
         if (receivers.Count == 0)
             throw new ChatRejectedException($"{(name.Length > 0 ? name : "That character")} is not online.");
         CheckMute(sender.Identity);

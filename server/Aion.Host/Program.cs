@@ -93,6 +93,10 @@ builder.Services.AddSingleton(rates);
 builder.Services.AddSingleton(rules);
 // Playerbots (OURS, docs/PLAYERBOTS.md): Aion:Bots (Enabled, PlayersMayUse, MaxPerAccount, MaxTotal, JoinParty, TeleportBeyond).
 var bots = (builder.Configuration.GetSection("Aion:Bots").Get<Aion.World.BotOptions>() ?? new Aion.World.BotOptions()).Validated();
+// World bots and their chat (OURS, docs/WORLDBOTS.md): Aion:WorldBots (Enabled, Count, MinLevel, MaxLevel, Race, ...) and Aion:BotChat
+// (Enabled, Endpoint, Model, ApiKey from the environment only, Room, FactionOnly, ...).
+var worldBots = (builder.Configuration.GetSection("Aion:WorldBots").Get<Aion.World.WorldBotOptions>() ?? new Aion.World.WorldBotOptions()).Validated();
+var botChat = (builder.Configuration.GetSection("Aion:BotChat").Get<Aion.World.BotChatOptions>() ?? new Aion.World.BotChatOptions()).Validated();
 
 builder.Services.AddSingleton(dungeonRules);
 if (native.LoginPort is not null || native.GamePort is not null)
@@ -132,10 +136,33 @@ if (native.LoginPort is not null || native.GamePort is not null)
             presence: provider.GetRequiredService<Aion.World.WorldPresence>()));
         builder.Services.AddHostedService<PlayerBotsService>();
     }
+    if (worldBots.Enabled && native.GamePort is not null)
+    {
+        builder.Services.AddSingleton(provider => new Aion.World.WorldBots(Aion.World.GameData.Embedded, worldBots, provider.GetRequiredService<Aion.World.SharedWorld>(),
+            new Aion.World.GameSessionOptions
+            {
+                WorldId = native.WorldId, Terrain = provider.GetService<Aion.World.TerrainStore>(), Nav = provider.GetService<Aion.World.NavMeshStore>(),
+                Rates = provider.GetService<Aion.World.ServerRates>() ?? Aion.World.ServerRates.Official,
+                Rules = provider.GetService<Aion.World.WorldRules>() ?? Aion.World.WorldRules.Default,
+                Dungeons = provider.GetService<Aion.World.DungeonOptions>() ?? Aion.World.DungeonOptions.Default,
+            }, presence: provider.GetRequiredService<Aion.World.WorldPresence>()));
+        builder.Services.AddHostedService<WorldBotsService>();
+        if (botChat.Enabled && chatPort is not null)
+        {
+            builder.Services.AddSingleton(provider =>
+            {
+                var model = botChat.Endpoint.Length > 0 ? new Aion.World.OpenAiChatModel(new HttpClient(), botChat) : null;
+                var world = provider.GetRequiredService<Aion.World.WorldBots>();
+                return new Aion.World.BotChatter(botChat, world.Speakers, model);
+            });
+            builder.Services.AddHostedService<BotChatService>();
+        }
+    }
     builder.Services.AddSingleton<IChatCommandHandler>(provider =>
         new Aion.World.GmCommands(provider.GetRequiredService<Aion.World.WorldPresence>(), provider.GetRequiredService<Aion.World.BuilderCommands>())
         {
             Bots = provider.GetService<Aion.World.PlayerBots>(),
+            WorldBots = provider.GetService<Aion.World.WorldBots>(),
             // "//report <text>" opens a ticket for the staff dashboard (accounts only).
             Report = provider.GetService<IStaffTools>() is { } staffTools ? async (sender, name, text, ct) =>
             {

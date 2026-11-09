@@ -10,7 +10,8 @@ public sealed record ChatRoomKey(string Type, string ServerKey, string RoomKey);
 /// <param name="Name">The stored name (whispers are addressed to it).</param>
 /// <param name="DisplayName">The name shown in the world (staff tag in front, see CharacterNames.Display).</param>
 /// <param name="GuildId">The legion the character is in now (0 none): legion chat rooms reach its members only.</param>
-public sealed record ChatCharacter(Guid Id, string Name, string DisplayName, long GuildId = 0);
+/// <param name="Race">1 Light (Elyos), 2 Dark (Asmodian), 0 unknown: bot chat that stays in its faction reaches its own race only.</param>
+public sealed record ChatCharacter(Guid Id, string Name, string DisplayName, long GuildId = 0, int Race = 0);
 
 /// <summary>
 /// A verified chat participant. Built by an <see cref="IChatLoginVerifier"/>, never from request JSON.
@@ -149,3 +150,11 @@ public interface IChatModeration
     /// <summary>A delivered message for the chat log (queued; written in batches).</summary>
     void Logged(Aion.Application.Gameplay.ChatLogEntry entry);
 }
+
+/// <summary>
+/// A message a player said in one of the shared rooms (WORLD, REGION), or whispered to a bot, for listeners such as bot chat.
+/// <paramref name="Race"/> is the speaker's race when known (1 Light, 2 Dark, 0 unknown).
+/// </summary>
+/// For a whisper, <paramref name="Room"/> and <paramref name="SubType"/> are the ones the player's client used (a bot answers on them).
+public sealed record ChatHeard(string RoomType, string Speaker, string Content, int Race, string? WhisperTo = null, ChatRoomKey? Room = null,
+    string SubType = "NORMAL");

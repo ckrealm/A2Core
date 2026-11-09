@@ -305,6 +305,13 @@ public sealed class GameData
         profile is not null && classes.Classes.GetValueOrDefault(profile.Class)?.StarterWeapons.TryGetValue(
             profile.Race.ToString(System.Globalization.CultureInfo.InvariantCulture), out var weapon) == true ? weapon : null;
 
+    /// <summary>Every equippable item's Item.dat summary by item ID (world bots pick their gear from it).</summary>
+    public IEnumerable<(int ItemId, ItemInfo Info)> Items =>
+        items.Select(i => (int.Parse(i.Key, System.Globalization.CultureInfo.InvariantCulture), i.Value));
+
+    /// <summary>The weapon category a class fights with (its starter weapon's type), or null.</summary>
+    public string? ClassWeaponType(string className) => classes.Classes.GetValueOrDefault(className)?.WeaponType;
+
     /// <summary>An equippable item's Item.dat summary, or null.</summary>
     public ItemInfo? Item(int? itemId) =>
         itemId is null ? null : items.GetValueOrDefault(itemId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));

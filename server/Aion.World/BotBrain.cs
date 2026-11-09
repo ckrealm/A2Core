@@ -72,6 +72,18 @@ public sealed record BotChoice(BotRotationStep Step, GameSession? Ally, Target? 
 public enum BotMovement { Follow, Stay }
 
 /// <summary>
+/// A bot without a leader (a world bot, docs/WORLDBOTS.md): what it hunts and where it walks when the brain has no fight, heal or
+/// loot to do. The brain still does all the fighting, healing, looting and moving; this only picks the next monster and spot.
+/// </summary>
+public interface IBotWander
+{
+    /// <summary>A monster to start a fight with now (null: none, or the bot is resting).</summary>
+    Target? Pull(long now, Vector3d me);
+    /// <summary>Where to walk now (null: stand still, e.g. resting or idling).</summary>
+    Vector3d? Destination(long now, Vector3d me);
+}
+
+/// <summary>
 /// One playerbot's decisions (mod-playerbots style: strategies decide, actions are client requests). Each tick it looks at its
 /// leader, its group and the fight and returns the requests to feed, in this priority: the rotation's heal, resurrection and
 /// buff entries on the group (by the rotation's order), the fight (the leader's target, its own, or a monster attacking the
@@ -106,12 +118,16 @@ public sealed class BotBrain(GameData data, GameSession bot, GameSession leader,
     public string Role { get; set; } = rotation?.Roles.FirstOrDefault() ?? "dps";
     public int Slot { get; set; } = slot;
     public BotClassRotation? Rotation => rotation;
+    /// <summary>World bots (leader = the bot itself): picks monsters to hunt and spots to walk to when there is nothing else to do.</summary>
+    public IBotWander? Wander { get; set; }
 
     /// <summary>Diagnostics: casts sent, accepted, movement messages sent.</summary>
     public int CastsSent { get; private set; }
     public int CastsAccepted { get; private set; }
     public int MovesSent { get; private set; }
     public int? FightingKey { get; private set; }
+    /// <summary>Whether the bot is running now (between its 0x3700 start and 0x3718 stop).</summary>
+    public bool Moving => moving;
     /// <summary>Diagnostics: the last 100 accepted casts at group members (time, skill, player key).</summary>
     public IReadOnlyList<(long At, int Skill, int Target)> SupportLog => supportLog;
     readonly List<(long At, int Skill, int Target)> supportLog = [];
@@ -160,6 +176,7 @@ public sealed class BotBrain(GameData data, GameSession bot, GameSession leader,
         var group = Group();
         var threats = Threats(group, lead);
         var target = Assist ? Fight(now, me, lead, threats) : null;
+        if (target is null && Assist && Wander?.Pull(now, me) is { } pull) target = pull;
         FightingKey = target?.Key;
         var choice = now >= nextCastAt ? Choose(target, now, group, Fighting(target, group, threats, now), me, threats) : null;
         // Heals, resurrection and buffs: run within reach of the group member, stop, cast.
@@ -188,6 +205,8 @@ public sealed class BotBrain(GameData data, GameSession bot, GameSession leader,
             return requests;
         }
         if (Assist && Loot(me, lead, now) is { } loot) return loot;
+        if (Wander is { } wander)
+            return wander.Destination(now, me) is { } goal ? MoveToward(me, goal, ArriveWithin / 2, now) : StopMoving(me, now);
         if (Movement == BotMovement.Stay) return StopMoving(me, now);
         var spot = SlotAround(lead);
         if (moving ? Flat(me, spot) > ArriveWithin : Flat(me, lead) > FollowFar) return MoveToward(me, spot, ArriveWithin / 2, now);
@@ -268,9 +287,10 @@ public sealed class BotBrain(GameData data, GameSession bot, GameSession leader,
     {
         if (bot.SharedMap is not { } map) return [];
         var found = new List<(Target, GameSession)>();
-        foreach (var (key, brain) in map.Ai.Brains)
+        // The NPCs near the leader only (a levelling map has ~13,000 brains; walking them all every tick was most of a bot's cost).
+        foreach (var key in SpatialGrid.Npcs(map.Targets).Near(lead.X, lead.Y, AssistRange + SpatialGrid.NpcMargin))
         {
-            if (!brain.Engaged || brain.VictimIsNpc || brain.Mode is NpcAi.Mode.Return or NpcAi.Mode.Dead) continue;
+            if (map.Ai.Brains.GetValueOrDefault(key) is not { } brain || !brain.Engaged || brain.VictimIsNpc || brain.Mode is NpcAi.Mode.Return or NpcAi.Mode.Dead) continue;
             if (group.FirstOrDefault(s => s.PlayerKey == brain.VictimKey) is not { } victim) continue;
             if (bot.Targets.GetValueOrDefault(key) is { Dead: false, Hostile: true } npc && Flat(lead, npc.Position) <= AssistRange) found.Add((npc, victim));
         }

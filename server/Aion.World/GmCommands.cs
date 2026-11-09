@@ -86,6 +86,8 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
 
     /// <summary>"//bot ..." (docs/PLAYERBOTS.md): staff, or every player with Aion:Bots:PlayersMayUse. Null: no playerbots on this host.</summary>
     public PlayerBots? Bots { get; init; }
+    /// <summary>"//bot world" (docs/WORLDBOTS.md): who the world bots are and what they do. Null: no world bots on this host.</summary>
+    public WorldBots? WorldBots { get; init; }
 
     public async Task<string> HandleAsync(ChatIdentity sender, string userName, string content, CancellationToken ct)
     {
@@ -124,9 +126,20 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
         }
     }
 
+    /// <summary>//bot world [name]: the summary, or one bot's class, level, place and activity (anyone may ask: it is what others see).</summary>
+    string WorldBotList(string name)
+    {
+        if (name.Length == 0) return WorldBots!.Summary();
+        return WorldBots!.Speakers().FirstOrDefault(b => b.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) is { } bot
+            ? $"{bot.Name}: level {bot.Level} {(bot.Race == 2 ? "Asmodian" : "Elyos")} {bot.ClassName}, {bot.Activity}{(bot.Place is { } p ? " in " + p : "")}."
+            : $"No world bot named {name}.";
+    }
+
     /// <summary>//bot: allowed for staff, or for everyone with Aion:Bots:PlayersMayUse; runs on the sender's game loop.</summary>
     async Task<string> BotAsync(GameSession actor, string args, CancellationToken ct)
     {
+        if (args.Equals("world", StringComparison.OrdinalIgnoreCase) || args.StartsWith("world ", StringComparison.OrdinalIgnoreCase))
+            return WorldBots is null ? "World bots are off on this server (Aion:WorldBots:Enabled)." : WorldBotList(args[5..].Trim());
         if (Bots is not { Options.Enabled: true } bots) return "Playerbots are off on this server.";
         if (actor.Bot) return "Bots do not command bots.";
         if (!bots.Options.PlayersMayUse && !await builder.AllowedAsync(actor, ct)) return "Playerbots are for staff on this server.";

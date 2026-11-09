@@ -29,6 +29,30 @@ public sealed partial class GameSession
 
     public bool InCombat => inCombat;
 
+    /// <summary>
+    /// World bots (unsaved characters only): puts this gear on, replacing what was equipped. Call before the selection (the entry
+    /// shows it to others) or later (stats apply at once, others see it at their next appear). False for stored characters.
+    /// </summary>
+    public bool EquipUnsaved(IReadOnlyList<(int ItemId, byte Slot)> gear)
+    {
+        if (Store is not null) return false;
+        foreach (var key in inventory.Where(i => i.Value.Container == InventoryItem.Equipped).Select(i => i.Key).ToList()) inventory.Remove(key);
+        long next = 9_000_000;
+        foreach (var (item, slot) in gear)
+        {
+            inventory[next] = new InventoryItem(next, item, 1, InventoryItem.Equipped, slot, new EquipDetail(data.ItemLevel(item), slot));
+            next++;
+        }
+        if (resources is not null) equippedWeapon = WeaponFromInventory();
+        return true;
+    }
+
+    /// <summary>World bots only (Aion:WorldBots:Toughness, OURS): defense added on top of the character's own; 0 for everyone else.</summary>
+    public int BotDefense { get; set; }
+
+    /// <summary>The character's race: 1 Light (Elyos), 2 Dark (Asmodian).</summary>
+    public int Race => profileRace == 2 ? 2 : 1;
+
     /// <summary>A playerbot's role (tank, dps, heal; null for players), set by its brain: a tank bot looks after the others first.</summary>
     public string? BotRole { get; set; }
 
