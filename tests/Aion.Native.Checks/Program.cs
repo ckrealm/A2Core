@@ -2499,7 +2499,7 @@ presence.Enter("Player1", game, null);
 presence.Enter("Visitor", stored, null);
 Check((await gm.HandleAsync(chatter, "player1", "//help", default)).StartsWith("Builder commands"), "configured development GM");
 Check((await gm.HandleAsync(chatter, "[GM] Player1", "//help", default)).StartsWith("Builder commands"), "chat under the displayed name finds the character");
-Check(await gm.HandleAsync(chatter, "Visitor", "//help", default) == "Commands: //report <text> sends a report to the staff. /stigma shows your Stigma Shards and slots. " + GameSession.DungeonHelp, "players get the report, stigma and dungeon commands as help");
+Check(await gm.HandleAsync(chatter, "Visitor", "//help", default) == "Commands: /report <text> sends a report to the staff. /stigma shows your Stigma Shards and slots. " + GameSession.DungeonHelp, "players get the report, stigma and dungeon commands as help");
 async Task<string> ChatOnLoop(GameSession loop, string name, string line)
 {
     var pending = gm.HandleAsync(chatter, name, line, default);
@@ -2517,7 +2517,10 @@ Check(await reporting.HandleAsync(chatter, "[GM] Visitor", "//report  the bridge
     "//report from any player (no world entry needed) carries the stored name and the text");
 Check((await reporting.HandleAsync(chatter, "Visitor", "//report x", default)).StartsWith("Write what happened") && reports.Count == 1, "a report needs some text");
 Check((await Gm(stored, "Visitor", "//SetInvisible true")).Reply == "GM permission required.", "others are denied commands");
-Check(await gm.HandleAsync(chatter, "Player1", "/dance", default) == "Unknown command. Use //help." && await gm.HandleAsync(chatter, "Player1", "/gm help", default) == "Unknown command. Use //help.", "only // reaches the builder commands");
+Check(await gm.HandleAsync(chatter, "Player1", "/dance", default) == "Unknown command. Use /help." && await gm.HandleAsync(chatter, "Player1", "/gm help", default) == "Unknown command. Use /help."
+      && await gm.HandleAsync(chatter, "Player1", "/SetInvisible true", default) == "Unknown command. Use /help.", "only // reaches the builder commands");
+Check(await gm.HandleAsync(chatter, "Visitor", "/help", default) == "Commands: /report <text> sends a report to the staff. /stigma shows your Stigma Shards and slots. " + GameSession.DungeonHelp
+      && await gm.HandleAsync(chatter, "Visitor", "/report the bridge is broken", default) == "Reports are not available on this server.", "player commands work with one slash");
 var hidden = await Gm(game, "Player1", "//SetInvisible true");
 Check(hidden.Reply == "Invisible." && hidden.Packets.Any(b => b.SequenceEqual(new byte[] { 0x4d, 0x36, 1 })) && game.Invisible, "SetInvisible true sends 0x364d true; NPCs stop seeing the GM");
 Check((await Gm(game, "Player1", "//setinvisible false")).Packets.Any(b => b.SequenceEqual(new byte[] { 0x4d, 0x36, 0 })), "names are case-insensitive; false sends 0x364d false");
@@ -3666,7 +3669,8 @@ checks = 0;
           && rots.For("Cleric")!.RangeFor("heal") == 1500 && rots.For("Cleric")!.RangeFor("dps") == 1800,
           "bot-rotations.json: every class but the Cleric has an interrupt; positions and role ranges load");
     var rotWorld = new SharedWorld(data);
-    var rotOptions = new GameSessionOptions { World = rotWorld, TrainingDummy = true, CharacterLevel = 20 };
+    // Stigmas off: these checks follow the class rotations cast for cast (bot stigmas have their own check, docs/STIGMAS.md).
+    var rotOptions = new GameSessionOptions { World = rotWorld, TrainingDummy = true, CharacterLevel = 20, Stigmas = new StigmaOptions { Enabled = false } };
     long t = Now + 5_000_000;
     var lead = new GameSession(data, rotOptions, new Random(41));
     await lead.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), t);
@@ -3964,6 +3968,147 @@ checks = 0;
 }
 Console.WriteLine($"{checks} progression checks passed (unlocks past 25, fallback damage, skill-level scaling, MP max, combat power).");
 
+{
+    // Aion:Fun (docs/friends-server/FUN.md): field bosses, //buff, //hub, duel restore.
+    checks = 0;
+    static bool OptionsRefused(Func<FunOptions> make) { try { make(); return false; } catch (InvalidOperationException) { return true; } }
+    Check(OptionsRefused(() => new FunOptions { BossRespawnMinMinutes = 90, BossRespawnMaxMinutes = 60 }.Validated()) && OptionsRefused(() => new FunOptions { BuffMinutes = 0 }.Validated())
+          && !OptionsRefused(() => FunOptions.Default.Validated()), "Aion:Fun refuses a boss window with min > max and BuffMinutes 0");
+    Check(FunFeatures.DisplayName("M_D1_FieldBoss_Kashapa_02_1") == "Kashapa" && FunFeatures.DisplayName("M_D1_IoI_OdiumGartua_01_001") == "Odium Gartua"
+          && FunFeatures.DisplayName("M_D2_FieldBoss_BeritraD_01_001_1") == "Beritra", "field boss display names come from the spawn names");
+    var funWorld = new SharedWorld(data);
+    var fun = new FunFeatures(FunOptions.Default);
+    async Task<GameSession> FunSession(string name, FunFeatures? features)
+    {
+        var session = new GameSession(data, new GameSessionOptions { World = funWorld, Fun = features }, new Random(11));
+        await session.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+        await session.HandleAsync(new PacketWriter().U16(0x361b).String(name).U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
+        await session.HandleAsync(select, Now);
+        await session.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+        return session;
+    }
+    var hunter = await FunSession("Hunter", fun);
+    var helper = await FunSession("Helper", fun);
+    var faraway = await FunSession("Faraway", fun);
+    foreach (var s in new[] { hunter, helper, faraway })
+    {
+        s.Teleport(1010, new Vector3d(138089, 71985, 24700), Now);
+        await s.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    }
+    var kashapa = hunter.Targets.Values.Single(t => t.Name == "M_L1_FieldBoss_Kashapa_01_1");
+    var trash = hunter.Targets.Values.First(t => t.SubType == "NormalMonster" && t.Hostile);
+    var named = hunter.Targets.Values.First(t => t.SubType == "HeroMonster" && t.Hostile && !t.Name.Contains("Boss") && t.Grade < 6);
+    Check(hunter.FieldRankOf(kashapa) == FieldRank.Boss && hunter.FieldRankOf(named) == FieldRank.Named && hunter.FieldRankOf(trash) == FieldRank.None,
+          "open-world FieldBoss spawns rank as bosses, other HeroMonsters as named elites, the rest as nothing");
+    var funAt = Now + 1_000_000;
+    await helper.HandleAsync(Cast(basic, kashapa.Key, kashapa.Position), funAt);
+    await faraway.HandleAsync(Cast(basic, kashapa.Key, kashapa.Position), funAt);
+    faraway.Teleport(1010, new Vector3d(138089 + 30_000, 71985, 24700), funAt + 100);
+    await faraway.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), funAt + 100);
+    kashapa.Hp = 1;
+    await hunter.HandleAsync(Cast(basic, kashapa.Key, kashapa.Position), funAt + 1_000);
+    Check(kashapa.Dead && kashapa.KilledAtMs == funAt + 1_000, "the field boss falls");
+    var bossNotices = fun.TakeDue(funAt + 1_000);
+    Check(bossNotices.Count == 1 && bossNotices[0].StartsWith("Hunter and 1 other defeated the field boss Kashapa") && fun.Pending == 1,
+          $"its kill is announced server-wide and its next appearance waits ({string.Join(" | ", bossNotices)})");
+    await helper.TickAsync(funAt + 2_000);
+    await faraway.TickAsync(funAt + 2_000);
+    Check(helper.SharedLootReceived > 0, "a player who fought the boss rolls its loot too (Aion:Fun:SharedBossLoot)");
+    Check(faraway.SharedLootReceived == 0, "a fighter who is far away when the boss dies gets no roll");
+    faraway.ExitSharedWorld();
+    await hunter.TickAsync(funAt + 1_000 + GameSession.CorpseMs);
+    Check(kashapa.CorpseRemoved, "the corpse still goes after CorpseMs with a long respawn");
+    await hunter.TickAsync(funAt + 1_000 + 59 * 60_000);
+    Check(kashapa.Dead && fun.TakeDue(funAt + 1_000 + 59 * 60_000).Count == 0, "no field boss before its 60-minute window opens");
+    await hunter.TickAsync(funAt + 1_000 + 90 * 60_000);
+    var bossBack = fun.TakeDue(funAt + 1_000 + 90 * 60_000);
+    Check(!kashapa.Dead && bossBack.Count == 1 && bossBack[0].Contains("Kashapa (level 48) has appeared in the Light lands"),
+          $"the boss is back within 90 minutes and its appearance is announced ({string.Join(" | ", bossBack)})");
+    named.Hp = 1;
+    await hunter.HandleAsync(Cast(basic, named.Key, named.Position), funAt + 100 * 60_000);
+    await hunter.TickAsync(funAt + 100 * 60_000 + 9 * 60_000);
+    Check(named.Dead && fun.TakeDue(funAt + 110 * 60_000).Count == 0, "a named elite waits at least 10 minutes and is not announced");
+    await hunter.TickAsync(funAt + 100 * 60_000 + 15 * 60_000 + 1_000);
+    Check(!named.Dead, "a named elite is back within 15 minutes");
+    trash.Hp = 1;
+    await hunter.HandleAsync(Cast(basic, trash.Key, trash.Position), funAt + 120 * 60_000);
+    await hunter.TickAsync(funAt + 120 * 60_000 + GameSession.RespawnMs);
+    Check(!trash.Dead, "ordinary monsters keep Aion:Rules:RespawnSeconds");
+    // //buff and //hub through chat, for every player.
+    var funPresence = new WorldPresence();
+    var funBuilder = new BuilderCommands(funPresence, new GmPolicy(), (_, _, _) => { });
+    var funChat = new GmCommands(funPresence, funBuilder) { Fun = fun };
+    funPresence.Enter("Hunter", hunter, null);
+    var funClock = funAt + 200 * 60_000;
+    async Task<(string Reply, List<byte[]> Packets)> FunSay(string text)
+    {
+        var reply = funChat.HandleAsync(chatter, "Hunter", text, default);
+        var packets = await hunter.TickAsync(funClock += 1_000);
+        return (await reply, packets);
+    }
+    Check((await FunSay("/help")).Reply.Contains("/buff") && (await FunSay("/help")).Reply.Contains("/hub"), "players see /buff and /hub in /help");
+    var buffed = await FunSay("/buff");
+    Check(buffed.Reply.EndsWith("buffs applied for 30 minutes.") && hunter.ActiveBuffs.Count >= 4 && buffed.Packets.Any(b => Op(b) == 0x382a),
+          $"//buff applies the food and scroll buffs ({buffed.Reply}, {hunter.ActiveBuffs.Count} active)");
+    Check((await FunSay("/hub")).Reply.StartsWith("Teleports: 1. Verteron") && (await FunSay("//hub")).Reply.StartsWith("Teleports: 1. Verteron"), "/hub (or //hub) lists the race's destinations");
+    Check((await FunSay("//hub 9")).Reply.StartsWith("Pick a number"), "//hub refuses an unknown number");
+    Check((await FunSay("//hub 3")).Reply == "The Abyss needs level 45.", "//hub keeps low levels out of the Abyss");
+    var hubbed = await FunSay("//hub 2");
+    Check(hubbed.Reply == "Teleporting to Eltnen: Changarnerk Camp (Light zone 2)." && hubbed.Packets.Any(b => b[0] == 0x21 && b[1] == 0x36 && BitConverter.ToInt32(b, 6) == 1011),
+          "//hub <number> teleports to that town (0x3621 to map 1011)");
+    Check(!(await new GmCommands(funPresence, funBuilder).HandleAsync(chatter, "Hunter", "//buff", default)).Contains("buffs applied"), "without Aion:Fun there is no //buff");
+    // A duel's end restores both duelists.
+    hunter.Teleport(1010, new Vector3d(138089, 71985, 24700), funClock);
+    await hunter.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), funClock);
+    helper.SetResource('H', helper.Resource.HpMax / 2);
+    var helperBefore = helper.Resource.Hp;
+    await hunter.HandleAsync(SocialRequests.EncodeKey(SocialOpcodes.DuelCallOutRq, helper.PlayerKey), funClock + 10);
+    var funDuel = funWorld.Social.Duels.Single().Key;
+    await helper.HandleAsync(SocialRequests.EncodeDuelAnswer(SocialOpcodes.DuelCallOutAcceptRq, funDuel, hunter.PlayerKey), funClock + 20);
+    await hunter.TickAsync(funClock + 20 + Duel.CountdownMs);
+    hunter.SetResource('H', 10);
+    helper.SetResource('H', 20);
+    helper.SetResource('M', 0);
+    hunter.ExitSharedWorld();
+    Check(funWorld.Social.Duels.Count == 0 && helper.Resource.Hp == helperBefore && helper.Resource.Mp == helper.Resource.MpMax,
+          "a duel's end gives back the HP and MP the duel cost (Aion:Fun:DuelRestore)");
+    helper.ExitSharedWorld();
+    // Lucky drops: the next grade of the same kind, and enchanted pieces up to the item's max.
+    var luckRng = new Random(3);
+    Check(EnchantTables.Embedded.Grade(110150005) == 1 && EnchantTables.Embedded.Grade(110140022) == 2 && EnchantTables.Embedded.Grade(110130047) == 3,
+          "item grades come from Enchant.dat (Rare, Epic/Legend, Unique)");
+    Check(LootUpgrades.NextGrade(110150005, luckRng) is { } epic && EnchantTables.Embedded.Grade(epic) == 2 && data.Item(epic)!.Category == "Greatsword"
+          && Math.Abs(data.Item(epic)!.Level - 25) <= 5, "a Rare greatsword's lucky upgrade is an Epic greatsword of about its level");
+    Check(LootUpgrades.NextGrade(110140028, luckRng) is { } unique && EnchantTables.Embedded.Grade(unique) == 3 && LootUpgrades.NextGrade(110130047, luckRng) is null,
+          "an Epic upgrades to Unique; Unique is the top");
+    var always = FunOptions.Default with { UpgradeChanceHero = 100, UpgradeChanceNormal = 0 };
+    Check(LootUpgrades.Apply([(110150005, 1), (GameSession.KinaItemId, 50)], "HeroMonster", always, luckRng) is [var up, (GameSession.KinaItemId, 50)]
+          && EnchantTables.Embedded.Grade(up.ItemId) == 2 && LootUpgrades.Apply([(110150005, 1)], "NormalMonster", always, luckRng)[0].ItemId == 110150005,
+          "the upgrade chance goes by monster rank and only touches equipment");
+    var low = FunOptions.Default with { EnchantLowChance = 100, EnchantMidChance = 0, EnchantHighChance = 0 };
+    var high = FunOptions.Default with { EnchantLowChance = 0, EnchantMidChance = 0, EnchantHighChance = 100 };
+    var lows = Enumerable.Range(0, 200).Select(_ => LootUpgrades.EnchantLevel(110130047, low, luckRng)).ToList();
+    var highs = Enumerable.Range(0, 200).Select(_ => LootUpgrades.EnchantLevel(110130047, high, luckRng)).ToList();
+    Check(lows.All(l => l is >= 1 and <= 3) && highs.All(l => l >= 7 && l <= EnchantTables.Embedded.MaxLevel(110130047)) && EnchantTables.Embedded.MaxLevel(110130047) == 15
+          && Enumerable.Range(0, 200).All(_ => LootUpgrades.EnchantLevel(110150005, high, luckRng) <= 5),
+          "lucky enchant levels stay in their band and never pass the item's max (+15 Unique, +5 Rare)");
+    Check(Enumerable.Range(0, 200).All(_ => LootUpgrades.EnchantLevel(110130047, FunOptions.Default with { LuckyDrops = false }, luckRng) == 0), "LuckyDrops off: no enchanted drops");
+    // Through a stored character: a looted piece arrives enchanted in the bag (stored upgrades.enchant).
+    var luckyStore = new FakeStore();
+    var lucky = new GameSession(data, new GameSessionOptions { World = new SharedWorld(data), Fun = new FunFeatures(low) }, new Random(13)) { Store = luckyStore };
+    await lucky.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+    await lucky.HandleAsync(new PacketWriter().U16(0x361b).String("Lucky").U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
+    await lucky.HandleAsync(new PacketWriter().U16(0x361f).Varint(luckyStore.States[0].WireId << 16).I32(0).Vec3(Vector3d.Zero).ToArray(), Now);
+    await lucky.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    var luckyGear = MonsterRewards.Embedded.FallbackBand(45).First(i => EnchantTables.Embedded.MaxLevel(i) > 0);
+    lucky.ShareLoot([(luckyGear, 1)], Vector3d.Zero);
+    await lucky.TickAsync(Now + 10);
+    var luckyRow = luckyStore.Items.Single(i => i.TemplateId == luckyGear);
+    Check(luckyRow.Upgrades.TryGetProperty("enchant", out var luckyLevel) && luckyLevel.GetInt32() is >= 1 and <= 3,
+          "a looted piece is stored already enchanted (+1..+3 at EnchantLowChance 100)");
+    lucky.ExitSharedWorld();
+}
+Console.WriteLine($"{checks} fun feature checks passed (Aion:Fun: field bosses, //buff, //hub, duel restore, lucky drops).");
 // ---------- Daevanion boards (docs/DAEVANION.md): a small board in the client tables' shape ----------
 checks = 0;
 {
