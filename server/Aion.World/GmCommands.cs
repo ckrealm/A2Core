@@ -87,6 +87,9 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
     /// <summary>"//bot ..." (docs/PLAYERBOTS.md): staff, or every player with Aion:Bots:PlayersMayUse. Null: no playerbots on this host.</summary>
     public PlayerBots? Bots { get; init; }
 
+    /// <summary>"//ah ..." (docs/MARKET.md): the market for every player. Null: no market on this host (no game database).</summary>
+    public MarketCommands? Market { get; init; }
+
     public async Task<string> HandleAsync(ChatIdentity sender, string userName, string content, CancellationToken ct)
     {
         var text = content.Trim();
@@ -106,12 +109,16 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
         {
             if (line.StartsWith("bot", StringComparison.OrdinalIgnoreCase) && (line.Length == 3 || char.IsWhiteSpace(line[3])))
                 return await BotAsync(actor.Session, line[3..].Trim(), ct);
+            if (line.StartsWith("ah", StringComparison.OrdinalIgnoreCase) && (line.Length == 2 || char.IsWhiteSpace(line[2])))
+                return Market is { } market ? await market.HandleAsync(actor.Session, line[2..].Trim(), ct) : "The market is not available on this server.";
             if (line.Length == 0 || line.Equals("help", StringComparison.OrdinalIgnoreCase))
                 return await builder.AllowedAsync(actor.Session, ct)
                     ? "Builder commands (in chat: //<command>; console: s <command>): " + string.Join(", ", BuilderCommands.Supported)
                         + (Bots is { Options.Enabled: true } ? "; //bot add <character> for playerbots" : "")
+                        + (Market is { Options.Enabled: true } ? "; //ah for the market" : "")
                     : "Commands: //report <text> sends a report to the staff."
-                        + (Bots is { Options: { Enabled: true, PlayersMayUse: true } } ? " //bot add <character> summons one of your characters as a bot." : "");
+                        + (Bots is { Options: { Enabled: true, PlayersMayUse: true } } ? " //bot add <character> summons one of your characters as a bot." : "")
+                        + (Market is { Options.Enabled: true } ? " //ah search <item> opens the market (//ah help)." : "");
             return await actor.Session.InvokeAsync(async now =>
             {
                 var outcome = await builder.RunAsync(actor.Session, line, now, ct);
