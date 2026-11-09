@@ -10,7 +10,8 @@
 # aion-*.dump are left alone. With a copy folder each verified backup is also copied there (compared byte for byte), with
 # its own retention; a failed copy keeps the local backup and exits 1.
 # Settings (flags win): AION_BACKUP_DIR, AION_BACKUP_KEEP, AION_BACKUP_PREFIX, AION_BACKUP_VERIFY=0,
-# AION_BACKUP_COPY_DIR, AION_BACKUP_COPY_KEEP (default: the same as AION_BACKUP_KEEP),
+# AION_BACKUP_COPY_DIR, AION_BACKUP_COPY_KEEP (default: the same as AION_BACKUP_KEEP), AION_PG_TIMEOUT (seconds for
+# pg_dump and the verification restore, default 3600, 0 = no limit),
 # AION_PG_HOME (/var/lib/aion/postgres), AION_PG_TOOL (/opt/aion/src/tools/postgres_dev.py), AION_RUN_AS (aion; empty runs
 # the tool as the calling user). The unit reads them from /etc/aion/backup.env; after changing a folder there, run
 # sudo /opt/aion/bin/backup-paths.sh (the sandboxed unit may write only to the folders it lists).
@@ -28,7 +29,7 @@ export AION_PG_HOME="${AION_PG_HOME:-/var/lib/aion/postgres}"
 COPY_DIR="${AION_BACKUP_COPY_DIR:-}"
 COPY_KEEP="${AION_BACKUP_COPY_KEEP:-}"
 
-usage() { sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; }
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dir) DIR="$2"; shift 2 ;;
@@ -53,7 +54,7 @@ tool() {
   if [[ -z "$RUN_AS" || "$(id -un)" == "$RUN_AS" ]]; then
     (cd / && "$PYTHON" "$TOOL" "$@")
   elif [[ $EUID -eq 0 ]]; then
-    (cd / && runuser -u "$RUN_AS" -- env AION_PG_HOME="$AION_PG_HOME" ${AION_PG_BIN:+AION_PG_BIN="$AION_PG_BIN"} "$PYTHON" "$TOOL" "$@")
+    (cd / && runuser -u "$RUN_AS" -- env AION_PG_HOME="$AION_PG_HOME" ${AION_PG_BIN:+AION_PG_BIN="$AION_PG_BIN"} ${AION_PG_TIMEOUT:+AION_PG_TIMEOUT="$AION_PG_TIMEOUT"} "$PYTHON" "$TOOL" "$@")
   else
     echo "Run as root or as $RUN_AS." >&2; exit 2
   fi

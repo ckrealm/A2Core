@@ -203,6 +203,7 @@ and the dashboard's `aion-*` backups in the same folder have their own retention
 systemctl list-timers aion-backup.timer
 sudo systemctl start aion-backup && journalctl -u aion-backup -n 20     # back up now
 echo 'AION_BACKUP_KEEP=30' | sudo tee /etc/aion/backup.env             # settings: AION_BACKUP_KEEP, AION_BACKUP_VERIFY=0
+echo 'AION_PG_TIMEOUT=7200' | sudo tee -a /etc/aion/backup.env        # pg_dump/verify limit in s (default 3600, 0 = none)
 sudo systemctl disable --now aion-backup.timer                          # no nightly backups
 sudo /opt/aion/bin/backup.sh --keep 30                                  # by hand (as root or aion)
 ```

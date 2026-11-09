@@ -6,6 +6,11 @@ Credentials and all generated data stay under ignored research/local/postgres.
 Linux servers (deploy/linux/README.md): the same project-owned cluster, with the
 distribution's PostgreSQL binaries (AION_PG_BIN, else the newest
 /usr/lib/postgresql/<n>/bin) and AION_PG_HOME for the cluster and credentials.
+
+Timeouts: quick calls (psql statements, pg_ctl) stop after 180 s / 45 s. Work that grows
+with the database (backup, verify-backup's restore and counts, import-catalog) gets
+AION_PG_TIMEOUT seconds (default 3600; 0 = no limit), so a big database on slow disks
+(WSL) is not cut off and a good backup discarded.
 """
 import argparse
 import csv
@@ -23,6 +28,21 @@ ROOT = Path(__file__).resolve().parents[1]
 HOME = Path(os.environ['AION_PG_HOME']) if os.environ.get('AION_PG_HOME') else ROOT / 'research/local/postgres'
 PORT = 55432
 WINDOWS = os.name == 'nt'
+SHORT_TIMEOUT = 180
+
+
+def long_timeout():
+    """Seconds for work that grows with the database (AION_PG_TIMEOUT, default 3600; 0 = none)."""
+    value = os.environ.get('AION_PG_TIMEOUT', '').strip()
+    if not value:
+        return 3600
+    try:
+        seconds = float(value)
+    except ValueError:
+        raise ValueError(f'AION_PG_TIMEOUT must be a number of seconds, not {value!r}') from None
+    if seconds < 0:
+        raise ValueError('AION_PG_TIMEOUT must be 0 (no limit) or more')
+    return seconds or None
 
 
 def binaries():
@@ -42,7 +62,7 @@ def literal(text):
     return "'" + str(text).replace("'", "''") + "'"
 
 
-def run(binary, args=(), *, text=None, role='aion_admin', database='aion', check=True):
+def run(binary, args=(), *, text=None, role='aion_admin', database='aion', check=True, timeout=SHORT_TIMEOUT):
     env = os.environ.copy()
     if (HOME / 'credentials.json').exists():
         credentials = json.loads((HOME / 'credentials.json').read_text())
@@ -61,7 +81,7 @@ def run(binary, args=(), *, text=None, role='aion_admin', database='aion', check
             result = subprocess.CompletedProcess(command, process.returncode, '', log.read())
     else:
         result = subprocess.run(command, input=text, encoding='utf-8', capture_output=True,
-                                env=env, creationflags=flags, timeout=180)
+                                env=env, creationflags=flags, timeout=timeout)
     if check and result.returncode:
         # SQL errors can contain input; redact generated credentials before printing.
         message = result.stderr
@@ -72,9 +92,9 @@ def run(binary, args=(), *, text=None, role='aion_admin', database='aion', check
     return result
 
 
-def sql(text, *, role='aion_admin', database='aion', check=True):
+def sql(text, *, role='aion_admin', database='aion', check=True, timeout=SHORT_TIMEOUT):
     return run('psql', ['-X', '-q', '-A', '-t', '-v', 'ON_ERROR_STOP=1'], text=text,
-               role=role, database=database, check=check)
+               role=role, database=database, check=check, timeout=timeout)
 
 
 def setup():
@@ -190,7 +210,7 @@ def import_catalog(directory):
             stream.write(f"INSERT INTO catalog.{kind}(build_id,template_id,name,category,definition) SELECT {literal(build_id)},(document->>'id')::integer,document->>'name',document->>'category',document FROM incoming WHERE document->>'kind'='{kind}' ON CONFLICT DO NOTHING;\n")
         stream.write('COMMIT;\n')
     try:
-        run('psql', ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-f', path])
+        run('psql', ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-f', path], timeout=long_timeout())
     finally:
         path.unlink(missing_ok=True)
     return {'build_id': build_id, 'counts': counts}
@@ -202,10 +222,11 @@ def verify_backup(path):
     sql(f'CREATE DATABASE {name};', database='postgres')
     try:
         run('pg_restore', ['--no-owner', '--no-privileges', '--exit-on-error',
-                           '--dbname', name, Path(path).resolve()])
+                           '--dbname', name, Path(path).resolve()], timeout=long_timeout())
         return sql("SELECT 'items='||count(*) FROM catalog.items;"
                    "SELECT 'skills='||count(*) FROM catalog.skills;"
-                   "SELECT 'migrations='||count(*) FROM public.schema_migrations;", database=name).stdout.strip()
+                   "SELECT 'migrations='||count(*) FROM public.schema_migrations;", database=name,
+                   timeout=long_timeout()).stdout.strip()
     finally:
         # Name consists only of this fixed prefix and freshly generated hex.
         sql(f'DROP DATABASE {name};', database='postgres')
@@ -258,7 +279,7 @@ def main():
         if args.output.exists():
             raise ValueError('Backup destination already exists')
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        run('pg_dump', ['-Fc', '-f', args.output])
+        run('pg_dump', ['-Fc', '-f', args.output], timeout=long_timeout())
         print('Backup saved:', args.output)
     elif args.command == 'verify-backup':
         print(verify_backup(args.path))
