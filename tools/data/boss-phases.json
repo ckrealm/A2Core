@@ -1,0 +1,2149 @@
+{
+  "source": "OURS: tools/boss_phases.py (the rules are in its docstring). Bosses, skills, cast times and adds are the client's own (map-events.json, world-npcs.json); the phases, slam radii, timings and multipliers are ours, except the hard modes' 4-minute frenzy (global's rule). Ludra's waves are the client's own spawn entries.",
+  "bosses": {
+    "2300104": {
+      "name": "KraoCave_monster_Named_1",
+      "dungeon": "KraoCave_Normal",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1218520,
+        "every_ms": 30000,
+        "wind_up_ms": 3000,
+        "radius": 450,
+        "damage": 3.0,
+        "warning": "The Krao Cave boss gathers power: get out of reach!"
+      }
+    },
+    "2300108": {
+      "name": "KraoCave_monster_Named_2",
+      "dungeon": "KraoCave_Normal",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1218590,
+        "every_ms": 30000,
+        "wind_up_ms": 1500,
+        "radius": 450,
+        "damage": 1.79,
+        "warning": "The Krao Cave boss gathers power: get out of reach!"
+      }
+    },
+    "2300171": {
+      "name": "KraoCave_Boss_1",
+      "dungeon": "KraoCave_Normal",
+      "role": "final",
+      "telegraph": {
+        "skill": 1800140,
+        "every_ms": 24000,
+        "wind_up_ms": 8000,
+        "radius": 600,
+        "damage": 1.0,
+        "warning": "The Krao Cave boss gathers power: get out of reach!"
+      },
+      "phases": [
+        {
+          "at": 70,
+          "name": "call",
+          "adds": {
+            "npc": 2300102,
+            "count": 3,
+            "radius": 500
+          },
+          "notice": "The Krao Cave boss calls for help!"
+        },
+        {
+          "at": 40,
+          "name": "fury",
+          "damage": 1.15,
+          "telegraph": {
+            "skill": 1800140,
+            "every_ms": 18000,
+            "wind_up_ms": 8000,
+            "radius": 600,
+            "damage": 1.0,
+            "warning": "The Krao Cave boss gathers power: get out of reach!"
+          },
+          "notice": "The Krao Cave boss grows furious."
+        },
+        {
+          "at": 20,
+          "name": "enrage",
+          "damage": 1.3,
+          "haste": 0.8,
+          "notice": "The Krao Cave boss is enraged!"
+        }
+      ]
+    },
+    "2300206": {
+      "name": "UruCan_Stage01_SubBoss_2",
+      "dungeon": "Urugugu_Canyon_Normal",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1504420,
+        "every_ms": 30000,
+        "wind_up_ms": 1500,
+        "radius": 450,
+        "damage": 1.0,
+        "warning": "The Urugugu Canyon boss gathers power: get out of reach!"
+      }
+    },
+    "2300207": {
+      "name": "UruCan_Stage01_SubBoss_1",
+      "dungeon": "Urugugu_Canyon_Normal",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1605110,
+        "every_ms": 30000,
+        "wind_up_ms": 1500,
+        "radius": 450,
+        "damage": 1.0,
+        "warning": "The Urugugu Canyon boss gathers power: get out of reach!"
+      }
+    },
+    "2300218": {
+      "name": "UruCan_Stage03_Boss_1",
+      "dungeon": "Urugugu_Canyon_Normal",
+      "role": "final",
+      "telegraph": {
+        "skill": 1600870,
+        "every_ms": 24000,
+        "wind_up_ms": 3000,
+        "radius": 600,
+        "damage": 3.0,
+        "warning": "The Urugugu Canyon boss gathers power: get out of reach!"
+      },
+      "phases": [
+        {
+          "at": 70,
+          "name": "call",
+          "adds": {
+            "npc": 2300201,
+            "count": 3,
+            "radius": 500
+          },
+          "notice": "The Urugugu Canyon boss calls for help!"
+        },
+        {
+          "at": 40,
+          "name": "fury",
+          "damage": 1.15,
+          "telegraph": {
+            "skill": 1600870,
+            "every_ms": 18000,
+            "wind_up_ms": 3000,
+            "radius": 600,
+            "damage": 3.0,
+            "warning": "The Urugugu Canyon boss gathers power: get out of reach!"
+          },
+          "notice": "The Urugugu Canyon boss grows furious."
+        },
+        {
+          "at": 20,
+          "name": "enrage",
+          "damage": 1.3,
+          "haste": 0.8,
+          "notice": "The Urugugu Canyon boss is enraged!"
+        }
+      ]
+    },
+    "2300310": {
+      "name": "Fire_Temple_Single_5",
+      "dungeon": "Fire_Temple_Normal",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1227130,
+        "every_ms": 30000,
+        "wind_up_ms": 3000,
+        "radius": 450,
+        "damage": 3.0,
+        "warning": "The Fire Temple boss gathers power: get out of reach!"
+      }
+    },
+    "2300311": {
+      "name": "Fire_Temple_Single_MidBoss_1",
+      "dungeon": "Fire_Temple_Normal",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1600850,
+        "every_ms": 30000,
+        "wind_up_ms": 3000,
+        "radius": 450,
+        "damage": 1.19,
+        "warning": "The Fire Temple boss gathers power: get out of reach!"
+      }
+    },
+    "2300312": {
+      "name": "Fire_Temple_Single_MidBoss_2",
+      "dungeon": "Fire_Temple_Normal",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1600680,
+        "every_ms": 30000,
+        "wind_up_ms": 1630,
+        "radius": 450,
+        "damage": 1.19,
+        "warning": "The Fire Temple boss gathers power: get out of reach!"
+      }
+    },
+    "2300371": {
+      "name": "Fire_Temple_Single_Boss_1",
+      "dungeon": "Fire_Temple_Normal",
+      "role": "final",
+      "telegraph": {
+        "skill": 1801080,
+        "every_ms": 24000,
+        "wind_up_ms": 2000,
+        "radius": 600,
+        "damage": 1.0,
+        "warning": "The Fire Temple boss gathers power: get out of reach!"
+      },
+      "phases": [
+        {
+          "at": 70,
+          "name": "call",
+          "adds": {
+            "npc": 2300305,
+            "count": 3,
+            "radius": 500
+          },
+          "notice": "The Fire Temple boss calls for help!"
+        },
+        {
+          "at": 40,
+          "name": "fury",
+          "damage": 1.15,
+          "telegraph": {
+            "skill": 1801080,
+            "every_ms": 18000,
+            "wind_up_ms": 2000,
+            "radius": 600,
+            "damage": 1.0,
+            "warning": "The Fire Temple boss gathers power: get out of reach!"
+          },
+          "notice": "The Fire Temple boss grows furious."
+        },
+        {
+          "at": 20,
+          "name": "enrage",
+          "damage": 1.3,
+          "haste": 0.8,
+          "notice": "The Fire Temple boss is enraged!"
+        }
+      ]
+    },
+    "2300401": {
+      "name": "Draupnir_Abyss_single_NagaElite_01_Lakshmi",
+      "dungeon": "Draupnir_Normal",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1605930,
+        "every_ms": 30000,
+        "wind_up_ms": 1600,
+        "radius": 450,
+        "damage": 1.77,
+        "warning": "Lakshmi gathers power: get out of reach!"
+      }
+    },
+    "2300403": {
+      "name": "Draupnir_Abyss_single_NagaElite_02_Saraswati",
+      "dungeon": "Draupnir_Normal",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1218640,
+        "every_ms": 30000,
+        "wind_up_ms": 3000,
+        "radius": 450,
+        "damage": 3.0,
+        "warning": "Saraswati gathers power: get out of reach!"
+      }
+    },
+    "2300471": {
+      "name": "Draupnir_Abyss_Boss_Bakarma",
+      "dungeon": "Draupnir_Normal",
+      "role": "final",
+      "telegraph": {
+        "skill": 1800554,
+        "every_ms": 24000,
+        "wind_up_ms": 2500,
+        "radius": 600,
+        "damage": 1.97,
+        "warning": "Bakarma gathers power: get out of reach!"
+      },
+      "phases": [
+        {
+          "at": 70,
+          "name": "call",
+          "adds": {
+            "npc": 2300422,
+            "count": 3,
+            "radius": 500
+          },
+          "notice": "Bakarma calls for help!"
+        },
+        {
+          "at": 40,
+          "name": "fury",
+          "damage": 1.15,
+          "telegraph": {
+            "skill": 1800554,
+            "every_ms": 18000,
+            "wind_up_ms": 2500,
+            "radius": 600,
+            "damage": 1.97,
+            "warning": "Bakarma gathers power: get out of reach!"
+          },
+          "notice": "Bakarma grows furious."
+        },
+        {
+          "at": 20,
+          "name": "enrage",
+          "damage": 1.3,
+          "haste": 0.8,
+          "notice": "Bakarma is enraged!"
+        }
+      ]
+    },
+    "2300810": {
+      "name": "BakronIsland_Single_MidBoss_1",
+      "dungeon": "BakronIsland_Normal",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1604440,
+        "every_ms": 30000,
+        "wind_up_ms": 3000,
+        "radius": 450,
+        "damage": 3.0,
+        "warning": "The Vakron Sky Island boss gathers power: get out of reach!"
+      }
+    },
+    "2300811": {
+      "name": "BakronIsland_Single_MidBoss_2",
+      "dungeon": "BakronIsland_Normal",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1604790,
+        "every_ms": 30000,
+        "wind_up_ms": 2050,
+        "radius": 450,
+        "damage": 2.5,
+        "warning": "The Vakron Sky Island boss gathers power: get out of reach!"
+      }
+    },
+    "2300812": {
+      "name": "BakronIsland_Single_Boss_1",
+      "dungeon": "BakronIsland_Normal",
+      "role": "final",
+      "telegraph": {
+        "skill": 1604410,
+        "every_ms": 24000,
+        "wind_up_ms": 2000,
+        "radius": 600,
+        "damage": 2.71,
+        "warning": "The Vakron Sky Island boss gathers power: get out of reach!"
+      },
+      "phases": [
+        {
+          "at": 70,
+          "name": "call",
+          "adds": {
+            "npc": 2300802,
+            "count": 3,
+            "radius": 500
+          },
+          "notice": "The Vakron Sky Island boss calls for help!"
+        },
+        {
+          "at": 40,
+          "name": "fury",
+          "damage": 1.15,
+          "telegraph": {
+            "skill": 1604410,
+            "every_ms": 18000,
+            "wind_up_ms": 2000,
+            "radius": 600,
+            "damage": 2.71,
+            "warning": "The Vakron Sky Island boss gathers power: get out of reach!"
+          },
+          "notice": "The Vakron Sky Island boss grows furious."
+        },
+        {
+          "at": 20,
+          "name": "enrage",
+          "damage": 1.3,
+          "haste": 0.8,
+          "notice": "The Vakron Sky Island boss is enraged!"
+        }
+      ]
+    },
+    "2300908": {
+      "name": "M_PD_FierceHornCave_KalnifElite_01_V02_001",
+      "dungeon": "HornCave_Normal",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1606870,
+        "every_ms": 30000,
+        "wind_up_ms": 3000,
+        "radius": 450,
+        "damage": 3.0,
+        "warning": "the Kalnif chieftain gathers power: get out of reach!"
+      }
+    },
+    "2300909": {
+      "name": "M_PD_FierceHornCave_Lycan_04_V01_001",
+      "dungeon": "HornCave_Normal",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1606960,
+        "every_ms": 30000,
+        "wind_up_ms": 3000,
+        "radius": 450,
+        "damage": 3.0,
+        "warning": "the Lycan alpha gathers power: get out of reach!"
+      }
+    },
+    "2300910": {
+      "name": "M_PD_FierceHornCave_Ferk_01_V01",
+      "dungeon": "HornCave_Normal",
+      "role": "final",
+      "telegraph": {
+        "skill": 1802000,
+        "every_ms": 24000,
+        "wind_up_ms": 3000,
+        "radius": 600,
+        "damage": 3.0,
+        "warning": "Ferk gathers power: get out of reach!"
+      },
+      "phases": [
+        {
+          "at": 70,
+          "name": "call",
+          "adds": {
+            "npc": 2300917,
+            "count": 3,
+            "radius": 500
+          },
+          "notice": "Ferk calls for help!"
+        },
+        {
+          "at": 40,
+          "name": "fury",
+          "damage": 1.15,
+          "telegraph": {
+            "skill": 1802000,
+            "every_ms": 18000,
+            "wind_up_ms": 3000,
+            "radius": 600,
+            "damage": 3.0,
+            "warning": "Ferk gathers power: get out of reach!"
+          },
+          "notice": "Ferk grows furious."
+        },
+        {
+          "at": 20,
+          "name": "enrage",
+          "damage": 1.3,
+          "haste": 0.8,
+          "notice": "Ferk is enraged!"
+        }
+      ]
+    },
+    "2301006": {
+      "name": "M_PD_ReforgedAbyss_Lagta_01_001",
+      "dungeon": "ReforgedAbyss_Normal",
+      "role": "raid",
+      "telegraph": {
+        "skill": 1802810,
+        "every_ms": 22000,
+        "wind_up_ms": 3000,
+        "radius": 700,
+        "damage": 1.19,
+        "warning": "Lagta gathers power: get out of reach!"
+      },
+      "phases": [
+        {
+          "at": 60,
+          "name": "call",
+          "adds": {
+            "npc": 2301019,
+            "count": 3,
+            "radius": 600
+          },
+          "notice": "Lagta calls for help!"
+        },
+        {
+          "at": 30,
+          "name": "enrage",
+          "damage": 1.25,
+          "haste": 0.85,
+          "notice": "Lagta is enraged!"
+        }
+      ]
+    },
+    "2301007": {
+      "name": "M_PD_ReforgedAbyss_Kashapa_01_001",
+      "dungeon": "ReforgedAbyss_Normal",
+      "role": "raid",
+      "telegraph": {
+        "skill": 1801820,
+        "every_ms": 22000,
+        "wind_up_ms": 2000,
+        "radius": 700,
+        "damage": 1.19,
+        "warning": "Kashapa gathers power: get out of reach!"
+      },
+      "phases": [
+        {
+          "at": 60,
+          "name": "call",
+          "adds": {
+            "npc": 2301019,
+            "count": 3,
+            "radius": 600
+          },
+          "notice": "Kashapa calls for help!"
+        },
+        {
+          "at": 30,
+          "name": "enrage",
+          "damage": 1.25,
+          "haste": 0.85,
+          "notice": "Kashapa is enraged!"
+        }
+      ]
+    },
+    "2301014": {
+      "name": "M_PD_ReforgedAbyss_Durbati_01_V01_001",
+      "dungeon": "ReforgedAbyss_Normal",
+      "role": "raid_final",
+      "telegraph": {
+        "skill": 1803000,
+        "every_ms": 20000,
+        "wind_up_ms": 3000,
+        "radius": 900,
+        "damage": 3.0,
+        "warning": "Durbati gathers power: get out of reach!"
+      },
+      "phases": [
+        {
+          "at": 75,
+          "name": "call",
+          "adds": {
+            "npc": 2301019,
+            "count": 4,
+            "radius": 700
+          },
+          "notice": "Durbati calls the forge guards!"
+        },
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.15,
+          "adds": {
+            "npc": 2301019,
+            "count": 4,
+            "radius": 700
+          },
+          "telegraph": {
+            "skill": 1803000,
+            "every_ms": 15000,
+            "wind_up_ms": 3000,
+            "radius": 900,
+            "damage": 3.0,
+            "warning": "Durbati gathers power: get out of reach!"
+          },
+          "notice": "Durbati grows furious."
+        },
+        {
+          "at": 25,
+          "name": "enrage",
+          "damage": 1.35,
+          "haste": 0.8,
+          "notice": "Durbati is enraged!"
+        }
+      ]
+    },
+    "2310104": {
+      "name": "KraoCave_monster_Named_1",
+      "dungeon": "KraoCave_Easy",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1218520,
+        "every_ms": 30000,
+        "wind_up_ms": 3000,
+        "radius": 450,
+        "damage": 3.0,
+        "warning": "The Krao Cave boss gathers power: get out of reach!"
+      }
+    },
+    "2310108": {
+      "name": "KraoCave_monster_Named_2",
+      "dungeon": "KraoCave_Easy",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1218590,
+        "every_ms": 30000,
+        "wind_up_ms": 1500,
+        "radius": 450,
+        "damage": 1.79,
+        "warning": "The Krao Cave boss gathers power: get out of reach!"
+      }
+    },
+    "2310171": {
+      "name": "KraoCave_Boss_1",
+      "dungeon": "KraoCave_Easy",
+      "role": "final",
+      "telegraph": {
+        "skill": 1800140,
+        "every_ms": 30000,
+        "wind_up_ms": 8000,
+        "radius": 500,
+        "damage": 1.0,
+        "warning": "The Krao Cave boss gathers power: get out of reach!"
+      },
+      "phases": [
+        {
+          "at": 70,
+          "name": "call",
+          "adds": {
+            "npc": 2310102,
+            "count": 2,
+            "radius": 500
+          },
+          "notice": "The Krao Cave boss calls for help!"
+        },
+        {
+          "at": 40,
+          "name": "fury",
+          "damage": 1.15,
+          "telegraph": {
+            "skill": 1800140,
+            "every_ms": 22500,
+            "wind_up_ms": 8000,
+            "radius": 500,
+            "damage": 1.0,
+            "warning": "The Krao Cave boss gathers power: get out of reach!"
+          },
+          "notice": "The Krao Cave boss grows furious."
+        }
+      ]
+    },
+    "2310206": {
+      "name": "UruCan_Stage01_SubBoss_2",
+      "dungeon": "Urugugu_Canyon_Easy",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1504420,
+        "every_ms": 30000,
+        "wind_up_ms": 1500,
+        "radius": 450,
+        "damage": 1.0,
+        "warning": "The Urugugu Canyon boss gathers power: get out of reach!"
+      }
+    },
+    "2310207": {
+      "name": "UruCan_Stage01_SubBoss_1",
+      "dungeon": "Urugugu_Canyon_Easy",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1605110,
+        "every_ms": 30000,
+        "wind_up_ms": 1500,
+        "radius": 450,
+        "damage": 1.0,
+        "warning": "The Urugugu Canyon boss gathers power: get out of reach!"
+      }
+    },
+    "2310218": {
+      "name": "UruCan_Stage03_Boss_1",
+      "dungeon": "Urugugu_Canyon_Easy",
+      "role": "final",
+      "telegraph": {
+        "skill": 1600870,
+        "every_ms": 30000,
+        "wind_up_ms": 3000,
+        "radius": 500,
+        "damage": 3.0,
+        "warning": "The Urugugu Canyon boss gathers power: get out of reach!"
+      },
+      "phases": [
+        {
+          "at": 70,
+          "name": "call",
+          "adds": {
+            "npc": 2310201,
+            "count": 2,
+            "radius": 500
+          },
+          "notice": "The Urugugu Canyon boss calls for help!"
+        },
+        {
+          "at": 40,
+          "name": "fury",
+          "damage": 1.15,
+          "telegraph": {
+            "skill": 1600870,
+            "every_ms": 22500,
+            "wind_up_ms": 3000,
+            "radius": 500,
+            "damage": 3.0,
+            "warning": "The Urugugu Canyon boss gathers power: get out of reach!"
+          },
+          "notice": "The Urugugu Canyon boss grows furious."
+        }
+      ]
+    },
+    "2310310": {
+      "name": "M_PD_Fire_Temple_Rotan_001_Easy",
+      "dungeon": "Fire_Temple_Easy",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1227130,
+        "every_ms": 30000,
+        "wind_up_ms": 3000,
+        "radius": 450,
+        "damage": 3.0,
+        "warning": "Rotan gathers power: get out of reach!"
+      }
+    },
+    "2310311": {
+      "name": "Fire_Temple_Single_MidBoss_1",
+      "dungeon": "Fire_Temple_Easy",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1600850,
+        "every_ms": 30000,
+        "wind_up_ms": 3000,
+        "radius": 450,
+        "damage": 1.19,
+        "warning": "The Fire Temple boss gathers power: get out of reach!"
+      }
+    },
+    "2310312": {
+      "name": "Fire_Temple_Single_MidBoss_2",
+      "dungeon": "Fire_Temple_Easy",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1600680,
+        "every_ms": 30000,
+        "wind_up_ms": 1630,
+        "radius": 450,
+        "damage": 1.19,
+        "warning": "The Fire Temple boss gathers power: get out of reach!"
+      }
+    },
+    "2310371": {
+      "name": "Fire_Temple_Single_Boss_1",
+      "dungeon": "Fire_Temple_Easy",
+      "role": "final",
+      "telegraph": {
+        "skill": 1801080,
+        "every_ms": 30000,
+        "wind_up_ms": 2000,
+        "radius": 500,
+        "damage": 1.0,
+        "warning": "The Fire Temple boss gathers power: get out of reach!"
+      },
+      "phases": [
+        {
+          "at": 70,
+          "name": "call",
+          "adds": {
+            "npc": 2310304,
+            "count": 2,
+            "radius": 500
+          },
+          "notice": "The Fire Temple boss calls for help!"
+        },
+        {
+          "at": 40,
+          "name": "fury",
+          "damage": 1.15,
+          "telegraph": {
+            "skill": 1801080,
+            "every_ms": 22500,
+            "wind_up_ms": 2000,
+            "radius": 500,
+            "damage": 1.0,
+            "warning": "The Fire Temple boss gathers power: get out of reach!"
+          },
+          "notice": "The Fire Temple boss grows furious."
+        }
+      ]
+    },
+    "2310401": {
+      "name": "Draupnir_Abyss_single_NagaElite_01_Lakshmi",
+      "dungeon": "Draupnir_Easy",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1605930,
+        "every_ms": 30000,
+        "wind_up_ms": 1600,
+        "radius": 450,
+        "damage": 1.77,
+        "warning": "Lakshmi gathers power: get out of reach!"
+      }
+    },
+    "2310403": {
+      "name": "Draupnir_Abyss_single_NagaElite_02_Saraswati",
+      "dungeon": "Draupnir_Easy",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1218640,
+        "every_ms": 30000,
+        "wind_up_ms": 3000,
+        "radius": 450,
+        "damage": 3.0,
+        "warning": "Saraswati gathers power: get out of reach!"
+      }
+    },
+    "2310471": {
+      "name": "Draupnir_Abyss_Boss_Bakarma",
+      "dungeon": "Draupnir_Easy",
+      "role": "final",
+      "telegraph": {
+        "skill": 1800554,
+        "every_ms": 30000,
+        "wind_up_ms": 2500,
+        "radius": 500,
+        "damage": 1.97,
+        "warning": "Bakarma gathers power: get out of reach!"
+      },
+      "phases": [
+        {
+          "at": 70,
+          "name": "call",
+          "adds": {
+            "npc": 2310421,
+            "count": 2,
+            "radius": 500
+          },
+          "notice": "Bakarma calls for help!"
+        },
+        {
+          "at": 40,
+          "name": "fury",
+          "damage": 1.15,
+          "telegraph": {
+            "skill": 1800554,
+            "every_ms": 22500,
+            "wind_up_ms": 2500,
+            "radius": 500,
+            "damage": 1.97,
+            "warning": "Bakarma gathers power: get out of reach!"
+          },
+          "notice": "Bakarma grows furious."
+        }
+      ]
+    },
+    "2310810": {
+      "name": "BakronIsland_Single_MidBoss_1",
+      "dungeon": "BakronIsland_Easy",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1604440,
+        "every_ms": 30000,
+        "wind_up_ms": 3000,
+        "radius": 450,
+        "damage": 3.0,
+        "warning": "The Vakron Sky Island boss gathers power: get out of reach!"
+      }
+    },
+    "2310811": {
+      "name": "BakronIsland_Single_MidBoss_2",
+      "dungeon": "BakronIsland_Easy",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1604790,
+        "every_ms": 30000,
+        "wind_up_ms": 2050,
+        "radius": 450,
+        "damage": 2.5,
+        "warning": "The Vakron Sky Island boss gathers power: get out of reach!"
+      }
+    },
+    "2310812": {
+      "name": "BakronIsland_Single_Boss_1",
+      "dungeon": "BakronIsland_Easy",
+      "role": "final",
+      "telegraph": {
+        "skill": 1604410,
+        "every_ms": 30000,
+        "wind_up_ms": 2000,
+        "radius": 500,
+        "damage": 2.71,
+        "warning": "The Vakron Sky Island boss gathers power: get out of reach!"
+      },
+      "phases": [
+        {
+          "at": 70,
+          "name": "call",
+          "adds": {
+            "npc": 2310802,
+            "count": 2,
+            "radius": 500
+          },
+          "notice": "The Vakron Sky Island boss calls for help!"
+        },
+        {
+          "at": 40,
+          "name": "fury",
+          "damage": 1.15,
+          "telegraph": {
+            "skill": 1604410,
+            "every_ms": 22500,
+            "wind_up_ms": 2000,
+            "radius": 500,
+            "damage": 2.71,
+            "warning": "The Vakron Sky Island boss gathers power: get out of reach!"
+          },
+          "notice": "The Vakron Sky Island boss grows furious."
+        }
+      ]
+    },
+    "2310908": {
+      "name": "M_PD_FierceHornCave_Easy_KalnifElite_01_V02_001",
+      "dungeon": "HornCave_Easy",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1606870,
+        "every_ms": 30000,
+        "wind_up_ms": 3000,
+        "radius": 450,
+        "damage": 3.0,
+        "warning": "the Kalnif chieftain gathers power: get out of reach!"
+      }
+    },
+    "2310909": {
+      "name": "M_PD_FierceHornCave_Easy_Lycan_04_V01_001",
+      "dungeon": "HornCave_Easy",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1606960,
+        "every_ms": 30000,
+        "wind_up_ms": 3000,
+        "radius": 450,
+        "damage": 3.0,
+        "warning": "the Lycan alpha gathers power: get out of reach!"
+      }
+    },
+    "2310910": {
+      "name": "M_PD_FierceHornCave_Easy_Ferk_01_V01",
+      "dungeon": "HornCave_Easy",
+      "role": "final",
+      "telegraph": {
+        "skill": 1802000,
+        "every_ms": 30000,
+        "wind_up_ms": 3000,
+        "radius": 500,
+        "damage": 3.0,
+        "warning": "Ferk gathers power: get out of reach!"
+      },
+      "phases": [
+        {
+          "at": 70,
+          "name": "call",
+          "adds": {
+            "npc": 2310902,
+            "count": 2,
+            "radius": 500
+          },
+          "notice": "Ferk calls for help!"
+        },
+        {
+          "at": 40,
+          "name": "fury",
+          "damage": 1.15,
+          "telegraph": {
+            "skill": 1802000,
+            "every_ms": 22500,
+            "wind_up_ms": 3000,
+            "radius": 500,
+            "damage": 3.0,
+            "warning": "Ferk gathers power: get out of reach!"
+          },
+          "notice": "Ferk grows furious."
+        }
+      ]
+    },
+    "2320104": {
+      "name": "KraoCave_monster_Named_1",
+      "dungeon": "KraoCave_Hard",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1218520,
+        "every_ms": 30000,
+        "wind_up_ms": 3000,
+        "radius": 450,
+        "damage": 3.0,
+        "warning": "The Krao Cave boss gathers power: get out of reach!"
+      }
+    },
+    "2320108": {
+      "name": "KraoCave_monster_Named_2",
+      "dungeon": "KraoCave_Hard",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1218590,
+        "every_ms": 30000,
+        "wind_up_ms": 1500,
+        "radius": 450,
+        "damage": 1.79,
+        "warning": "The Krao Cave boss gathers power: get out of reach!"
+      }
+    },
+    "2320171": {
+      "name": "KraoCave_Boss_1",
+      "dungeon": "KraoCave_Hard",
+      "role": "final",
+      "telegraph": {
+        "skill": 1800140,
+        "every_ms": 18000,
+        "wind_up_ms": 8000,
+        "radius": 600,
+        "damage": 1.0,
+        "warning": "The Krao Cave boss gathers power: get out of reach!"
+      },
+      "phases": [
+        {
+          "at": 70,
+          "name": "call",
+          "adds": {
+            "npc": 2320102,
+            "count": 4,
+            "radius": 500
+          },
+          "notice": "The Krao Cave boss calls for help!"
+        },
+        {
+          "at": 40,
+          "name": "fury",
+          "damage": 1.15,
+          "telegraph": {
+            "skill": 1800140,
+            "every_ms": 13500,
+            "wind_up_ms": 8000,
+            "radius": 600,
+            "damage": 1.0,
+            "warning": "The Krao Cave boss gathers power: get out of reach!"
+          },
+          "adds": {
+            "npc": 2320102,
+            "count": 2,
+            "radius": 500
+          },
+          "notice": "The Krao Cave boss grows furious."
+        },
+        {
+          "at": 20,
+          "name": "enrage",
+          "damage": 1.3,
+          "haste": 0.8,
+          "notice": "The Krao Cave boss is enraged!"
+        }
+      ],
+      "frenzy": {
+        "after_ms": 240000,
+        "damage": 3.0,
+        "haste": 0.5,
+        "notice": "The Krao Cave boss goes into a frenzy!"
+      }
+    },
+    "2320206": {
+      "name": "UruCan_Stage01_SubBoss_2",
+      "dungeon": "Urugugu_Canyon_Hard",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1504420,
+        "every_ms": 30000,
+        "wind_up_ms": 1500,
+        "radius": 450,
+        "damage": 1.0,
+        "warning": "The Urugugu Canyon boss gathers power: get out of reach!"
+      }
+    },
+    "2320207": {
+      "name": "UruCan_Stage01_SubBoss_1",
+      "dungeon": "Urugugu_Canyon_Hard",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1605110,
+        "every_ms": 30000,
+        "wind_up_ms": 1500,
+        "radius": 450,
+        "damage": 1.0,
+        "warning": "The Urugugu Canyon boss gathers power: get out of reach!"
+      }
+    },
+    "2320218": {
+      "name": "UruCan_Stage03_Boss_1",
+      "dungeon": "Urugugu_Canyon_Hard",
+      "role": "final",
+      "telegraph": {
+        "skill": 1600870,
+        "every_ms": 18000,
+        "wind_up_ms": 3000,
+        "radius": 600,
+        "damage": 3.0,
+        "warning": "The Urugugu Canyon boss gathers power: get out of reach!"
+      },
+      "phases": [
+        {
+          "at": 70,
+          "name": "call",
+          "adds": {
+            "npc": 2320201,
+            "count": 4,
+            "radius": 500
+          },
+          "notice": "The Urugugu Canyon boss calls for help!"
+        },
+        {
+          "at": 40,
+          "name": "fury",
+          "damage": 1.15,
+          "telegraph": {
+            "skill": 1600870,
+            "every_ms": 13500,
+            "wind_up_ms": 3000,
+            "radius": 600,
+            "damage": 3.0,
+            "warning": "The Urugugu Canyon boss gathers power: get out of reach!"
+          },
+          "adds": {
+            "npc": 2320201,
+            "count": 2,
+            "radius": 500
+          },
+          "notice": "The Urugugu Canyon boss grows furious."
+        },
+        {
+          "at": 20,
+          "name": "enrage",
+          "damage": 1.3,
+          "haste": 0.8,
+          "notice": "The Urugugu Canyon boss is enraged!"
+        }
+      ],
+      "frenzy": {
+        "after_ms": 240000,
+        "damage": 3.0,
+        "haste": 0.5,
+        "notice": "The Urugugu Canyon boss goes into a frenzy!"
+      }
+    },
+    "2320310": {
+      "name": "Fire_Temple_Single_5",
+      "dungeon": "Fire_Temple_Hard",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1227130,
+        "every_ms": 30000,
+        "wind_up_ms": 3000,
+        "radius": 450,
+        "damage": 3.0,
+        "warning": "The Fire Temple boss gathers power: get out of reach!"
+      }
+    },
+    "2320311": {
+      "name": "Fire_Temple_Single_MidBoss_1",
+      "dungeon": "Fire_Temple_Hard",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1600850,
+        "every_ms": 30000,
+        "wind_up_ms": 3000,
+        "radius": 450,
+        "damage": 1.19,
+        "warning": "The Fire Temple boss gathers power: get out of reach!"
+      }
+    },
+    "2320312": {
+      "name": "Fire_Temple_Single_MidBoss_2",
+      "dungeon": "Fire_Temple_Hard",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1600680,
+        "every_ms": 30000,
+        "wind_up_ms": 1630,
+        "radius": 450,
+        "damage": 1.19,
+        "warning": "The Fire Temple boss gathers power: get out of reach!"
+      }
+    },
+    "2320371": {
+      "name": "Fire_Temple_Single_Boss_1",
+      "dungeon": "Fire_Temple_Hard",
+      "role": "final",
+      "telegraph": {
+        "skill": 1801080,
+        "every_ms": 18000,
+        "wind_up_ms": 2000,
+        "radius": 600,
+        "damage": 1.0,
+        "warning": "The Fire Temple boss gathers power: get out of reach!"
+      },
+      "phases": [
+        {
+          "at": 70,
+          "name": "call",
+          "adds": {
+            "npc": 2320305,
+            "count": 4,
+            "radius": 500
+          },
+          "notice": "The Fire Temple boss calls for help!"
+        },
+        {
+          "at": 40,
+          "name": "fury",
+          "damage": 1.15,
+          "telegraph": {
+            "skill": 1801080,
+            "every_ms": 13500,
+            "wind_up_ms": 2000,
+            "radius": 600,
+            "damage": 1.0,
+            "warning": "The Fire Temple boss gathers power: get out of reach!"
+          },
+          "adds": {
+            "npc": 2320305,
+            "count": 2,
+            "radius": 500
+          },
+          "notice": "The Fire Temple boss grows furious."
+        },
+        {
+          "at": 20,
+          "name": "enrage",
+          "damage": 1.3,
+          "haste": 0.8,
+          "notice": "The Fire Temple boss is enraged!"
+        }
+      ],
+      "frenzy": {
+        "after_ms": 240000,
+        "damage": 3.0,
+        "haste": 0.5,
+        "notice": "The Fire Temple boss goes into a frenzy!"
+      }
+    },
+    "2320401": {
+      "name": "Draupnir_Abyss_single_NagaElite_01_Lakshmi",
+      "dungeon": "Draupnir_Hard",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1605930,
+        "every_ms": 30000,
+        "wind_up_ms": 1600,
+        "radius": 450,
+        "damage": 1.77,
+        "warning": "Lakshmi gathers power: get out of reach!"
+      }
+    },
+    "2320403": {
+      "name": "Draupnir_Abyss_single_NagaElite_02_Saraswati",
+      "dungeon": "Draupnir_Hard",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1218640,
+        "every_ms": 30000,
+        "wind_up_ms": 3000,
+        "radius": 450,
+        "damage": 3.0,
+        "warning": "Saraswati gathers power: get out of reach!"
+      }
+    },
+    "2320471": {
+      "name": "Draupnir_Abyss_Boss_Bakarma",
+      "dungeon": "Draupnir_Hard",
+      "role": "final",
+      "telegraph": {
+        "skill": 1800554,
+        "every_ms": 18000,
+        "wind_up_ms": 2500,
+        "radius": 600,
+        "damage": 1.97,
+        "warning": "Bakarma gathers power: get out of reach!"
+      },
+      "phases": [
+        {
+          "at": 70,
+          "name": "call",
+          "adds": {
+            "npc": 2320422,
+            "count": 4,
+            "radius": 500
+          },
+          "notice": "Bakarma calls for help!"
+        },
+        {
+          "at": 40,
+          "name": "fury",
+          "damage": 1.15,
+          "telegraph": {
+            "skill": 1800554,
+            "every_ms": 13500,
+            "wind_up_ms": 2500,
+            "radius": 600,
+            "damage": 1.97,
+            "warning": "Bakarma gathers power: get out of reach!"
+          },
+          "adds": {
+            "npc": 2320422,
+            "count": 2,
+            "radius": 500
+          },
+          "notice": "Bakarma grows furious."
+        },
+        {
+          "at": 20,
+          "name": "enrage",
+          "damage": 1.3,
+          "haste": 0.8,
+          "notice": "Bakarma is enraged!"
+        }
+      ],
+      "frenzy": {
+        "after_ms": 240000,
+        "damage": 3.0,
+        "haste": 0.5,
+        "notice": "Bakarma goes into a frenzy!"
+      }
+    },
+    "2320601": {
+      "name": "DeusCenter_Single_Boss_1",
+      "dungeon": "DeusCenter_G_01",
+      "role": "final",
+      "telegraph": {
+        "skill": 1801510,
+        "every_ms": 24000,
+        "wind_up_ms": 5000,
+        "radius": 600,
+        "damage": 1.87,
+        "warning": "The Deus Research Base boss gathers power: get out of reach!"
+      },
+      "phases": [
+        {
+          "at": 70,
+          "name": "call",
+          "adds": {
+            "npc": 2320607,
+            "count": 3,
+            "radius": 500
+          },
+          "notice": "The Deus Research Base boss calls for help!"
+        },
+        {
+          "at": 40,
+          "name": "fury",
+          "damage": 1.15,
+          "telegraph": {
+            "skill": 1801510,
+            "every_ms": 18000,
+            "wind_up_ms": 5000,
+            "radius": 600,
+            "damage": 1.87,
+            "warning": "The Deus Research Base boss gathers power: get out of reach!"
+          },
+          "notice": "The Deus Research Base boss grows furious."
+        },
+        {
+          "at": 20,
+          "name": "enrage",
+          "damage": 1.3,
+          "haste": 0.8,
+          "notice": "The Deus Research Base boss is enraged!"
+        }
+      ]
+    },
+    "2320810": {
+      "name": "BakronIsland_Single_MidBoss_1",
+      "dungeon": "BakronIsland_Hard",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1604440,
+        "every_ms": 30000,
+        "wind_up_ms": 3000,
+        "radius": 450,
+        "damage": 3.0,
+        "warning": "The Vakron Sky Island boss gathers power: get out of reach!"
+      }
+    },
+    "2320811": {
+      "name": "BakronIsland_Single_MidBoss_2",
+      "dungeon": "BakronIsland_Hard",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1604790,
+        "every_ms": 30000,
+        "wind_up_ms": 2050,
+        "radius": 450,
+        "damage": 2.5,
+        "warning": "The Vakron Sky Island boss gathers power: get out of reach!"
+      }
+    },
+    "2320812": {
+      "name": "BakronIsland_Single_Boss_1",
+      "dungeon": "BakronIsland_Hard",
+      "role": "final",
+      "telegraph": {
+        "skill": 1604410,
+        "every_ms": 18000,
+        "wind_up_ms": 2000,
+        "radius": 600,
+        "damage": 2.71,
+        "warning": "The Vakron Sky Island boss gathers power: get out of reach!"
+      },
+      "phases": [
+        {
+          "at": 70,
+          "name": "call",
+          "adds": {
+            "npc": 2320802,
+            "count": 4,
+            "radius": 500
+          },
+          "notice": "The Vakron Sky Island boss calls for help!"
+        },
+        {
+          "at": 40,
+          "name": "fury",
+          "damage": 1.15,
+          "telegraph": {
+            "skill": 1604410,
+            "every_ms": 13500,
+            "wind_up_ms": 2000,
+            "radius": 600,
+            "damage": 2.71,
+            "warning": "The Vakron Sky Island boss gathers power: get out of reach!"
+          },
+          "adds": {
+            "npc": 2320802,
+            "count": 2,
+            "radius": 500
+          },
+          "notice": "The Vakron Sky Island boss grows furious."
+        },
+        {
+          "at": 20,
+          "name": "enrage",
+          "damage": 1.3,
+          "haste": 0.8,
+          "notice": "The Vakron Sky Island boss is enraged!"
+        }
+      ],
+      "frenzy": {
+        "after_ms": 240000,
+        "damage": 3.0,
+        "haste": 0.5,
+        "notice": "The Vakron Sky Island boss goes into a frenzy!"
+      }
+    },
+    "2320908": {
+      "name": "M_PD_FierceHornCave_KalnifElite_01_V02_001",
+      "dungeon": "HornCave_Hard",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1606870,
+        "every_ms": 30000,
+        "wind_up_ms": 3000,
+        "radius": 450,
+        "damage": 3.0,
+        "warning": "the Kalnif chieftain gathers power: get out of reach!"
+      }
+    },
+    "2320909": {
+      "name": "M_PD_FierceHornCave_Lycan_04_V01_001",
+      "dungeon": "HornCave_Hard",
+      "role": "mid",
+      "phases": [
+        {
+          "at": 50,
+          "name": "fury",
+          "damage": 1.2
+        }
+      ],
+      "telegraph": {
+        "skill": 1606960,
+        "every_ms": 30000,
+        "wind_up_ms": 3000,
+        "radius": 450,
+        "damage": 3.0,
+        "warning": "the Lycan alpha gathers power: get out of reach!"
+      }
+    },
+    "2320910": {
+      "name": "M_PD_FierceHornCave_Ferk_01_V01",
+      "dungeon": "HornCave_Hard",
+      "role": "final",
+      "telegraph": {
+        "skill": 1802000,
+        "every_ms": 18000,
+        "wind_up_ms": 3000,
+        "radius": 600,
+        "damage": 3.0,
+        "warning": "Ferk gathers power: get out of reach!"
+      },
+      "phases": [
+        {
+          "at": 70,
+          "name": "call",
+          "adds": {
+            "npc": 2320917,
+            "count": 4,
+            "radius": 500
+          },
+          "notice": "Ferk calls for help!"
+        },
+        {
+          "at": 40,
+          "name": "fury",
+          "damage": 1.15,
+          "telegraph": {
+            "skill": 1802000,
+            "every_ms": 13500,
+            "wind_up_ms": 3000,
+            "radius": 600,
+            "damage": 3.0,
+            "warning": "Ferk gathers power: get out of reach!"
+          },
+          "adds": {
+            "npc": 2320917,
+            "count": 2,
+            "radius": 500
+          },
+          "notice": "Ferk grows furious."
+        },
+        {
+          "at": 20,
+          "name": "enrage",
+          "damage": 1.3,
+          "haste": 0.8,
+          "notice": "Ferk is enraged!"
+        }
+      ],
+      "frenzy": {
+        "after_ms": 240000,
+        "damage": 3.0,
+        "haste": 0.5,
+        "notice": "Ferk goes into a frenzy!"
+      }
+    },
+    "2330709": {
+      "name": "Arkanis_G_01_Boss",
+      "dungeon": "Arkanis_G_01",
+      "role": "final",
+      "telegraph": {
+        "skill": 1801640,
+        "every_ms": 24000,
+        "wind_up_ms": 1700,
+        "radius": 600,
+        "damage": 1.17,
+        "warning": "The Shattered Arkanis boss gathers power: get out of reach!"
+      },
+      "phases": [
+        {
+          "at": 70,
+          "name": "call",
+          "adds": {
+            "npc": 2330701,
+            "count": 3,
+            "radius": 500
+          },
+          "notice": "The Shattered Arkanis boss calls for help!"
+        },
+        {
+          "at": 40,
+          "name": "fury",
+          "damage": 1.15,
+          "telegraph": {
+            "skill": 1801640,
+            "every_ms": 18000,
+            "wind_up_ms": 1700,
+            "radius": 600,
+            "damage": 1.17,
+            "warning": "The Shattered Arkanis boss gathers power: get out of reach!"
+          },
+          "notice": "The Shattered Arkanis boss grows furious."
+        },
+        {
+          "at": 20,
+          "name": "enrage",
+          "damage": 1.3,
+          "haste": 0.8,
+          "notice": "The Shattered Arkanis boss is enraged!"
+        }
+      ]
+    },
+    "2340601": {
+      "name": "DeusCenter_Single_Boss_1",
+      "dungeon": "DeusCenter_G_03",
+      "role": "final",
+      "telegraph": {
+        "skill": 1801510,
+        "every_ms": 24000,
+        "wind_up_ms": 5000,
+        "radius": 600,
+        "damage": 1.87,
+        "warning": "The Deus Research Base boss gathers power: get out of reach!"
+      },
+      "phases": [
+        {
+          "at": 70,
+          "name": "call",
+          "adds": {
+            "npc": 2340607,
+            "count": 3,
+            "radius": 500
+          },
+          "notice": "The Deus Research Base boss calls for help!"
+        },
+        {
+          "at": 40,
+          "name": "fury",
+          "damage": 1.15,
+          "telegraph": {
+            "skill": 1801510,
+            "every_ms": 18000,
+            "wind_up_ms": 5000,
+            "radius": 600,
+            "damage": 1.87,
+            "warning": "The Deus Research Base boss gathers power: get out of reach!"
+          },
+          "notice": "The Deus Research Base boss grows furious."
+        },
+        {
+          "at": 20,
+          "name": "enrage",
+          "damage": 1.3,
+          "haste": 0.8,
+          "notice": "The Deus Research Base boss is enraged!"
+        }
+      ]
+    },
+    "2343601": {
+      "name": "DeusCenter_Single_Boss_1",
+      "dungeon": "DeusCenter_G_06",
+      "role": "final",
+      "telegraph": {
+        "skill": 1801510,
+        "every_ms": 24000,
+        "wind_up_ms": 5000,
+        "radius": 600,
+        "damage": 1.87,
+        "warning": "The Deus Research Base boss gathers power: get out of reach!"
+      },
+      "phases": [
+        {
+          "at": 70,
+          "name": "call",
+          "adds": {
+            "npc": 2343607,
+            "count": 3,
+            "radius": 500
+          },
+          "notice": "The Deus Research Base boss calls for help!"
+        },
+        {
+          "at": 40,
+          "name": "fury",
+          "damage": 1.15,
+          "telegraph": {
+            "skill": 1801510,
+            "every_ms": 18000,
+            "wind_up_ms": 5000,
+            "radius": 600,
+            "damage": 1.87,
+            "warning": "The Deus Research Base boss gathers power: get out of reach!"
+          },
+          "notice": "The Deus Research Base boss grows furious."
+        },
+        {
+          "at": 20,
+          "name": "enrage",
+          "damage": 1.3,
+          "haste": 0.8,
+          "notice": "The Deus Research Base boss is enraged!"
+        }
+      ]
+    },
+    "2346601": {
+      "name": "DeusCenter_Single_Boss_1",
+      "dungeon": "DeusCenter_G_09",
+      "role": "final",
+      "telegraph": {
+        "skill": 1801510,
+        "every_ms": 24000,
+        "wind_up_ms": 5000,
+        "radius": 600,
+        "damage": 1.87,
+        "warning": "The Deus Research Base boss gathers power: get out of reach!"
+      },
+      "phases": [
+        {
+          "at": 70,
+          "name": "call",
+          "adds": {
+            "npc": 2346607,
+            "count": 3,
+            "radius": 500
+          },
+          "notice": "The Deus Research Base boss calls for help!"
+        },
+        {
+          "at": 40,
+          "name": "fury",
+          "damage": 1.15,
+          "telegraph": {
+            "skill": 1801510,
+            "every_ms": 18000,
+            "wind_up_ms": 5000,
+            "radius": 600,
+            "damage": 1.87,
+            "warning": "The Deus Research Base boss gathers power: get out of reach!"
+          },
+          "notice": "The Deus Research Base boss grows furious."
+        },
+        {
+          "at": 20,
+          "name": "enrage",
+          "damage": 1.3,
+          "haste": 0.8,
+          "notice": "The Deus Research Base boss is enraged!"
+        }
+      ]
+    },
+    "2350709": {
+      "name": "Arkanis_G_03_Boss",
+      "dungeon": "Arkanis_G_03",
+      "role": "final",
+      "telegraph": {
+        "skill": 1801640,
+        "every_ms": 24000,
+        "wind_up_ms": 1700,
+        "radius": 600,
+        "damage": 1.17,
+        "warning": "The Shattered Arkanis boss gathers power: get out of reach!"
+      },
+      "phases": [
+        {
+          "at": 70,
+          "name": "call",
+          "adds": {
+            "npc": 2350701,
+            "count": 3,
+            "radius": 500
+          },
+          "notice": "The Shattered Arkanis boss calls for help!"
+        },
+        {
+          "at": 40,
+          "name": "fury",
+          "damage": 1.15,
+          "telegraph": {
+            "skill": 1801640,
+            "every_ms": 18000,
+            "wind_up_ms": 1700,
+            "radius": 600,
+            "damage": 1.17,
+            "warning": "The Shattered Arkanis boss gathers power: get out of reach!"
+          },
+          "notice": "The Shattered Arkanis boss grows furious."
+        },
+        {
+          "at": 20,
+          "name": "enrage",
+          "damage": 1.3,
+          "haste": 0.8,
+          "notice": "The Shattered Arkanis boss is enraged!"
+        }
+      ]
+    },
+    "2353709": {
+      "name": "Arkanis_G_06_Boss",
+      "dungeon": "Arkanis_G_06",
+      "role": "final",
+      "telegraph": {
+        "skill": 1801640,
+        "every_ms": 24000,
+        "wind_up_ms": 1700,
+        "radius": 600,
+        "damage": 1.17,
+        "warning": "The Shattered Arkanis boss gathers power: get out of reach!"
+      },
+      "phases": [
+        {
+          "at": 70,
+          "name": "call",
+          "adds": {
+            "npc": 2353703,
+            "count": 3,
+            "radius": 500
+          },
+          "notice": "The Shattered Arkanis boss calls for help!"
+        },
+        {
+          "at": 40,
+          "name": "fury",
+          "damage": 1.15,
+          "telegraph": {
+            "skill": 1801640,
+            "every_ms": 18000,
+            "wind_up_ms": 1700,
+            "radius": 600,
+            "damage": 1.17,
+            "warning": "The Shattered Arkanis boss gathers power: get out of reach!"
+          },
+          "notice": "The Shattered Arkanis boss grows furious."
+        },
+        {
+          "at": 20,
+          "name": "enrage",
+          "damage": 1.3,
+          "haste": 0.8,
+          "notice": "The Shattered Arkanis boss is enraged!"
+        }
+      ]
+    },
+    "2356709": {
+      "name": "Arkanis_G_09_Boss",
+      "dungeon": "Arkanis_G_09",
+      "role": "final",
+      "telegraph": {
+        "skill": 1801640,
+        "every_ms": 24000,
+        "wind_up_ms": 1700,
+        "radius": 600,
+        "damage": 1.17,
+        "warning": "The Shattered Arkanis boss gathers power: get out of reach!"
+      },
+      "phases": [
+        {
+          "at": 70,
+          "name": "call",
+          "adds": {
+            "npc": 2356703,
+            "count": 3,
+            "radius": 500
+          },
+          "notice": "The Shattered Arkanis boss calls for help!"
+        },
+        {
+          "at": 40,
+          "name": "fury",
+          "damage": 1.15,
+          "telegraph": {
+            "skill": 1801640,
+            "every_ms": 18000,
+            "wind_up_ms": 1700,
+            "radius": 600,
+            "damage": 1.17,
+            "warning": "The Shattered Arkanis boss gathers power: get out of reach!"
+          },
+          "notice": "The Shattered Arkanis boss grows furious."
+        },
+        {
+          "at": 20,
+          "name": "enrage",
+          "damage": 1.3,
+          "haste": 0.8,
+          "notice": "The Shattered Arkanis boss is enraged!"
+        }
+      ]
+    }
+  },
+  "waves": {
+    "FierceHornCave_Easy_Wave_01": {
+      "map": 600091,
+      "around": "M_PD_FierceHornCave_LycanTotem_01_001",
+      "npc": 2310902,
+      "count": 3,
+      "every_ms": 15000,
+      "pulses": 6,
+      "radius": 600
+    },
+    "FierceHornCave_Hard_Wave_01": {
+      "map": 600093,
+      "around": "M_PD_FierceHornCave_LycanTotem_01_001",
+      "npc": 2320902,
+      "count": 3,
+      "every_ms": 15000,
+      "pulses": 6,
+      "radius": 600
+    },
+    "FierceHornCave_Wave_01": {
+      "map": 600092,
+      "around": "M_PD_FierceHornCave_LycanTotem_01_001",
+      "npc": 2300902,
+      "count": 3,
+      "every_ms": 15000,
+      "pulses": 6,
+      "radius": 600
+    }
+  }
+}

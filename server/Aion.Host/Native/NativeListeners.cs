@@ -304,6 +304,7 @@ public sealed class NativeGameListener(NativeOptions options, IServiceProvider s
             Rates = services.GetService<ServerRates>() ?? ServerRates.Official, Rules = services.GetService<WorldRules>() ?? WorldRules.Default,
             Dungeons = services.GetService<DungeonOptions>() ?? DungeonOptions.Default,
             Stigmas = services.GetService<StigmaOptions>() ?? StigmaOptions.Default,
+            Bosses = services.GetService<BossOptions>() ?? BossOptions.Default,
             Fun = services.GetService<FunFeatures>(),
             Daevanion = services.GetService<DaevanionOptions>() ?? DaevanionOptions.Default,
         }, new Random());
