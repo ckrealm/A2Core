@@ -57,6 +57,10 @@ public sealed record TimeGateOptions
 /// <item>AllSkins: every skin of Skin.dat added to the character's collection.</item>
 /// <item>AllPets: every pet/mount (VehicleList) acquired at its top level, and every creature board raised to its top level.</item>
 /// <item>AllWings: every wing of the character's race registered in its wing collection.</item>
+/// <item>AllTraces: every Empyrean Trace ("feather", the Monolith fragment pickups) collected: each fragment achievement of
+/// the character's race and of Reshanta marked complete (1,000 per faction in the supported client: Verteron 560 + Eltnen
+/// 140 + Reshanta 300 for Elyos, Altgard 560 + Morheim 140 + Reshanta 300 for Asmodians). Checked at every world entry, so
+/// characters made later and existing ones alike have them; turning it off leaves the ones already given.</item>
 /// </list>
 /// Aion:Unlocks also holds the profession and pet cost switches: CraftAlwaysSucceeds (default on: a craft never fails and
 /// eats its components) and PetSoulCost (multiplies the souls a pet costs to acquire and level up; default 0.5, at least 1).
@@ -66,6 +70,7 @@ public sealed record UnlockOptions
     public bool AllSkins { get; init; } = true;
     public bool AllPets { get; init; } = true;
     public bool AllWings { get; init; } = true;
+    public bool AllTraces { get; init; } = true;
     public bool CraftAlwaysSucceeds { get; init; } = true;
     public double PetSoulCost { get; init; } = DefaultPetSoulCost;
 
@@ -73,7 +78,7 @@ public sealed record UnlockOptions
     /// <summary>The setting names that remember a perk was given (per character).</summary>
     public const string SkinsGivenSetting = "unlocks_all_skins", PetsGivenSetting = "unlocks_all_pets", WingsGivenSetting = "unlocks_all_wings";
     public static UnlockOptions Default { get; } = new();
-    public static UnlockOptions Official { get; } = new() { AllSkins = false, AllPets = false, AllWings = false, CraftAlwaysSucceeds = false, PetSoulCost = 1 };
+    public static UnlockOptions Official { get; } = new() { AllSkins = false, AllPets = false, AllWings = false, AllTraces = false, CraftAlwaysSucceeds = false, PetSoulCost = 1 };
 
     /// <summary>A pet soul cost after <see cref="PetSoulCost"/>: at least 1 when anything was due.</summary>
     public int SoulCost(int cost) => cost <= 0 || PetSoulCost == 1 ? cost : Math.Max(1, (int)Math.Ceiling(cost * PetSoulCost));
@@ -86,7 +91,7 @@ public sealed record UnlockOptions
     }
 
     public override string ToString() =>
-        $"all skins {(AllSkins ? "on" : "off")}, all pets maxed {(AllPets ? "on" : "off")}, all wings {(AllWings ? "on" : "off")}, crafts {(CraftAlwaysSucceeds ? "always succeed" : "can fail")}, pet soul cost x{PetSoulCost}";
+        $"all skins {(AllSkins ? "on" : "off")}, all pets maxed {(AllPets ? "on" : "off")}, all wings {(AllWings ? "on" : "off")}, all feathers {(AllTraces ? "on" : "off")}, crafts {(CraftAlwaysSucceeds ? "always succeed" : "can fail")}, pet soul cost x{PetSoulCost}";
 }
 
 /// <summary>

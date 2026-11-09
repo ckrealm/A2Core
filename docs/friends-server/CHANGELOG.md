@@ -85,6 +85,8 @@
 - **Time gates, all off by default** (`Aion:TimeGates:*`): shop purchase caps, dungeon timers, daily/weekly collection rotation; gather nodes back after 10 s (was 60). Dungeon entry limits stay off. Audit of what else gates play by time: RATES.md.
 - **Professions and pets** (`Aion:Unlocks:*`): crafts always succeed (default on), pets cost half the souls (default 0.5); `AllSkins`, `AllPets` (every pet at level 3, boards maxed) and `AllWings` on by default, for every character at its next world entry, once.
 - **Death wait** 60 s → 5 s (`Aion:TimeGates:ReviveSeconds`). Odyn energy: not enforced anywhere (checked).
+- **All feathers** (`Aion:Unlocks:AllTraces`, default on): every Empyrean Trace of the character's faction collected (1,000 per faction in client 2.0.6.0), at every world entry. `--all-feathers on|off` in `wsl-install.sh` and `server_env.py`.
+- **Alt boost** `//boost` (`Aion:Boost:*`): once an account has a level 45, an alt pays 10,000,000 Kinah for level 45, the released MSQ, regional and sealed-dungeon quests done, a ~1,412 item level gear set and the map revealed.
 - **Alt boost** `/boost` (also `//boost`) (`Aion:Boost:*`): once an account has a level 45, an alt pays 10,000,000 Kinah for level 45, the released MSQ, regional and sealed-dungeon quests done, a ~1,412 item level gear set and the map revealed.
 - `wsl-install.sh` and `server_env.py` take all of these as options. Checks: 34 rate/rule, 229 stored session, 15 alt boost, 148 PostgreSQL repository, 520 Python tests passing.
 - Note for an existing install: a `game.env` that says `Aion__Rates__Profile=accelerated` keeps those rates; `wsl-install.sh --rates-only --rates-profile friends` switches.

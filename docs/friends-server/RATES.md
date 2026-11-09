@@ -53,13 +53,22 @@ Not gates, or not modelled, so left as they are:
 | Every skin for every character | `Aion__Unlocks__AllSkins` | on |
 | Every pet/mount at its top level (3), every creature board at its top level (slots open) | `Aion__Unlocks__AllPets` | on |
 | Every wing of the character's race | `Aion__Unlocks__AllWings` | on |
+| Every feather (Empyrean Trace) of the character's faction collected | `Aion__Unlocks__AllTraces` | on |
 
 The unlocks apply to every character, new and existing, at its next world entry (character select), once per
 character: a setting (`unlocks_all_skins`, `unlocks_all_pets`) remembers it, and turning the switch off later takes
 nothing back. That gives 1,463 skins, 207 pets and every wing of the race. The board slots open empty; stat rolls still cost crystals.
 
-Feathers (Empyrean Traces, the 2,560 collectibles in the world) are not modelled by the server yet: it has no table or
-message for them, so they cannot be given out until the client data and a capture show how they are stored and sent.
+Feathers (Empyrean Traces) are achievements in the client's tables: one "Monolith fragment" achievement per feather
+spawner (groups `Group_Unlock_MonolithFragment_<region>_<page>`, objective `UseEnvObjSpawnerName` on a `*_GodFragment_*`
+object). The client is expected to draw the Monolith's fragment window and map from the achievement list it gets at
+login (CANDIDATE: the usmap has no other per-feather message; not yet seen in game). The
+supported client (2.0.6.0) has 1,700 of them, 1,000 per faction: Verteron 560, Eltnen 140 and Reshanta 300 for Elyos;
+Altgard 560, Morheim 140 and Reshanta 300 for Asmodians. (The 2,560 quoted for the current game presumably counts regions added
+after this client; those are not in its data.) `AllTraces` marks every one of the character's faction complete at every
+world entry, so new characters, existing ones and any feathers added by a data update all count; turning it off keeps
+what was given. Not modelled yet: the Monolith itself (Sync, Resonate and its 30 reward levels), whose tables
+(Monolith, MonolithLevel, RewardMonolith) are not extracted, so the Monolith's level and its stat rewards are not given.
 
 ## Alt boost (`/boost`)
 

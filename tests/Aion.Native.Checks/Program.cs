@@ -1655,6 +1655,14 @@ Check((await staffSession.HandleAsync(new PacketWriter().U16(0x8c02).Varint(1).V
           && GamePackets.Wings(staffStore.States[0].Race).All(staffStore.Wings.Contains) && friendlySession.RegisteredWings.Count >= GamePackets.Wings(staffStore.States[0].Race).Length
           && friendlySession.OwnedSkins.Count >= SkinTables.Embedded.Count,
           "Aion:Unlocks: at world entry every skin, every wing, every pet at its top level and every creature board at its top level, remembered per character");
+    {
+        var race = staffStore.States[0].Race == 2 ? 2 : 1;
+        var own = AchievementTables.Embedded.Traces.Where(e => AchievementTables.Embedded.GroupOf(e) is { } g && (g.Race == 0 || g.Race == race)).ToList();
+        var other = AchievementTables.Embedded.Traces.Where(e => AchievementTables.Embedded.GroupOf(e) is { } g && g.Race != 0 && g.Race != race).ToList();
+        Check(own.Count == 1000 && other.Count == 700 && own.All(e => friendlySession.AchievementCount(e.Id) == e.Target) && other.All(e => friendlySession.AchievementCount(e.Id) == 0)
+              && own.All(e => staffSession.AchievementCount(e.Id) == 0) && friendlySession.CollectAllTraces(race, Now) == 0,
+              "Aion:Unlocks:AllTraces: at world entry every feather (Empyrean Trace) of the faction and of Reshanta collected (1,000), none of the other faction's, none without the switch; idempotent");
+    }
     friendlySession.Teleport(staffSession.MapId ?? 1000, staffSession.Position!.Value, Now);
     await friendlySession.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
     if (friendlySession.Targets.Values.FirstOrDefault(n => n.NpcId == 2930093) is { } freeMerchant)
@@ -2766,7 +2774,7 @@ checks = 0;
     var gateRefused = false;
     try { new TimeGateOptions { GatherRespawnSeconds = -1 }.Validated(); } catch (InvalidOperationException) { gateRefused = true; }
     Check(gateRefused && new TimeGateOptions { GatherRespawnSeconds = 0 }.Validated().GatherRespawnMs == 0, "gather respawn seconds must be 0-3600");
-    Check(UnlockOptions.Default is { AllSkins: true, AllPets: true, AllWings: true, CraftAlwaysSucceeds: true, PetSoulCost: 0.5 }
+    Check(UnlockOptions.Default is { AllSkins: true, AllPets: true, AllWings: true, AllTraces: true, CraftAlwaysSucceeds: true, PetSoulCost: 0.5 } && !UnlockOptions.Official.AllTraces
           && UnlockOptions.Default.SoulCost(5) == 3 && UnlockOptions.Default.SoulCost(75) == 38 && UnlockOptions.Default.SoulCost(1) == 1 && UnlockOptions.Default.SoulCost(0) == 0
           && UnlockOptions.Official.SoulCost(25) == 25 && new UnlockOptions { PetSoulCost = 0 }.SoulCost(25) == 1,
           "unlocks: all pets and wings on, all skins off by default, crafts always succeed, pets cost half the souls (at least 1)");
@@ -2775,6 +2783,8 @@ checks = 0;
     Check(unlockRefused, "pet soul cost must be 0-10");
     Check(SkinTables.Embedded.All.Count == SkinTables.Embedded.Count && RewardBoxes.Embedded.AllRides.Count > 100 && RewardBoxes.Embedded.AllRides.All(id => RewardBoxes.Embedded.Ride(id) is not null),
           "unlocks: every Skin.dat skin and every VehicleList ride can be listed");
+    Check(AchievementTables.Embedded.Traces.Count == 1700 && AchievementTables.Embedded.Traces.All(e => e.Type == "UseEnvObjSpawnerName" && e.Target == 1 && AchievementTables.Embedded.GroupOf(e) is { Category: "Unlock" }),
+          "unlocks: the 1,700 feathers (Monolith fragment achievements) of client 2.0.6.0 are listed, each an Unlock achievement done by one pickup");
     {
         var season = CollectionTables.Embedded.Window;
         var midSeason = season.FromMs + 3 * 86_400_000L + 3_600_000L;
