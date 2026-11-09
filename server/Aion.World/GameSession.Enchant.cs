@@ -37,6 +37,29 @@ public sealed class EnchantTables
             r[4].EnumerateArray().Select(c => (c[0].GetInt32(), c[1].GetInt32())).ToList());
     }
 
+    /// <summary>Every enchantable item ID (the lucky-drop grade index, LootUpgrades).</summary>
+    public IEnumerable<int> ItemIds => file.Items.Keys.Select(k => int.Parse(k, System.Globalization.CultureInfo.InvariantCulture));
+
+    /// <summary>
+    /// An item's grade from its Enchant.dat group name (Enchant_Unique_102, Amulet_Abyss_Legend, ...): 0 Common, 1 Rare,
+    /// 2 Legend (shown as Epic in the global client), 3 Unique; -1 unknown.
+    /// </summary>
+    public int Grade(int itemId)
+    {
+        if (!file.Items.TryGetValue(Key(itemId), out var groups)) return -1;
+        var name = groups[0];
+        return name.Contains("_Unique", StringComparison.Ordinal) ? 3 : name.Contains("_Legend", StringComparison.Ordinal) ? 2
+            : name.Contains("_Rare", StringComparison.Ordinal) ? 1 : name.Contains("_Common", StringComparison.Ordinal) ? 0 : -1;
+    }
+
+    /// <summary>The highest enchant level an item can reach (0: not enchantable).</summary>
+    public int MaxLevel(int itemId)
+    {
+        var level = 0;
+        while (Next(itemId, level) is not null) level++;
+        return level;
+    }
+
     /// <summary>What an item at an enchant level adds: item level and stat totals.</summary>
     public (int ItemLevel, IReadOnlyDictionary<string, int> Stats) Effect(int itemId, int level)
     {

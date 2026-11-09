@@ -47,6 +47,8 @@ public sealed record GameSessionOptions
     public BoostOptions Boost { get; init; } = BoostOptions.Off;
     /// <summary>Heal/buff/debuff effects of class skills; null: the embedded tools/data/skill-effects.json (OURS values).</summary>
     public SkillEffectTable? SkillEffects { get; init; }
+    /// <summary>Aion:Fun (field bosses, //buff, //hub, duel restore); null: none of them (retail-style respawns are off too).</summary>
+    public FunFeatures? Fun { get; init; }
     /// <summary>Aion:Daevanion: the boards' point rate, flat extra points, free resets and hidden boards (docs/DAEVANION.md).</summary>
     public DaevanionOptions Daevanion { get; init; } = DaevanionOptions.Default;
 }
@@ -2080,7 +2082,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         {
             var due = respawnAt[key];
             if (!Targets.TryGetValue(key, out var target) || !target.Dead) continue;
-            if (!target.CorpseRemoved && now >= due - options.Rules.RespawnMs + CorpseMs)
+            if (!target.CorpseRemoved && now >= (target.KilledAtMs > 0 ? target.KilledAtMs : due - options.Rules.RespawnMs) + CorpseMs)
             {
                 target.CorpseRemoved = true;
                 replies.Add(GamePackets.Death(target.Key));
@@ -2091,6 +2093,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
             if (RunsMapEvents) continue;
             target.Hp = target.HpMax;
             target.CorpseRemoved = false;
+            target.KilledAtMs = 0;
             replies.Add(GamePackets.NpcAppear(target.Appearance()));
         }
         return replies;
@@ -2146,7 +2149,9 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         replies.AddRange(MapEventHp(target, now));
         if (target.Dead)
         {
-            respawnAt[target.Key] = now + options.Rules.RespawnMs;  // HP 0 is the kill (Aion:Rules:RespawnSeconds)
+            // HP 0 is the kill: Aion:Rules:RespawnSeconds, or a field boss's long window (Aion:Fun).
+            respawnAt[target.Key] = now + KillRespawnMs(target);
+            target.KilledAtMs = now;
             killedNpcs.Add(target.NpcId);
             replies.AddRange(AchieveKill(target.NpcId));
             replies.AddRange(BossChallengeKilled(target, now));
@@ -2154,6 +2159,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
             replies.AddRange(MapEventKilled(target, now));
             killedLevels.Add(target.Level);
             replies.AddRange(DropLoot(target, now));
+            FieldBossKilled(target, now);   // before ai.Killed: the hate table names who fought it
             // Official order after HP 0: the mob's target cleared, the kill, its 0x8d21 off.
             replies.Add(GamePackets.TargetUpdate(target.Key));
             replies.Add(GamePackets.Kill(target.Key, skill, playerKey, ServerId, StoredName));
@@ -2222,7 +2228,8 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         var replies = new List<byte[]>();
         foreach (var (victim, killer) in fights.TakeNpcKills())
         {
-            respawnAt[victim.Key] = now + options.Rules.RespawnMs;
+            respawnAt[victim.Key] = now + KillRespawnMs(victim);
+            victim.KilledAtMs = now;
             replies.Add(GamePackets.TargetUpdate(victim.Key));
             replies.Add(GamePackets.Kill(victim.Key, 0, killer.Key, 0, ""));
             replies.AddRange(fights.Killed(victim));

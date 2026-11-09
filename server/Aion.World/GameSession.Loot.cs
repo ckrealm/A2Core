@@ -31,16 +31,11 @@ public sealed partial class GameSession
     /// <summary>The loot of a killed monster: the drops for the killer (0x561e), or nothing; party members' shares go to them.</summary>
     List<byte[]> DropLoot(Target target, long now)
     {
-        // The base drop rate (Aion:Rates:Drop, OURS) times drop events (SharedWorld.DropRate) rolls the table more often:
-        // x2.5 = two rolls and a third half the time. Kinah in a drop is scaled by Aion:Rates:Kinah.
-        var rolls = options.Rates.LootRolls(options.World?.DropRate ?? 1, rng);
-        var generic = options.Rules.FallbackLoot && !LootTables.Embedded.HasLoot(target.NpcId);
-        var rolled = new List<(int, long)>();
-        for (var i = 0; i < rolls; i++)
-            rolled.AddRange(generic ? MonsterRewards.Embedded.Fallback(target.SubType, target.Level, rng) : LootTables.Embedded.Roll(target.NpcId, profileRace, rng));
-        rolled = options.Rates.WithKinah(rolled);
-        var kinah = options.Rates.KinahAmount(MonsterRewards.Embedded.Kinah(target.SubType, target.Level, rng, options.Rates.KinahChance));
-        var mine = ShareLootWithParty(rolled, kinah, target.Position);
+        var (rolled, kinah) = RollLoot(target, profileRace);
+        // A field boss with Aion:Fun:SharedBossLoot: every fighter rolls their own (FieldBossKilled), so the killer keeps this one.
+        List<(int ItemId, long Count)> mine;
+        if (PersonalBossLoot(target)) { mine = rolled; if (kinah > 0) mine.Add((KinaItemId, kinah)); }
+        else mine = ShareLootWithParty(rolled, kinah, target.Position);
         return PlaceDrops(mine, target.Position, now);
     }
 
@@ -63,6 +58,23 @@ public sealed partial class GameSession
                 now + DropLifetimeMs, (byte)profileRace));
         }
         return [LootPackets.DropItems(placed)];
+    }
+
+    /// <summary>
+    /// One player's roll of a kill: the base drop rate (Aion:Rates:Drop, OURS) times drop events (SharedWorld.DropRate) rolls
+    /// the table more often (x2.5 = two rolls and a third half the time); Aion:Fun:LuckyDrops; Kinah in a drop is scaled by
+    /// Aion:Rates:Kinah, and the monster's own Kinah comes apart.
+    /// </summary>
+    (List<(int ItemId, long Count)> Items, long Kinah) RollLoot(Target target, int race)
+    {
+        var rolls = options.Rates.LootRolls(options.World?.DropRate ?? 1, rng);
+        var generic = options.Rules.FallbackLoot && !LootTables.Embedded.HasLoot(target.NpcId);
+        var rolled = new List<(int ItemId, long Count)>();
+        for (var i = 0; i < rolls; i++)
+            rolled.AddRange(generic ? MonsterRewards.Embedded.Fallback(target.SubType, target.Level, rng) : LootTables.Embedded.Roll(target.NpcId, race, rng));
+        rolled = options.Rates.WithKinah(LuckyLoot(rolled, target));
+        var kinah = options.Rates.KinahAmount(MonsterRewards.Embedded.Kinah(target.SubType, target.Level, rng, options.Rates.KinahChance));
+        return (rolled, kinah);
     }
 
     /// <summary>
@@ -119,9 +131,11 @@ public sealed partial class GameSession
         var replies = new List<byte[]>();
         if (Store is { } store && CharacterId is { } character)
         {
+            var known = BagInstances();
             var granted = await Stored(async () => await store.GrantLootAsync(character, items, ct) ? [[]] : []);
             if (granted.Count == 0) return DropSharedLoot(items, killSite, now);
             replies.AddRange(await InventoryChangesAsync(ct, IncreaseDropItemGet, 0));
+            replies.AddRange(await EnchantLuckyLootAsync(known, ct));
             replies.AddRange(await AutoUseAsync(items.Select(i => i.ItemId), now, ct));
         }
         SharedLootReceived += items.Count;
@@ -169,6 +183,7 @@ public sealed partial class GameSession
             else replies.Add(LootPackets.LootReply(1, uid, auto));
         }
         if (taken.Count == 0) return replies;
+        var knownBefore = BagInstances();
         if (Store is { } store && CharacterId is { } character)
         {
             var granted = await Stored(async () => await store.GrantLootAsync(character, taken.Select(d => (d.ItemId, d.Count)).ToList(), ct) ? [[]] : []);
@@ -178,6 +193,7 @@ public sealed partial class GameSession
         replies.AddRange(taken.Select(d => LootPackets.LootReply(0, d.Uid, auto)));
         replies.Add(LootPackets.DropsRemoved(taken.Select(d => (d.Key, d.Uid, (long)(selected?.WireId ?? playerKey), auto)).ToList()));
         replies.AddRange(await InventoryChangesAsync(ct, IncreaseDropItemGet, 0));
+        replies.AddRange(await EnchantLuckyLootAsync(knownBefore, ct));
         replies.AddRange(await AutoUseAsync(taken.Select(d => d.ItemId), now, ct));
         return replies;
     }
