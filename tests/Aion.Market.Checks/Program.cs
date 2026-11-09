@@ -84,6 +84,9 @@ Check(refPricing.BuyerLimit(700, new MarketBuyerOptions { ReferenceFraction = 0.
 Check(refPricing.SellerPool(new MarketSellerOptions()).Contains(888) && !refPricing.SellerPool(new MarketSellerOptions { ReferenceItems = false }).Contains(888),
       "reference items join the seller pool");
 
+var bundled = MarketReferencePrices.Embedded();
+Check(bundled.ByName.Count >= 50 && bundled.ByName["Ruby Powder"] == 1645 && bundled.ById.Count == 0, "bundled reference table");
+
 // --- Pricing (embedded game data) ---
 var embedded = MarketPricing.Embedded;
 var pool = embedded.SellerPool(defaults.Seller);

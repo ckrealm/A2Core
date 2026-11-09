@@ -1,0 +1,68 @@
+# Reference prices for the market bots (OURS, docs/MARKET.md): item name or ID, Kinah each.
+# Source: Kinah Ledger (https://kinahledger.com/market/) "typical" price = median of the lowest ask across all
+# Aion 2 servers, snapshot 2026-11-08 22:27 UTC. Not Siel-only: no public source allows reading per-server Siel prices.
+# Refreshed by hand from that page now and then; Aion:Market:PriceFile replaces this table with your own.
+item,price
+Riverside Gloves,50000
+Expert's Asvata Bow,180000
+Riverside Cloak,30000
+Expert's Asvata Staff,190000
+Earth Longsword,10600
+Order Helm,200000
+Luminous Longsword,141700
+Destruction Spellbook,138900
+Luminous Guard,111100
+Expert's Orichalcum Boots,140000
+Order Breastplate,174000
+Forgotten Spellbook,30000
+Destruction Greaves,150000
+Order Greaves,240000
+Bloodthirsty Orb,170000
+Earth Spellbook,15000
+Destruction Pauldrons,138000
+Destruction Dagger,199400
+Forgotten Orb,33300
+Vagabond Boots,33300
+Vagabond Pauldrons,44500
+Bloodthirsty Greaves,150000
+Order Cloak,157800
+Chaos Helm,34200
+Discipline Cloak,115800
+Phantasm Breastplate,60000
+Destruction Breastplate,200000
+Earth Helm,15000
+Earth Boots,10000
+Luminous Breastplate,50000
+Order Spellbook,152800
+Illusion Breastplate,222200
+Discipline Breastplate,200000
+Destruction Bow,166700
+Destruction Staff,150000
+Vagabond Greaves,41000
+Ethereal Gloves,47500
+Discipline Orb,123600
+Bloodthirsty Breastplate,200000
+Vagabond Cloak,28400
+Expert's Yggdrasil Bow,200000
+Bloodthirsty Spellbook,194500
+Vagabond Longsword,50000
+Shade Cloak,11100
+Phantasm Gloves,22200
+Discipline Greaves,206100
+Ruby Powder,1645
+Luminous Greaves,40000
+Destruction Helm,200000
+Illusion Greatsword,202500
+Destruction Cloak,120000
+Fresh Targena,3399
+Destruction Greatsword,188900
+Forgotten Pauldrons,20000
+Fruit Salad,3600
+Intermediate Abyssal Soulstone,166700
+Illusion Mace,152500
+Splendent Yggdrasil Staff,280000
+Expert's Yggdrasil Staff,230000
+Bloodthirsty Helm,124500
+Tempest Orb,58900
+Elder Longsword,100000
+Comet Staff,60000
