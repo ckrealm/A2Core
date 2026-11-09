@@ -80,6 +80,13 @@
 - All OURS values, all configurable, all on by default. 28 checks.
 - Player chat commands work with a single slash (/buff, /hub, /report, /help, /bot, /ah, /boost); GM commands keep //.
 
-## 2026-11-09 — monster difficulty past level 30
+## 2026-11-09 — no time gates, faster leveling, alt perks
+- **`friends` rates profile, now the host default** (Brandon's picks): experience and quest experience 5, Kinah 10, Kinah drop chance x2, drops 4, gathering/crafting/pet experience 10. New keys `Aion:Rates:KinahChance`, `GatherExperience`, `CraftExperience`, `PetExperience`. `official` and `accelerated` unchanged.
+- **Time gates, all off by default** (`Aion:TimeGates:*`): shop purchase caps, dungeon timers, daily/weekly collection rotation; gather nodes back after 10 s (was 60). Dungeon entry limits stay off. Audit of what else gates play by time: RATES.md.
+- **Professions and pets** (`Aion:Unlocks:*`): crafts always succeed (default on), pets cost half the souls (default 0.5); `AllSkins`, `AllPets` (every pet at level 3, boards maxed) and `AllWings` on by default, for every character at its next world entry, once.
+- **Death wait** 60 s → 5 s (`Aion:TimeGates:ReviveSeconds`). Odyn energy: not enforced anywhere (checked).
+- **Alt boost** `/boost` (also `//boost`) (`Aion:Boost:*`): once an account has a level 45, an alt pays 10,000,000 Kinah for level 45, the released MSQ, regional and sealed-dungeon quests done, a ~1,412 item level gear set and the map revealed.
+- `wsl-install.sh` and `server_env.py` take all of these as options. Checks: 34 rate/rule, 229 stored session, 15 alt boost, 148 PostgreSQL repository, 520 Python tests passing.
+- Note for an existing install: a `game.env` that says `Aion__Rates__Profile=accelerated` keeps those rates; `wsl-install.sh --rates-only --rates-profile friends` switches.
 - **Monster HP and hits from 31 to 44 follow the observed curve.** The server had observed Grade 3 HP up to level 30 (9,975) and one endgame point at 45 (70,756, from an official level-45 NPC), and drew a straight line between them. Monster HP and the NPC hits that scale with it (7.5% of the level's HP) grew ~5x from 30 to 40 while a player's HP and defense in level gear grow ~1.3x: a level-40 monster killed a level-40 player in ~5 hits instead of the ~15 of levels 16-30, and took ~3x as long to kill. Levels 31-44 now continue the growth seen from 16 to 30 (HP ~ level^1.88): level 35 13.3k (was 30.2k), 40 17.1k (was 50.5k), 44 20.5k (was 66.7k). Observed points, levels 45+ and every rank's multiplier are unchanged. `Combat.HpForLevel`, mirrored in `tools/world_npcs.py`.
 - Level 45 is still the endgame step (about 3.4x level 44): it expects the level-45 gear tier plus enchants, Daevanion and stigmas. No official capture exists between 30 and 45, so the 31-44 curve is a candidate that keeps the 16-30 feel.

@@ -1631,6 +1631,49 @@ Check(limitedOpen.Single().SequenceEqual(new PacketWriter().U16(0x8c01).U16(0).V
       "the shop opens with what was bought of its limited goods (0x8c01 map)");
 Check((await staffSession.HandleAsync(new PacketWriter().U16(0x8c02).Varint(1).Varint((uint)limitedMerchant.Key).Varint(1).I32(110019901).I32(1).ToArray(), Now))[0][2] == 3,
       "buying past the limit is refused (result 3)");
+// Aion:TimeGates and Aion:Unlocks (OURS) through a session of the same character: no shop limits (nothing reported bought, the
+// limited goods sold again), every skin and every pet at its top level with the boards maxed at the next world entry (once).
+{
+    // The store is shared with the checks that follow: what this block adds is taken back at its end.
+    var keptSkins = new Dictionary<int, int>(staffStore.Skins);
+    var keptRides = staffStore.RideRows.ToList();
+    var keptBoards = new Dictionary<int, CreatureBoardRecord>(staffStore.BoardRows);
+    var keptSettings = staffStore.Settings.ToDictionary(p => p.Key, p => p.Value);
+    var keptItems = staffStore.Items.ToList();
+    var keptWings = staffStore.Wings.ToList();
+    var friendlySession = new GameSession(data, new GameSessionOptions
+    {
+        StaffRole = (_, _) => Task.FromResult<string?>("admin"), TimeGates = TimeGateOptions.Default, Unlocks = UnlockOptions.Default with { AllSkins = true, AllPets = true },
+    }, new Random(3)) { Store = staffStore };
+    await friendlySession.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+    await friendlySession.HandleAsync(new PacketWriter().U16(0x361f).Varint(staffStore.States[0].WireId << 16).I32(0).Vec3(Vector3d.Zero).ToArray(), Now);
+    await friendlySession.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    var rideTop = RewardBoxes.Embedded.RideMaxLevel;
+    Check(staffStore.Skins.Count >= SkinTables.Embedded.Count && RewardBoxes.Embedded.AllRides.All(id => staffStore.RideRows.Any(r => r.RideId == id && r.Owned && r.Level == rideTop))
+          && Enumerable.Range(2, 5).All(type => staffStore.BoardRows.TryGetValue(type, out var board) && board.Level == RewardBoxes.Embedded.CreatureMaxLevel(type))
+          && staffStore.Settings.ContainsKey(UnlockOptions.SkinsGivenSetting) && staffStore.Settings.ContainsKey(UnlockOptions.PetsGivenSetting)
+          && GamePackets.Wings(staffStore.States[0].Race).All(staffStore.Wings.Contains) && friendlySession.RegisteredWings.Count >= GamePackets.Wings(staffStore.States[0].Race).Length
+          && friendlySession.OwnedSkins.Count >= SkinTables.Embedded.Count,
+          "Aion:Unlocks: at world entry every skin, every wing, every pet at its top level and every creature board at its top level, remembered per character");
+    friendlySession.Teleport(staffSession.MapId ?? 1000, staffSession.Position!.Value, Now);
+    await friendlySession.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    if (friendlySession.Targets.Values.FirstOrDefault(n => n.NpcId == 2930093) is { } freeMerchant)
+    {
+        staffStore.Items.Add(Stored(GameSession.KinaItemId, 1_000_000, "bag", null, 990));
+        await friendlySession.InventoryChangesAsync(default);
+        var freeOpen = await friendlySession.HandleAsync(new PacketWriter().U16(0x8c00).Varint((uint)freeMerchant.Key).ToArray(), Now);
+        var freeBuy = await friendlySession.HandleAsync(new PacketWriter().U16(0x8c02).Varint(1).Varint((uint)freeMerchant.Key).Varint(1).I32(110019901).I32(1).ToArray(), Now);
+        Check(freeOpen.Single().SequenceEqual(new PacketWriter().U16(0x8c01).U16(0).Varint((uint)freeMerchant.Key).Varint(0).I64(Now).ToArray()) && freeBuy[0][2] == 0,
+              "Aion:TimeGates:ShopLimits off: the shop reports nothing bought and the limited goods sell again");
+    }
+    else Check(false, "the limited merchant is in view of the second session");
+    staffStore.Skins.Clear(); foreach (var (k, v) in keptSkins) staffStore.Skins[k] = v;
+    staffStore.RideRows.Clear(); staffStore.RideRows.AddRange(keptRides);
+    staffStore.BoardRows.Clear(); foreach (var (k, v) in keptBoards) staffStore.BoardRows[k] = v;
+    staffStore.Settings.Clear(); foreach (var (k, v) in keptSettings) staffStore.Settings[k] = v;
+    staffStore.Items.Clear(); staffStore.Items.AddRange(keptItems);
+    staffStore.Wings.Clear(); staffStore.Wings.AddRange(keptWings);
+}
 Check(ShopTables.Period(1, DateTimeOffset.Parse("2026-10-16T06:59:00Z")) == "2026-10-15" && ShopTables.Period(1, DateTimeOffset.Parse("2026-10-16T07:00:00Z")) == "2026-10-16"
       && ShopTables.Period(2, DateTimeOffset.Parse("2026-10-16T12:00:00Z")) == "w2026-10-14", "limits reset at 07:00 UTC, weekly from Wednesday");
 // Enchanting (0x5622 -> 0x5623): the starter sword goes +0 -> +1 for 125 Kina and 5 enchant coins (Enchant_Common_1);
@@ -2530,6 +2573,9 @@ Check(await gm.HandleAsync(chatter, "Player1", "/dance", default) == "Unknown co
       && await gm.HandleAsync(chatter, "Player1", "/SetInvisible true", default) == "Unknown command. Use /help.", "only // reaches the builder commands");
 Check(await gm.HandleAsync(chatter, "Visitor", "/help", default) == "Commands: /report <text> sends a report to the staff. /stigma shows your Stigma Shards and slots. " + GameSession.DungeonHelp
       && await gm.HandleAsync(chatter, "Visitor", "/report the bridge is broken", default) == "Reports are not available on this server.", "player commands work with one slash");
+var (singleBoost, _) = await Gm(stored, "Visitor", "/boost");
+var (doubleBoost, _) = await Gm(stored, "Visitor", "//boost");
+Check(singleBoost == doubleBoost && singleBoost.Contains("off on this server"), $"/boost reaches the boost with a single slash, like //boost: {singleBoost}");
 var hidden = await Gm(game, "Player1", "//SetInvisible true");
 Check(hidden.Reply == "Invisible." && hidden.Packets.Any(b => b.SequenceEqual(new byte[] { 0x4d, 0x36, 1 })) && game.Invisible, "SetInvisible true sends 0x364d true; NPCs stop seeing the GM");
 Check((await Gm(game, "Player1", "//setinvisible false")).Packets.Any(b => b.SequenceEqual(new byte[] { 0x4d, 0x36, 0 })), "names are case-insensitive; false sends 0x364d false");
@@ -2666,15 +2712,27 @@ Console.WriteLine($"{checks} builder command checks passed.");
 // ---------- Server rates and rules (Aion:Rates, Aion:Rules, Aion:Native:MaxPlayers; OURS) ----------
 checks = 0;
 {
-    var official = new RatesOptions().Resolve();
-    Check(official == ServerRates.Official && official.Experience == 1 && official.Kinah == 1 && official.Drop == 1 && official.QuestExperience == 1,
-          "rates default to the official profile (all 1.0)");
+    var official = new RatesOptions { Profile = "official" }.Resolve();
+    Check(official == ServerRates.Official && official.Experience == 1 && official.Kinah == 1 && official.Drop == 1 && official.QuestExperience == 1
+          && official is { KinahChance: 1, GatherExperience: 1, CraftExperience: 1, PetExperience: 1 },
+          "the official profile is all 1.0");
+    var friends = new RatesOptions().Resolve();
+    Check(friends == ServerRates.Friends && friends.Profile == "friends" && friends is { Experience: 5, QuestExperience: 5, Kinah: 10, KinahChance: 2, Drop: 4,
+          GatherExperience: 10, CraftExperience: 10, PetExperience: 10 }, "rates default to the friends profile (experience 5, Kinah 10, Kinah chance 2, drops 4, professions and pets 10)");
+    Check(new RatesOptions { GatherExperience = 1, PetExperience = 20 }.Resolve() is { GatherExperience: 1, PetExperience: 20, CraftExperience: 10, Experience: 5 },
+          "profession and pet rates override the preset one by one");
+    Check(ServerRates.Scaled(40, 5) == 200 && ServerRates.Scaled(1, 0.1) == 1 && ServerRates.Scaled(40, 0) == 0 && ServerRates.Scaled(0, 5) == 0 && ServerRates.Scaled(7, 1) == 7,
+          "profession and pet experience: scaled, at least 1 unless the rate is 0");
+    var kinahRng = new Random(5);
+    var kinahHits = Enumerable.Range(0, 2000).Count(_ => MonsterRewards.Embedded.Kinah("NormalMonster", 10, kinahRng) > 0);
+    var kinahHitsDoubled = Enumerable.Range(0, 2000).Count(_ => MonsterRewards.Embedded.Kinah("NormalMonster", 10, kinahRng, 2) > 0);
+    Check(kinahHits is > 1300 and < 1500 && kinahHitsDoubled == 2000, "Kinah drop chance: 70% for a normal monster, certain at x2 (capped)");
     var fast = new RatesOptions { Profile = "Accelerated" }.Resolve();
     Check(fast.Profile == "accelerated" && fast.Experience == 5 && fast.Kinah == 3 && fast.Drop == 3 && fast.QuestExperience == 5,
           "the accelerated profile presets experience 5, Kinah 3, drops 3 (quest experience follows experience)");
     var tuned = new RatesOptions { Profile = "accelerated", Experience = 2, Drop = 1.5 }.Resolve();
     Check(tuned.Experience == 2 && tuned.QuestExperience == 2 && tuned.Kinah == 3 && tuned.Drop == 1.5, "explicit rates override the preset; the rest stay preset");
-    Check(new RatesOptions { Experience = 3, QuestExperience = 1 }.Resolve() is { Experience: 3, QuestExperience: 1, Kinah: 1 }, "an explicit quest rate is kept apart from the kill rate");
+    Check(new RatesOptions { Profile = "official", Experience = 3, QuestExperience = 1 }.Resolve() is { Experience: 3, QuestExperience: 1, Kinah: 1 }, "an explicit quest rate is kept apart from the kill rate");
     foreach (var bad in new[] { new RatesOptions { Profile = "turbo" }, new RatesOptions { Experience = -1 }, new RatesOptions { Drop = 101 }, new RatesOptions { Kinah = double.NaN } })
     {
         var threw = false;
@@ -2687,8 +2745,8 @@ checks = 0;
     Check(fast.KillExperience(100, 1) == 500 && fast.KillExperience(100, events.ExpRate) == 5000 && official.KillExperience(100, 1) == 100,
           "kill experience: base x event (5 x 10 = 50, above the event clamp)");
     Check(fast.QuestReward(1000) == 5000 && official.QuestReward(1000) == 1000 && fast.QuestReward(0) == 0, "quest experience: base quest rate");
-    var half = new RatesOptions { Kinah = 0.5 }.Resolve();
-    var none = new RatesOptions { Kinah = 0 }.Resolve();
+    var half = new RatesOptions { Profile = "official", Kinah = 0.5 }.Resolve();
+    var none = new RatesOptions { Profile = "official", Kinah = 0 }.Resolve();
     Check(fast.KinahAmount(100) == 300 && half.KinahAmount(1) == 1 && half.KinahAmount(101) == 50 && none.KinahAmount(100) == 0 && official.KinahAmount(77) == 77,
           "Kinah: scaled, at least 1 unless the rate is 0");
     var rewards = fast.WithKinah([(GameSession.KinaItemId, 100L), (534660085, 2L)]);
@@ -2700,6 +2758,34 @@ checks = 0;
           "loot rolls: whole part of base x event, the fraction as a chance (1.5 = one or two)");
     Check(new RatesOptions { Drop = 100 }.Resolve().LootRolls(10, rollRng) == ServerRates.MaxLootRolls && none.LootRolls(1, rollRng) == 1
           && new RatesOptions { Drop = 0 }.Resolve().LootRolls(1, rollRng) == 0, "loot rolls are capped at 100 per kill; drop rate 0 rolls nothing");
+    // Time gates and unlocks (Aion:TimeGates, Aion:Unlocks; OURS): the host defaults are no gates; sessions without options keep the official behaviour.
+    Check(TimeGateOptions.Default is { ShopLimits: false, DungeonTimeLimits: false, CollectionRotation: false, GatherRespawnSeconds: 10, ReviveSeconds: 5 }
+          && new GameSessionOptions().TimeGates == TimeGateOptions.Official && TimeGateOptions.Official.GatherRespawnMs == 60_000
+          && TimeGateOptions.Official.ReviveMs == GameSession.ReviveDelayMs,
+          "time gates: none by default on the host; official-like for a bare session");
+    var gateRefused = false;
+    try { new TimeGateOptions { GatherRespawnSeconds = -1 }.Validated(); } catch (InvalidOperationException) { gateRefused = true; }
+    Check(gateRefused && new TimeGateOptions { GatherRespawnSeconds = 0 }.Validated().GatherRespawnMs == 0, "gather respawn seconds must be 0-3600");
+    Check(UnlockOptions.Default is { AllSkins: true, AllPets: true, AllWings: true, CraftAlwaysSucceeds: true, PetSoulCost: 0.5 }
+          && UnlockOptions.Default.SoulCost(5) == 3 && UnlockOptions.Default.SoulCost(75) == 38 && UnlockOptions.Default.SoulCost(1) == 1 && UnlockOptions.Default.SoulCost(0) == 0
+          && UnlockOptions.Official.SoulCost(25) == 25 && new UnlockOptions { PetSoulCost = 0 }.SoulCost(25) == 1,
+          "unlocks: all pets and wings on, all skins off by default, crafts always succeed, pets cost half the souls (at least 1)");
+    var unlockRefused = false;
+    try { new UnlockOptions { PetSoulCost = 11 }.Validated(); } catch (InvalidOperationException) { unlockRefused = true; }
+    Check(unlockRefused, "pet soul cost must be 0-10");
+    Check(SkinTables.Embedded.All.Count == SkinTables.Embedded.Count && RewardBoxes.Embedded.AllRides.Count > 100 && RewardBoxes.Embedded.AllRides.All(id => RewardBoxes.Embedded.Ride(id) is not null),
+          "unlocks: every Skin.dat skin and every VehicleList ride can be listed");
+    {
+        var season = CollectionTables.Embedded.Window;
+        var midSeason = season.FromMs + 3 * 86_400_000L + 3_600_000L;
+        var rotating = CollectionTables.Embedded.Open(1, midSeason);
+        var allBooks = CollectionTables.Embedded.Open(1, midSeason, rotation: false);
+        var afterSeason = CollectionTables.Embedded.Open(1, season.ToMs + 86_400_000L, rotation: false);
+        var daily = allBooks.First(o => o.Collection.Dated).Collection;
+        Check(allBooks.Count > rotating.Count && allBooks.All(o => o.From == season.FromMs && o.To >= season.ToMs) && afterSeason.Count == allBooks.Count
+              && afterSeason.All(o => o.To > season.ToMs + 86_400_000L) && CollectionTables.Embedded.Offered(daily, rotation: false).Count == CollectionTables.Embedded.ListsOf(daily.Group).Count,
+              "collection rotation off: every collection open all season and after it, with all its lists");
+    }
     // Rules: respawn seconds checked at startup, PvP default on.
     Check(WorldRules.Default.Pvp && WorldRules.Default.RespawnMs == GameSession.RespawnMs, "rules default: PvP on, the 30 s respawn");
     var respawnRefused = false;
@@ -4167,6 +4253,55 @@ checks = 0;
     foreach (var s in new[] { gladiator30, gladiator1, cleric30 }) s.ExitSharedWorld();
 }
 Console.WriteLine($"{checks} progression checks passed (unlocks past 25, fallback damage, skill-level scaling, MP max, combat power).");
+// ---------- Alt boost (Aion:Boost, //boost; OURS) ----------
+checks = 0;
+{
+    foreach (var cls in new[] { "Gladiator", "Templar", "Assassin", "Cleric", "Ranger", "Elementalist", "Sorcerer", "Chanter" })
+    {
+        var set = GameSession.BoostGear(data, cls, 1, 45);
+        var total = set.Sum(data.ItemLevel);
+        Check(set.Count == 14 && total is >= 1350 and <= 1450 && set.All(id => data.Item(id) is { PermitLevel: <= 45 })
+              && data.Item(set[0])!.Category == data.ClassWeapon(cls), $"boost gear for a {cls}: 14 pieces wearable at 45, item level {total} (about 1,400)");
+    }
+    var lightQuests = GameSession.BoostQuests(QuestBook.Embedded, 1, 46);
+    Check(lightQuests.Count(c => c.StartsWith("HQ1")) == 90 && lightQuests.Contains("EQ1810001") && lightQuests.Contains("EQ1803030") && !lightQuests.Any(c => c.StartsWith("HQ2") || c.StartsWith("EQ2"))
+          && lightQuests.All(c => QuestBook.Embedded.Find(c)!.Title != "???"),
+          "boost quests: the 90 released Light main story quests, regional quests and the sealed dungeons' exploration quests");
+    var boostStore = new FakeStore();
+    var boostSession = new GameSession(data, new GameSessionOptions { Boost = BoostOptions.Default with { Price = 500_000 } }, new Random(3)) { Store = boostStore };
+    await boostSession.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+    await boostSession.HandleAsync(create, Now);
+    await boostSession.HandleAsync(new PacketWriter().U16(0x361f).Varint(boostStore.States[0].WireId << 16).I32(0).Vec3(Vector3d.Zero).ToArray(), Now);
+    await boostSession.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    var (locked, _) = await boostSession.BoostCommandAsync("confirm", default);
+    Check(locked.Contains("unlocks once a character of this account reaches level 45") && boostSession.Level < 45, "//boost: locked until the account has a level 45");
+    boostStore.States.Add(boostStore.States[0] with { Summary = boostStore.States[0].Summary with { CharacterId = Guid.NewGuid(), Name = "Mainchar", Level = 45 } });
+    var (info, _) = await boostSession.BoostCommandAsync("", default);
+    Check(info.Contains("Unlocked by Mainchar") && info.Contains("500,000 Kinah") && info.Contains("/boost confirm") && boostSession.Level < 45, "//boost alone tells the price and changes nothing");
+    var (poor, _) = await boostSession.BoostCommandAsync("confirm", default);
+    Check(poor.Contains("costs 500,000 Kinah") && boostSession.Level < 45, "//boost confirm without the Kinah is refused");
+    boostStore.Items.Add(Stored(GameSession.KinaItemId, 600_000, "bag", null, 995));
+    await boostSession.InventoryChangesAsync(default);
+    var gearCount = GameSession.BoostGear(data, "Gladiator", 1, 45).Count;
+    var bagBefore = boostStore.Items.Count;
+    long KinahLeft() => boostStore.Items.Where(i => i.TemplateId == GameSession.KinaItemId).Sum(i => i.Quantity);
+    boostStore.FailProgress = true;
+    var (halfway, halfwayPackets) = await boostSession.BoostCommandAsync("confirm", default);
+    boostStore.FailProgress = false;
+    var (pendingInfo, _) = await boostSession.BoostCommandAsync("", default);
+    Check(halfway.Contains("could not be saved") && halfway.Contains("no extra charge") && boostSession.Level < 45 && KinahLeft() == 100_000
+          && pendingInfo.Contains("paid but did not finish"), "//boost: a failed level save keeps the payment on record and offers to finish it");
+    var (boostBought, boostPackets) = await boostSession.BoostCommandAsync("confirm", default);
+    var heroDone = lightQuests.Where(c => c.StartsWith("HQ1")).All(c => boostSession.QuestStatus(c) == QuestLog.Rewarded);
+    Check(boostBought.StartsWith("Boosted to level 45") && boostSession.Level == 45 && boostStore.Items.Where(i => i.TemplateId == GameSession.KinaItemId).Sum(i => i.Quantity) == 100_000
+          && boostStore.Items.Count >= bagBefore + gearCount - 1 && heroDone && boostStore.Settings.ContainsKey(GameSession.BoostedSetting)
+          && halfwayPackets.Concat(boostPackets).Any(b => b[0] == 0x1b && b[1] == 0x56), "//boost confirm: level 45, 500,000 Kinah paid once, gear in the bag, the main story done, recorded");
+    var (boostAgain, _) = await boostSession.BoostCommandAsync("confirm", default);
+    Check(boostAgain.Contains("already been boosted") && KinahLeft() == 100_000, "a boosted character cannot be boosted again, and the finished boost charged once");
+    var (off, _) = await new GameSession(data, new GameSessionOptions(), new Random(1)).BoostCommandAsync("confirm", default);
+    Check(off.Contains("off on this server"), "the boost is off for a session without host options");
+}
+Console.WriteLine($"{checks} alt boost checks passed (Aion:Boost).");
 
 {
     // Aion:Fun (docs/friends-server/FUN.md): field bosses, //buff, //hub, duel restore.
@@ -4512,6 +4647,18 @@ sealed class FakeStore : INativeCharacterStore
         foreach (var skin in skins) Skins[skin] = Skins.GetValueOrDefault(skin) + 1;
         return Task.FromResult(true);
     }
+    public Task<bool> GrantUnlocksAsync(Guid character, IReadOnlyList<int> skins, IReadOnlyList<(int RideId, int Level)> rides, IReadOnlyList<int> wings, CancellationToken ct)
+    {
+        foreach (var skin in skins) Skins.TryAdd(skin, 1);
+        foreach (var wing in wings) if (!Wings.Contains(wing)) Wings.Add(wing);
+        foreach (var (rideId, level) in rides)
+        {
+            var index = RideRows.FindIndex(r => r.RideId == rideId);
+            if (index < 0) RideRows.Add(new RideRecord(rideId, level, 0, true));
+            else RideRows[index] = RideRows[index] with { Owned = true, Level = Math.Max(RideRows[index].Level, level) };
+        }
+        return Task.FromResult(true);
+    }
     public Task<bool> SetSkinEquipsAsync(Guid character, IReadOnlyDictionary<int, int> equips, CancellationToken ct)
     {
         if (equips.Any(e => e.Value != 0 && !Skins.ContainsKey(e.Value))) return Task.FromResult(false);
@@ -4854,7 +5001,8 @@ sealed class FakeStore : INativeCharacterStore
         return Task.FromResult(true);
     }
     public (int Level, long Experience)? Progress { get; private set; }
-    public Task<bool> SaveProgressAsync(Guid character, int level, long experience, CancellationToken ct) { Progress = (level, experience); return Task.FromResult(true); }
+    public bool FailProgress { get; set; }
+    public Task<bool> SaveProgressAsync(Guid character, int level, long experience, CancellationToken ct) { if (FailProgress) throw new FakeDbException(); Progress = (level, experience); return Task.FromResult(true); }
     public Task<RideRecord?> AddRideSoulsAsync(Guid character, Guid item, long revision, int rideId, int souls, CancellationToken ct)
     {
         if (!Consume(item, revision, 1)) return Task.FromResult<RideRecord?>(null);

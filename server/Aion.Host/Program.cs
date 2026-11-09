@@ -81,8 +81,8 @@ else
 // local client with an unsaved character and must be chosen explicitly.
 var native = (builder.Configuration.GetSection("Aion:Native").Get<NativeOptions>() ?? new NativeOptions()) with { Network = network };
 if (native.MaxPlayers is < 0) throw new InvalidOperationException("Aion:Native:MaxPlayers must be 0 (no cap) or more.");
-// Base rates and host switches (OURS; server owner's choice): Aion:Rates (Profile official|accelerated, Experience, Kinah,
-// Drop, QuestExperience) and Aion:Rules (Pvp, RespawnSeconds, PartyLoot freeforall|roundrobin|killer, FallbackLoot). Scheduled dashboard events multiply on top of the rates.
+// Base rates and host switches (OURS; server owner's choice): Aion:Rates (Profile friends (default)|official|accelerated,
+// Experience, Kinah, KinahChance, Drop, QuestExperience, GatherExperience, CraftExperience, PetExperience) and Aion:Rules (Pvp, RespawnSeconds, PartyLoot freeforall|roundrobin|killer, FallbackLoot). Scheduled dashboard events multiply on top of the rates.
 var rates = (builder.Configuration.GetSection("Aion:Rates").Get<Aion.World.RatesOptions>() ?? new Aion.World.RatesOptions()).Resolve();
 var rules = (builder.Configuration.GetSection("Aion:Rules").Get<Aion.World.WorldRules>() ?? Aion.World.WorldRules.Default).Validated();
 Aion.World.GameData.BrawlerOwnModel = rules.BrawlerOwnModel;
@@ -110,6 +110,15 @@ var marketReferences = market.PriceFile is { Length: > 0 } priceFile ? Aion.Worl
     : ((Dictionary<int, long> ById, Dictionary<string, long> ByName)?)null;
 
 builder.Services.AddSingleton(dungeonRules);
+// Aion:TimeGates (OURS, all off by default: ShopLimits, DungeonTimeLimits, CollectionRotation; GatherRespawnSeconds 10) and
+// Aion:Unlocks (OURS: AllSkins, AllPets and AllWings on by default; CraftAlwaysSucceeds on, PetSoulCost 0.5).
+var timeGates = (builder.Configuration.GetSection("Aion:TimeGates").Get<Aion.World.TimeGateOptions>() ?? Aion.World.TimeGateOptions.Default).Validated();
+var unlocks = (builder.Configuration.GetSection("Aion:Unlocks").Get<Aion.World.UnlockOptions>() ?? Aion.World.UnlockOptions.Default).Validated();
+builder.Services.AddSingleton(timeGates);
+builder.Services.AddSingleton(unlocks);
+// Aion:Boost (OURS): /boost raises an alt to Level (45) for Price Kinah (10000000) once the account has a character at RequiredLevel (45).
+var boost = (builder.Configuration.GetSection("Aion:Boost").Get<Aion.World.BoostOptions>() ?? Aion.World.BoostOptions.Default).Validated(Aion.World.GameData.Embedded.MaxLevel);
+builder.Services.AddSingleton(boost);
 // Aion:Stigmas (docs/STIGMAS.md): Enabled (default on, global's stigma rules), Slots (4 global, 6 Korea), ShardRate, MaxLevel,
 // RequireSlot.
 var stigmaOptions = (builder.Configuration.GetSection("Aion:Stigmas").Get<Aion.World.StigmaOptions>() ?? Aion.World.StigmaOptions.Default).Validated();
@@ -299,6 +308,8 @@ builder.WebHost.ConfigureKestrel(options =>
 builder.Services.AddSingleton<WardrobeAccess>();
 var app = builder.Build();
 if (native.LoginPort is not null || native.GamePort is not null)
+    app.Logger.LogInformation("World rates: {Rates} (scheduled events multiply on top, each 0.1-10). Rules: {Rules}. Players: {Players}. Dungeons: {Dungeons}. Time gates: {TimeGates}. Unlocks: {Unlocks}. Boost: {Boost}.",
+        rates, rules, native.MaxPlayers is > 0 and var maxPlayers ? $"at most {maxPlayers}" : $"no cap beyond {native.MaxConnections} connections per port", dungeonRules, timeGates, unlocks, boost);
     app.Logger.LogInformation("World rates: {Rates} (scheduled events multiply on top, each 0.1-10). Rules: {Rules}. Players: {Players}. Dungeons: {Dungeons}. Bosses: {Bosses}. Stigmas: {Stigmas}.",
         rates, rules, native.MaxPlayers is > 0 and var maxPlayers ? $"at most {maxPlayers}" : $"no cap beyond {native.MaxConnections} connections per port", dungeonRules, bossRules, stigmaOptions);
 // Chat mutes and the chat log go through the staff tools when both exist.

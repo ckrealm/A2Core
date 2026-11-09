@@ -103,6 +103,9 @@ public interface IGameplayStore
     Task<bool> SetTitleAsync(VerifiedAccount account, Guid character, int category, int titleId, CancellationToken ct = default) => Task.FromResult(false);
     /// <summary>Skins added to the collection (a count per skin).</summary>
     Task<bool> GrantSkinsAsync(VerifiedAccount account, Guid character, IReadOnlyList<int> skins, CancellationToken ct = default) => Task.FromResult(false);
+    /// <summary>Aion:Unlocks (OURS): skins and wings added (owned ones kept as they are) and rides owned at least at the given level, at once.</summary>
+    Task<bool> GrantUnlocksAsync(VerifiedAccount account, Guid character, IReadOnlyList<int> skins, IReadOnlyList<(int RideId, int Level)> rides, IReadOnlyList<int> wings, CancellationToken ct = default) =>
+        Task.FromResult(false);
     /// <summary>Equipped skins by ESkinEquipSlot; 0 clears the slot. Each skin must be owned.</summary>
     Task<bool> SetSkinEquipsAsync(VerifiedAccount account, Guid character, IReadOnlyDictionary<int, int> equips, CancellationToken ct = default) => Task.FromResult(false);
     /// <summary>A learned skill's level (a skill level bought with skill points).</summary>
@@ -280,6 +283,13 @@ public interface IGameplayStore
     Task<IReadOnlyList<QuestRecord>?> QuestsAsync(VerifiedAccount account, Guid character, CancellationToken ct = default);
     // Insert or update one quest by code (uid assigned on insert); the stored record.
     Task<QuestRecord> SaveQuestAsync(VerifiedAccount account, Guid character, QuestRecord quest, CancellationToken ct = default);
+    // Several quests in one transaction (Aion:Boost); the stored records in the same order.
+    async Task<IReadOnlyList<QuestRecord>> SaveQuestsAsync(VerifiedAccount account, Guid character, IReadOnlyList<QuestRecord> quests, CancellationToken ct = default)
+    {
+        var saved = new List<QuestRecord>();
+        foreach (var quest in quests) saved.Add(await SaveQuestAsync(account, character, quest, ct));
+        return saved;
+    }
     Task<bool> RemoveQuestAsync(VerifiedAccount account, Guid character, string code, CancellationToken ct = default);
     // Server-decided reward of a completed quest: marks it rewarded, adds experience and grants the
     // items once (repeating the call for a rewarded quest grants nothing). Returns the new experience.

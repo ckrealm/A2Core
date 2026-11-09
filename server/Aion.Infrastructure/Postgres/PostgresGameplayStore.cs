@@ -185,6 +185,24 @@ public sealed class PostgresGameplayStore(NpgsqlDataSource source) : IGameplaySt
         await t.CommitAsync(ct); return true;
     }
 
+    public async Task<bool> GrantUnlocksAsync(VerifiedAccount account, Guid character, IReadOnlyList<int> skins, IReadOnlyList<(int RideId, int Level)> rides, IReadOnlyList<int> wings, CancellationToken ct=default)
+    {
+        if(skins.Count>100_000 || rides.Count>10_000 || wings.Count>10_000 || skins.Any(s=>s<=0) || wings.Any(w=>w<=0) || rides.Any(r=>r.RideId<=0 || r.Level is <1 or >100)) throw new GameplayException("invalid_unlocks");
+        await using var c=await source.OpenConnectionAsync(ct); await using var t=await c.BeginTransactionAsync(ct);
+        if(!await Own(c,t,account.AccountId,character,ct)) return false;
+        if(skins.Count>0)
+            await Execute(c,t,"INSERT INTO game.character_skins(character_id,skin_id) SELECT $1,s FROM unnest($2::integer[]) AS s ON CONFLICT (character_id,skin_id) DO NOTHING",ct,character,skins.Distinct().ToArray());
+        if(rides.Count>0)
+            await Execute(c,t,"INSERT INTO game.character_rides(character_id,ride_id,level,owned) SELECT $1,r.id,r.lvl,true FROM unnest($2::integer[],$3::smallint[]) AS r(id,lvl) "
+                +"ON CONFLICT (character_id,ride_id) DO UPDATE SET owned=true,level=GREATEST(game.character_rides.level,EXCLUDED.level)",
+                ct,character,rides.Select(r=>r.RideId).ToArray(),rides.Select(r=>(short)r.Level).ToArray());
+        if(wings.Count>0)
+            await Execute(c,t,"INSERT INTO game.character_wings(character_id,wing_id) SELECT $1,w FROM unnest($2::integer[]) AS w ON CONFLICT DO NOTHING",ct,character,wings.Distinct().ToArray());
+        await Execute(c,t,"INSERT INTO audit.events(action,character_id,actor_id,details) VALUES('unlocks_granted',$1,$2,$3)",ct,character,account.AccountId,
+            Json(new {skins=skins.Count,rides=rides.Count,wings=wings.Count}));
+        await t.CommitAsync(ct); return true;
+    }
+
     public async Task<bool> SetSkinEquipsAsync(VerifiedAccount account, Guid character, IReadOnlyDictionary<int, int> equips, CancellationToken ct=default)
     {
         if(equips.Count is 0 or >32 || equips.Any(e=>e.Key is <1 or >27 || e.Value<0)) throw new GameplayException("invalid_skin_equips");
@@ -264,6 +282,24 @@ public sealed class PostgresGameplayStore(NpgsqlDataSource source) : IGameplaySt
             """,character,quest.Code,quest.QuestId,(short)quest.Status,(short)quest.Step,quest.Goals))
             uid=(long)(await q.ExecuteScalarAsync(ct))!;
         await t.CommitAsync(ct); return quest with { Uid=uid };
+    }
+
+    public async Task<IReadOnlyList<QuestRecord>> SaveQuestsAsync(VerifiedAccount account, Guid character, IReadOnlyList<QuestRecord> quests, CancellationToken ct=default)
+    {
+        if(quests.Any(quest=>quest.Goals.Length!=6 || quest.Status is <1 or >4 || quest.Step is <1 or >64)) throw new GameplayException("invalid_quest");
+        await using var c=await source.OpenConnectionAsync(ct); await using var t=await c.BeginTransactionAsync(ct);
+        if(!await Own(c,t,account.AccountId,character,ct)) throw new GameplayException("character_unavailable");
+        var saved=new List<QuestRecord>(quests.Count);
+        foreach(var quest in quests)
+        {
+            await using var q=Query(c,t,"""
+                INSERT INTO game.character_quests(character_id,quest_code,quest_id,status,step,goals) VALUES($1,$2,$3,$4,$5,$6)
+                ON CONFLICT(character_id,quest_code) DO UPDATE SET status=EXCLUDED.status,step=EXCLUDED.step,goals=EXCLUDED.goals,updated_at=now()
+                RETURNING uid
+                """,character,quest.Code,quest.QuestId,(short)quest.Status,(short)quest.Step,quest.Goals);
+            saved.Add(quest with { Uid=(long)(await q.ExecuteScalarAsync(ct))! });
+        }
+        await t.CommitAsync(ct); return saved;
     }
 
     public async Task<bool> RemoveQuestAsync(VerifiedAccount account, Guid character, string code, CancellationToken ct=default)

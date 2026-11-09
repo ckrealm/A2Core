@@ -213,6 +213,11 @@ await using(var source=NpgsqlDataSource.Create(connectionString))
     Check(await game.RewardQuestAsync(first,id,"HQ1101010",1133,[]) is long xp && xp>=1133,"a complete quest pays its experience");
     Check(await game.RewardQuestAsync(first,id,"HQ1101010",1133,[]) is null && (await game.QuestsAsync(first,id))!.Single().Status==4,"and only once (Rewarded)");
     await Reject(()=>game.SaveQuestAsync(first,id,quest with {Goals=[1]}),"invalid_quest");
+    // Several quests in one transaction (Aion:Boost): updates keep their uid, new ones get one; one bad record saves none.
+    var batch=await game.SaveQuestsAsync(first,id,[new QuestRecord("HQ1101010",1101010,0,4,3,[0,0,0,0,0,0]),new QuestRecord("HQ1101020",1101020,0,4,1,[0,0,0,0,0,0])]);
+    Check(batch.Count==2 && batch[0].Uid==quest.Uid && batch[1].Uid>0 && (await game.QuestsAsync(first,id))!.Count==2,"quests saved together, uid kept for an existing one");
+    await Reject(()=>game.SaveQuestsAsync(first,id,[new QuestRecord("HQ1101030",1101030,0,4,1,[0,0,0,0,0,0]),new QuestRecord("HQ1101040",1101040,0,4,1,[1])]),"invalid_quest");
+    Check((await game.QuestsAsync(first,id))!.Count==2,"a batch with a bad record saves nothing");
     // Wings: staff registration, stored once per wing, read back with the owner's inventory.
     await Reject(()=>game.AdminAsync(second,new(Guid.NewGuid(),id,"wings",Wings:[])),"invalid_wings");
     await Reject(()=>game.AdminAsync(first,new(Guid.NewGuid(),id,"wings",Wings:[30200600])),"forbidden");
@@ -277,6 +282,17 @@ await using(var source=NpgsqlDataSource.Create(connectionString))
     Check(staffView.Inventory.Items.Count==5 && staffView.Inventory.Items.Count(x=>x.Location=="equipment")==1,"staff detail lists another account's inventory (the two swords, the unknown item, the two single rows of the grant of two)");
     Check(await game.AdminCharacterAsync(second,Guid.NewGuid()) is null,"staff detail of unknown character is absent");
     Check(await new CharacterPersistenceService(new PostgresCharacterRepository(source)).SaveAsync(first,id,saved.Revision-1,saved.Progress) is null,"old world save cannot overwrite GM changes");
+    // Aion:Unlocks: skins added once (owned ones kept), rides owned at least at the given level; only the owner may.
+    Check(await game.GrantSkinsAsync(first,id,[7001]) && await game.GrantUnlocksAsync(first,id,[7001,7002,7003],[(1001,3),(1002,1)],[11,12]),"unlocks granted");
+    Check(await game.GrantUnlocksAsync(first,id,[7002],[(1002,3),(1001,1)],[12,13]),"unlocks granted again");
+    var unlockedWings=(await game.InventoryAsync(first,id))!.Wings!;
+    Check(new[]{11,12,13}.All(w=>unlockedWings.Count(x=>x==w)==1),"unlocked wings registered once each");
+    var unlockedRides=(await game.RidesAsync(first,id))!.Rides;
+    Check(unlockedRides.Count==2 && unlockedRides.All(r=>r.Owned && r.Level==3),"unlocked rides owned at the top level, never lowered");
+    var unlockedSkins=(await game.InventoryAsync(first,id))!.Extras!.Skins;
+    Check(unlockedSkins.Count==3 && unlockedSkins[7001]==1 && unlockedSkins[7002]==1,"unlocked skins added once");
+    Check(!await game.GrantUnlocksAsync(second,id,[7004],[],[]),"unlocks for another account's character are refused");
+    await Reject(()=>game.GrantUnlocksAsync(first,id,[0],[],[]),"invalid_unlocks");
     await using var reopened=NpgsqlDataSource.Create(connectionString);
     Check((await new PostgresGameplayStore(reopened).InventoryAsync(first,id))!.Items.Count==5,"inventory survives a fresh pool");
     var restoredItems=(await new PostgresGameplayStore(reopened).InventoryAsync(first,id))!.Items;

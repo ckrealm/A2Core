@@ -303,6 +303,8 @@ public sealed class NativeGameListener(NativeOptions options, IServiceProvider s
             WorldRace = services.GetService<WorldChoices>() is { } choices ? choices.Race : null,
             Rates = services.GetService<ServerRates>() ?? ServerRates.Official, Rules = services.GetService<WorldRules>() ?? WorldRules.Default,
             Dungeons = services.GetService<DungeonOptions>() ?? DungeonOptions.Default,
+            TimeGates = services.GetService<TimeGateOptions>() ?? TimeGateOptions.Default, Unlocks = services.GetService<UnlockOptions>() ?? UnlockOptions.Default,
+            Boost = services.GetService<BoostOptions>() ?? BoostOptions.Default,
             Stigmas = services.GetService<StigmaOptions>() ?? StigmaOptions.Default,
             Bosses = services.GetService<BossOptions>() ?? BossOptions.Default,
             Fun = services.GetService<FunFeatures>(),

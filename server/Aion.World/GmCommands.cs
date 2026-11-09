@@ -131,6 +131,13 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
                 return Market is { } market ? await market.HandleAsync(actor.Session, line[2..].Trim(), ct) : "The market is not available on this server.";
             if (line.StartsWith("bot", StringComparison.OrdinalIgnoreCase) && (line.Length == 3 || char.IsWhiteSpace(line[3])))
                 return await BotAsync(actor.Session, line[3..].Trim(), ct);
+            // /boost or //boost (Aion:Boost, OURS): every player; runs on the sender's game loop.
+            if (Is(line, "boost"))
+            {
+                var boostArgs = line[5..].Trim();
+                try { return await actor.Session.InvokeAsync(async _ => await actor.Session.BoostCommandAsync(boostArgs, ct)).WaitAsync(TimeSpan.FromSeconds(30), ct); }
+                catch (TimeoutException) { return "The boost is still being saved. Type /boost in a moment to see whether it finished; you are never charged twice."; }
+            }
             if (Fun is { Options.BuffCommand: true } && Is(line, "buff"))
                 return await actor.Session.InvokeAsync(now => actor.Session.FunBuff(now)).WaitAsync(TimeSpan.FromSeconds(10), ct);
             if (Fun is { Options.HubCommand: true } && Is(line, "hub"))
@@ -139,6 +146,8 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
                 return await builder.AllowedAsync(actor.Session, ct)
                     ? "Builder commands (in chat: //<command>; console: s <command>): " + string.Join(", ", BuilderCommands.Supported)
                         + (Bots is { Options.Enabled: true } ? "; //bot add <character> for playerbots" : "")
+                    : "Commands: /report <text> sends a report to the staff. " + GameSession.DungeonHelp
+                        + (actor.Session.BoostEnabled ? " /boost raises an alt to the boost level once your account has a character there." : "")
                     : "Commands: /report <text> sends a report to the staff. /stigma shows your Stigma Shards and slots. " + GameSession.DungeonHelp
                         + (Fun is { Options.BuffCommand: true } ? " /buff gives you the food and scroll buffs." : "")
                         + (Fun is { Options.HubCommand: true } ? " /hub teleports to a town or the Abyss." : "")

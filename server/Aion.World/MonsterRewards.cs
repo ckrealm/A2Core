@@ -71,11 +71,14 @@ public sealed class MonsterRewards
         return (low * times, high * times);
     }
 
-    /// <summary>The Kinah of one kill before rates: by the rank's chance, an amount in the band's range; 0 otherwise.</summary>
-    public long Kinah(string subType, int level, Random rng)
+    /// <summary>
+    /// The Kinah of one kill before rates: by the rank's chance (times <paramref name="chanceRate"/>, Aion:Rates:KinahChance),
+    /// an amount in the band's range; 0 otherwise.
+    /// </summary>
+    public long Kinah(string subType, int level, Random rng, double chanceRate = 1)
     {
         var (low, high) = KinahRange(subType, level);
-        if (high <= 0 || rng.NextDouble() * ChanceScale >= kinah.Chance[subType]) return 0;
+        if (high <= 0 || rng.NextDouble() * ChanceScale >= kinah.Chance[subType] * chanceRate) return 0;
         return low + (long)(rng.NextDouble() * (high - low + 1));
     }
 

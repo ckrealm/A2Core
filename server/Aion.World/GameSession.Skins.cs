@@ -31,6 +31,8 @@ public sealed class SkinTables
     public bool Known(int skinId) => file.Categories.ContainsKey(skinId.ToString(CultureInfo.InvariantCulture));
     public string Category(int skinId) => file.Categories.GetValueOrDefault(skinId.ToString(CultureInfo.InvariantCulture)) ?? "None";
     public int Count => file.Skins.Count;
+    /// <summary>Every Skin.dat id (Aion:Unlocks:AllSkins).</summary>
+    public IReadOnlyList<int> All => file.Categories.Keys.Select(k => int.Parse(k, CultureInfo.InvariantCulture)).Where(id => id > 0).OrderBy(id => id).ToList();
 }
 
 // Skins (appearance items). The 0x8d run (catalogue index + 0x89d1): SkinInfo_NT 0x8d5b OBSERVED at the official world

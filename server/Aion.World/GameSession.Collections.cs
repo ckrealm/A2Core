@@ -61,9 +61,19 @@ public sealed class CollectionTables
         return (day, day / 7 + 1);
     }
 
-    /// <summary>The collections open now for a race with their windows: today's daily, this week's weekly, the season-long ones.</summary>
-    public List<(Collection Collection, long From, long To)> Open(int race, long nowMs)
+    /// <summary>
+    /// The collections open now for a race with their windows: today's daily, this week's weekly, the season-long ones. Without
+    /// <paramref name="rotation"/> (Aion:TimeGates:CollectionRotation off, OURS) every collection is open, before and after the
+    /// season too, its window the season's (stretched to at least a month past now so the client never sees it ended).
+    /// </summary>
+    public List<(Collection Collection, long From, long To)> Open(int race, long nowMs, bool rotation = true)
     {
+        if (!rotation)
+        {
+            var from = Math.Min(file.Season.FromMs, nowMs);
+            var to = Math.Max(file.Season.ToMs, nowMs + 30 * DayMs);
+            return byId.Values.Where(c => c.Race == 0 || c.Race == race).OrderBy(c => c.Tab).ThenBy(c => c.Id).Select(c => (c, from, to)).ToList();
+        }
         var (day, week) = At(nowMs);
         var open = new List<(Collection, long, long)>();
         if (day < 0) return open;
@@ -78,11 +88,11 @@ public sealed class CollectionTables
         return open.OrderBy(o => o.Item1.Tab).ToList();
     }
 
-    /// <summary>The lists a collection offers: every list for the season-long ones, ten picked by the collection id for the daily and weekly ones (OURS).</summary>
-    public List<ListEntry> Offered(Collection c)
+    /// <summary>The lists a collection offers: every list for the season-long ones, ten picked by the collection id for the daily and weekly ones (OURS); every list without rotation.</summary>
+    public List<ListEntry> Offered(Collection c, bool rotation = true)
     {
         var all = ListsOf(c.Group);
-        if (!c.Dated) return all.ToList();
+        if (!c.Dated || !rotation) return all.ToList();
         var take = c.Kind == 1 ? file.Season.DailyLists : file.Season.WeeklyLists;
         var rng = new Random(c.Id);
         return all.OrderBy(_ => rng.Next()).Take(take).OrderBy(l => l.Id).ToList();
@@ -117,11 +127,11 @@ public sealed partial class GameSession
 
     byte[] PeriodCollectionList(long now)
     {
-        var open = Collections.Open(profileRace, now);
+        var open = Collections.Open(profileRace, now, options.TimeGates.CollectionRotation);
         var w = PacketWriter.Opcode(PeriodCollectionListNt).Varint((uint)open.Count);
         foreach (var (collection, from, to) in open)
         {
-            var lists = Collections.Offered(collection);
+            var lists = Collections.Offered(collection, options.TimeGates.CollectionRotation);
             w.I32(collection.Id).U8((byte)collection.Tab).I64(from).I64(to).Varint((uint)lists.Count);
             foreach (var list in lists) WriteDelivery(w, collection.Id, list.Id, collectionProgress.GetValueOrDefault((collection.Id, list.Id)));
         }
@@ -154,8 +164,8 @@ public sealed partial class GameSession
             return w.ToArray();
         }
         var state = collectionProgress.GetValueOrDefault((collectionId, listId));
-        var open = Collections.Open(profileRace, now).FirstOrDefault(o => o.Collection.Id == collectionId);
-        if (open.Collection is not { } collection || Collections.List(collection.Group, listId) is not { } list || !Collections.Offered(collection).Any(l => l.Id == listId)
+        var open = Collections.Open(profileRace, now, options.TimeGates.CollectionRotation).FirstOrDefault(o => o.Collection.Id == collectionId);
+        if (open.Collection is not { } collection || Collections.List(collection.Group, listId) is not { } list || !Collections.Offered(collection, options.TimeGates.CollectionRotation).Any(l => l.Id == listId)
             || state.Rewarded || items.Count == 0 || Store is not { } store || CharacterId is not { } character)
             return [Reply(1, state)];
         var room = list.Target - state.Registered;

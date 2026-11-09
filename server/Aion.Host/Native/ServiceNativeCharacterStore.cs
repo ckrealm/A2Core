@@ -89,6 +89,12 @@ public sealed class ServiceNativeCharacterStore(string token, WorldIdentity iden
         return await game.SaveQuestAsync(identity.Account, character, quest, ct);
     }
 
+    public async Task<IReadOnlyList<QuestRecord>> SaveQuestsAsync(Guid character, IReadOnlyList<QuestRecord> quests, CancellationToken ct)
+    {
+        await ValidateAsync(ct);
+        return await game.SaveQuestsAsync(identity.Account, character, quests, ct);
+    }
+
     public async Task<bool> RemoveQuestAsync(Guid character, string code, CancellationToken ct)
     {
         await ValidateAsync(ct);
@@ -588,6 +594,12 @@ public sealed class ServiceNativeCharacterStore(string token, WorldIdentity iden
     {
         await ValidateAsync(ct);
         return await game.GrantSkinsAsync(identity.Account, character, skins, ct);
+    }
+
+    public async Task<bool> GrantUnlocksAsync(Guid character, IReadOnlyList<int> skins, IReadOnlyList<(int RideId, int Level)> rides, IReadOnlyList<int> wings, CancellationToken ct)
+    {
+        await ValidateAsync(ct);
+        return await game.GrantUnlocksAsync(identity.Account, character, skins, rides, wings, ct);
     }
 
     public async Task<bool> SetSkinEquipsAsync(Guid character, IReadOnlyDictionary<int, int> equips, CancellationToken ct)

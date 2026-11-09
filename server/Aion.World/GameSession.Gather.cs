@@ -6,7 +6,7 @@ namespace Aion.World;
 // (0x3634, tools/world_objects.py "gather": material, count, bonus item, bonus count, mastery, gauge, attempts). The client starts one
 // with InteractEnvObj_RQ 0x3636 (the timed interaction already served) or GatherSourceStart_RQ 0x8d30 (0x8d run,
 // catalogue index + 0x89d1; which one is not observed). On completion: the material (and, OURS, the bonus item one
-// time in five), GatherSourceCompleted_NT 0x8d33, and the node is used up for this player for GatherRespawnMs (OURS).
+// time in five), GatherSourceCompleted_NT 0x8d33, and the node is used up for this player for Aion:TimeGates:GatherRespawnSeconds (OURS).
 // Gather mastery (migration 029): a node needs its GatherSource MasteryLevel; each gather pays an eighth of the level's
 // GatherMastery need (OURS) as GatherExpUpdate_NT 0x8d35 {exp i64, gained i64}, a level-up GatherLevelUpdate_NT 0x8d36
 // {level i32, exp i64, skill points i32, specialized points i32} (usmap fields, CANDIDATE). The gather skill tree
@@ -78,7 +78,7 @@ public sealed partial class GameSession
     {
         var need = Crafts.GatherMasteryNeed(gatherLevel);
         if (need <= 0) return [];
-        var gained = Math.Max(1, need / 8);
+        var gained = ServerRates.Scaled(Math.Max(1, need / 8), options.Rates.GatherExperience);   // Aion:Rates:GatherExperience
         gatherExp += gained;
         var replies = new List<byte[]> { PacketWriter.Opcode(GatherExpUpdateNt).I64(gatherExp).I64(gained).ToArray() };
         var leveled = false;
@@ -142,7 +142,7 @@ public sealed partial class GameSession
         if (attempts <= 0)
         {
             gatherAttempts.Remove(index);
-            gathered[index] = now + GatherRespawnMs;
+            gathered[index] = now + options.TimeGates.GatherRespawnMs;
             if (shownObjects.Remove(index)) lost.Add(GamePackets.EnvObjDespawn((int)key));
         }
         else
@@ -179,7 +179,7 @@ public sealed partial class GameSession
             replies.AddRange(await InventoryChangesAsync(ct, IncreaseGatherSource, 0));
         }
         replies.Insert(0, PacketWriter.Opcode(GatherCompletedNt).U16(0).Varint(key).I32(item).I32(count).I32(0).I32(bonus.Item1).I32(bonus.Item2).ToArray());
-        gathered[index] = now + GatherRespawnMs;
+        gathered[index] = now + options.TimeGates.GatherRespawnMs;
         gatherAttempts.Remove(index);
         if (shownObjects.Remove(index)) replies.Add(GamePackets.EnvObjDespawn(key));
         replies.AddRange(await GatherMasteryExpAsync(ct));

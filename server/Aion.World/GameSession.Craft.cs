@@ -137,7 +137,7 @@ public sealed partial class GameSession
         var (lvl, exp) = CraftMastery(category);
         var need = Crafts.CraftMasteryNeed(lvl);
         if (need <= 0) return [];
-        var gained = Math.Max(1, need / 8);
+        var gained = ServerRates.Scaled(Math.Max(1, need / 8), options.Rates.CraftExperience);   // Aion:Rates:CraftExperience
         exp += gained;
         var replies = new List<byte[]> { PacketWriter.Opcode(CraftExpUpdateNt).U8((byte)category).I64(exp).I64(gained).ToArray() };
         var leveled = false;
@@ -196,7 +196,8 @@ public sealed partial class GameSession
             costs.AddRange(fee);
         }
         // The success rate at the mastery gap (player mastery over the recipe's; CraftRecipeRate curve).
-        var success = CraftRoll() < Crafts.Rate(recipe, CraftLevelOf(recipe.Worktable) - recipe.Mastery);
+        // Aion:Unlocks:CraftAlwaysSucceeds (OURS) skips the roll.
+        var success = options.Unlocks.CraftAlwaysSucceeds || CraftRoll() < Crafts.Rate(recipe, CraftLevelOf(recipe.Worktable) - recipe.Mastery);
         if (Store is { } store && CharacterId is { } character)
         {
             var done = await Stored(async () => await store.ShopBuyAsync(character, costs, success ? [(recipe.Product, recipe.ProductCount)] : [], [], ct) ? [[]] : []);

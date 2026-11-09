@@ -38,6 +38,13 @@ public sealed record GameSessionOptions
     public WorldRules Rules { get; init; } = WorldRules.Default;
     /// <summary>Aion:Dungeons: daily entry limits (off by default) and the untracked-objective fallback delay.</summary>
     public DungeonOptions Dungeons { get; init; } = DungeonOptions.Default;
+    /// <summary>Aion:TimeGates (shop limits, dungeon timers, collection rotation, gather node respawn). The host defaults to
+    /// none (<see cref="TimeGateOptions.Default"/>); a session built without options keeps the official-like behaviour.</summary>
+    public TimeGateOptions TimeGates { get; init; } = TimeGateOptions.Official;
+    /// <summary>Aion:Unlocks (all skins, all pets maxed, crafting and pet costs); official-like unless the host passes its own.</summary>
+    public UnlockOptions Unlocks { get; init; } = UnlockOptions.Official;
+    /// <summary>Aion:Boost (the /boost alt boost); off unless the host passes its own.</summary>
+    public BoostOptions Boost { get; init; } = BoostOptions.Off;
     /// <summary>Aion:Stigmas: stigma slots, shard rate and level cap (docs/STIGMAS.md); on by default, as on global (Brandon's choice).</summary>
     public StigmaOptions Stigmas { get; init; } = StigmaOptions.Default;
     /// <summary>Aion:Bosses: boss phases, slams, adds and the hard modes' frenzy (all on by default).</summary>
@@ -1640,6 +1647,10 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
                 selected = state;
                 StaffRole = state.Staff ? accountRole : null;
                 experience = state.Progress.Experience;
+                // Aion:Unlocks (OURS), before the loads below. A failed grant is logged and tried again at the next entry; it never blocks entering the world.
+                (bool Skins, bool Pets) unlocked = (false, false);
+                try { unlocked = await GrantUnlocksAsync(store, state.Summary.CharacterId, state.Race, ct); }
+                catch (Exception error) when (error is not OperationCanceledException) { Note($"Aion:Unlocks not given: {error.GetType().Name}: {error.Message}"); }
                 registeredWings.Clear();
                 registeredWings.UnionWith(await store.WingsAsync(state.Summary.CharacterId, ct));
                 var extras = await store.ExtrasAsync(state.Summary.CharacterId, ct);
@@ -1653,6 +1664,9 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
                 LoadSkins(extras);
                 LoadMasteries(extras);
                 await LoadRidesAsync(store, state.Summary.CharacterId, ct);
+                if (unlocked.Pets)
+                    try { await MaxBoardsAsync(store, state.Summary.CharacterId, ct); }
+                    catch (Exception error) when (error is not OperationCanceledException) { Note($"Aion:Unlocks boards not raised: {error.GetType().Name}: {error.Message}"); }
                 await LoadQuickSlotsAsync(store, state.Summary.CharacterId, ct);
                 LoadSettings(await store.CharacterSettingsAsync(state.Summary.CharacterId, ct));
                 await LoadBuybackAsync(store, state.Summary.CharacterId, ct);
@@ -2322,7 +2336,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
             dungeonCopy.Deaths++;
             limitNote = HardModeDeath(dungeonCopy);
         }
-        reviveAt = now + ReviveDelayMs;
+        reviveAt = now + options.TimeGates.ReviveMs;   // Aion:TimeGates:ReviveSeconds (OURS)
         diedAt = position;
         inCombat = false;
         var kill = GamePackets.Kill(playerKey, 0, killerKey, ServerId, "", dieType: 2);
