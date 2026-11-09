@@ -31,6 +31,8 @@ public sealed partial class GameSession
 
     /// <summary>A playerbot's role (tank, dps, heal; null for players), set by its brain: a tank bot looks after the others first.</summary>
     public string? BotRole { get; set; }
+    /// <summary>When this player's hit on a monster last landed as a critical (0: never): the window of the crit-only skills.</summary>
+    public long LastCriticalAt { get; private set; }
 
     /// <summary>
     /// OURS: this player's hits count this many times in a monster's hate table (NpcAi.Engage). 1 for players; a tank bot's brain

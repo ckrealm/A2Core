@@ -2,7 +2,8 @@ using Aion.Protocol.Native;
 
 namespace Aion.World;
 
-// Class skills beyond their Damage rows: heals, heals over time, buffs, NPC debuffs, damage over time and resurrection, from
+// Class skills beyond their Damage rows: heals, heals over time, buffs, NPC debuffs, damage over time, resurrection, and the NPC
+// control effects bots rely on (stun / interrupt, taunt, extra threat; docs/PLAYERBOTS.md), from
 // tools/data/skill-effects.json (OURS: class-skills.json carries no heal/abnormal rows yet; see the file's "regenerate"). A cast
 // goes through CastReplies like a damage skill (learned, weapon, MP, cooldown), refused when its target is wrong (a heal at a
 // monster or an enemy player, a dead or distant ally).
@@ -42,7 +43,7 @@ public sealed partial class GameSession
     /// </summary>
     int HealAmount(SkillEffect e, int targetHpMax, int skill) =>
         Math.Max(0, (int)Math.Round((RollRange(e.Flat, rng) + (double)SkillPower() * RollRange(e.Ratio, rng) / 10_000 + (double)targetHpMax * RollRange(e.HpRatio, rng) / 10_000)
-            * data.Progression.SkillLevelScale(SkillLevel(skill))));
+            * data.Progression.SkillLevelScale(CombatSkillLevel(skill))));
 
     /// <summary>
     /// The player a friendly skill lands on: another player on the map selected by key (alive, or dead for a resurrection; not an
@@ -82,7 +83,7 @@ public sealed partial class GameSession
     }
 
     /// <summary>An accepted cast's skill-effects entry: heals, buffs and resurrection on a friendly player, debuffs and dots on the NPC.</summary>
-    List<byte[]> SkillEffectReplies(int skill, int targetKey, long now)
+    List<byte[]> SkillEffectReplies(int skill, int targetKey, long now, Vector3d? location = null)
     {
         if (SkillEffectData.Of(skill) is not { } set || resources is null) return [];
         var replies = new List<byte[]>();
@@ -117,7 +118,20 @@ public sealed partial class GameSession
             });
             return replies;
         }
-        if (targets is null || !targets.TryGetValue(targetKey, out var npc) || !npc.Hostile || npc.Dead) return [];
+        if (targets is null) return [];
+        // An area cast (at the caster's own key) puts its effects on every monster the area hit (CombatReplies, AreaRange).
+        List<Target> struck = targetKey == playerKey && location is { } at
+            ? targets.Values.Where(t => t.Hostile && !t.Dead && t.Position.DistanceSquared(at) <= AreaRange * AreaRange).ToList()
+            : targets.TryGetValue(targetKey, out var one) && one.Hostile && !one.Dead ? [one] : [];
+        foreach (var npc in struck) replies.AddRange(EnemyEffects(skill, set, npc, now));
+        return replies;
+    }
+
+    /// <summary>An enemy skill-effects entry on one monster: debuffs, dots, stuns, taunt and threat.</summary>
+    List<byte[]> EnemyEffects(int skill, SkillEffectSet set, Target npc, long now)
+    {
+        var replies = new List<byte[]>();
+        var targets = this.targets!;
         foreach (var e in set.Effects)
             switch (e.Type)
             {
@@ -125,9 +139,35 @@ public sealed partial class GameSession
                     if (e.DamageTaken > 0) (npc.DamageTakenBonus, npc.DamageTakenUntil) = (e.DamageTaken, now + e.DurationMs);
                     if (e.Speed > 0) (npc.SlowRatio, npc.SlowUntil) = (e.Speed, now + e.DurationMs);
                     break;
+                case "stun":
+                    // Always interrupts a special being wound up; holds the monster unless it is a boss or shook off a stun lately.
+                    ai.Interrupt(npc, now);
+                    if (npc.Boss)
+                    {
+                        // A boss is not held by one stun: every BossStaggerStuns stuns break its stagger gauge and it reels for StaggerMs.
+                        if (npc.Stunned(now) || ++npc.StaggerStuns < BossStaggerStuns) break;
+                        npc.StaggerStuns = 0;
+                        npc.StunnedUntil = now + StaggerMs;
+                    }
+                    else if (e.DurationMs > 0 && now >= npc.StunImmuneUntil)
+                    {
+                        npc.StunnedUntil = now + e.DurationMs;
+                        npc.StunImmuneUntil = now + e.DurationMs * StunImmunityFactor;
+                    }
+                    break;
+                case "interrupt":
+                    ai.Interrupt(npc, now);
+                    break;
+                case "taunt":
+                    replies.AddRange(ai.Taunt(targets, npc, now, playerKey));
+                    break;
+                case "threat":
+                    // Extra hate on top of the hit's own (an enmity-raising attack): flat + power x ratio / 10000, a tank bot's multiplier on top.
+                    replies.AddRange(ai.Engage(targets, npc, now, playerKey, Threat(Math.Max(1, RollRange(e.Flat, rng) + (int)((long)SkillPower() * RollRange(e.Ratio, rng) / 10_000)))));
+                    break;
                 case "dot" when e.IntervalMs > 0:
                     dots.RemoveAll(d => d.Target == npc && d.Skill == skill);   // a recast renews it
-                    var raw = (RollRange(e.Flat, rng) + (double)SkillPower() * RollRange(e.Ratio, rng) / 10_000) * data.Progression.SkillLevelScale(SkillLevel(skill));
+                    var raw = (RollRange(e.Flat, rng) + (double)SkillPower() * RollRange(e.Ratio, rng) / 10_000) * data.Progression.SkillLevelScale(CombatSkillLevel(skill));
                     dots.Add(new Dot
                     {
                         Target = npc, Skill = skill, EffectId = data.Skill(skill)?.Damage.LastOrDefault()?.EffectId ?? 0, IntervalMs = e.IntervalMs,
@@ -139,6 +179,11 @@ public sealed partial class GameSession
         if (data.Skill(skill)?.Damage is not { Length: > 0 }) replies.AddRange(ai.Engage(targets, npc, now, playerKey, Threat(1)));
         return replies;
     }
+
+    /// <summary>A monster is immune to new stuns for this many times a stun's duration from its start (OURS diminishing return).</summary>
+    public const int StunImmunityFactor = 3;
+    /// <summary>A boss's stagger (OURS stand-in for the official stagger gauge): this many stuns, then held for StaggerMs.</summary>
+    public const int BossStaggerStuns = 3, StaggerMs = 5000;
 
     /// <summary>A friendly skill's effects on this player, with the amounts the caster rolled (one per effect). On this player's loop.</summary>
     List<byte[]> ApplyFriendlyEffects(int skill, SkillEffectSet set, IReadOnlyList<int> amounts, long now)

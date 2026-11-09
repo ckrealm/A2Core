@@ -93,8 +93,10 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
     public async Task<string> HandleAsync(ChatIdentity sender, string userName, string content, CancellationToken ct)
     {
         var text = content.Trim();
-        if (!text.StartsWith("//", StringComparison.Ordinal)) return "Unknown command. Use //help.";
-        var line = text[2..].Trim();
+        // Player commands also take a single slash ("/boost"); builder commands need two.
+        var single = !text.StartsWith("//", StringComparison.Ordinal);
+        if (single && !IsWord(text[1..].TrimStart(), "boost")) return "Unknown command. Use //help.";
+        var line = text[(single ? 1 : 2)..].Trim();
         if (line.StartsWith("report", StringComparison.OrdinalIgnoreCase) && (line.Length == 6 || char.IsWhiteSpace(line[6])))
         {
             var report = line[6..].Trim();
@@ -112,19 +114,19 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
                 return Market is { } market ? await market.HandleAsync(actor.Session, line[2..].Trim(), ct) : "The market is not available on this server.";
             if (line.StartsWith("bot", StringComparison.OrdinalIgnoreCase) && (line.Length == 3 || char.IsWhiteSpace(line[3])))
                 return await BotAsync(actor.Session, line[3..].Trim(), ct);
-            // //boost (Aion:Boost, OURS): every player; runs on the sender's game loop.
-            if (line.StartsWith("boost", StringComparison.OrdinalIgnoreCase) && (line.Length == 5 || char.IsWhiteSpace(line[5])))
+            // /boost or //boost (Aion:Boost, OURS): every player; runs on the sender's game loop.
+            if (IsWord(line, "boost"))
             {
                 var boostArgs = line[5..].Trim();
                 try { return await actor.Session.InvokeAsync(async _ => await actor.Session.BoostCommandAsync(boostArgs, ct)).WaitAsync(TimeSpan.FromSeconds(30), ct); }
-                catch (TimeoutException) { return "The boost is still being saved. Type //boost in a moment to see whether it finished; you are never charged twice."; }
+                catch (TimeoutException) { return "The boost is still being saved. Type /boost in a moment to see whether it finished; you are never charged twice."; }
             }
             if (line.Length == 0 || line.Equals("help", StringComparison.OrdinalIgnoreCase))
                 return await builder.AllowedAsync(actor.Session, ct)
                     ? "Builder commands (in chat: //<command>; console: s <command>): " + string.Join(", ", BuilderCommands.Supported)
                         + (Bots is { Options.Enabled: true } ? "; //bot add <character> for playerbots" : "")
                     : "Commands: //report <text> sends a report to the staff."
-                        + (actor.Session.BoostEnabled ? " //boost raises an alt to the boost level once your account has a character there." : "")
+                        + (actor.Session.BoostEnabled ? " /boost raises an alt to the boost level once your account has a character there." : "")
                         + (Bots is { Options: { Enabled: true, PlayersMayUse: true } } ? " //bot add <character> summons one of your characters as a bot." : "");
             return await actor.Session.InvokeAsync(async now =>
             {
@@ -137,6 +139,9 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
             return "The game connection did not respond.";
         }
     }
+
+    static bool IsWord(string line, string word) =>
+        line.StartsWith(word, StringComparison.OrdinalIgnoreCase) && (line.Length == word.Length || char.IsWhiteSpace(line[word.Length]));
 
     /// <summary>//bot: allowed for staff, or for everyone with Aion:Bots:PlayersMayUse; runs on the sender's game loop.</summary>
     async Task<string> BotAsync(GameSession actor, string args, CancellationToken ct)

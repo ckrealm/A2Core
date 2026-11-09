@@ -231,9 +231,9 @@ def main(argv=None):
     unlocks.add_argument('--all-pets', choices=['on', 'off'], help='every character gets every pet at its top level, boards maxed (default on)')
     unlocks.add_argument('--all-wings', choices=['on', 'off'], help='every character gets every wing of its race (default on)')
     gates.add_argument('--revive-seconds', type=int, help='a dead player is revived at the respawn point after this long (1-600, default 5)')
-    unlocks.add_argument('--boost', choices=['on', 'off'], help='//boost alt boost (default on)')
-    unlocks.add_argument('--boost-level', type=int, help='the level //boost gives (default 45; also the level the account needs)')
-    unlocks.add_argument('--boost-price', type=int, help='what //boost costs in Kinah (default 10000000)')
+    unlocks.add_argument('--boost', choices=['on', 'off'], help='/boost alt boost (default on)')
+    unlocks.add_argument('--boost-level', type=int, help='the level /boost gives (default 45; also the level the account needs)')
+    unlocks.add_argument('--boost-price', type=int, help='what /boost costs in Kinah (default 10000000)')
     unlocks.add_argument('--craft-always-succeeds', choices=['on', 'off'], help='crafts never fail (default on)')
     unlocks.add_argument('--pet-soul-cost', type=float, help='multiplies the souls pets cost to acquire and level (0-10, default 0.5)')
     parser.add_argument('--geolocation', default='59.9139,10.7522,NO', metavar='LAT,LON,CC',

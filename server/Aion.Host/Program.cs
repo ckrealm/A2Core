@@ -108,9 +108,11 @@ var timeGates = (builder.Configuration.GetSection("Aion:TimeGates").Get<Aion.Wor
 var unlocks = (builder.Configuration.GetSection("Aion:Unlocks").Get<Aion.World.UnlockOptions>() ?? Aion.World.UnlockOptions.Default).Validated();
 builder.Services.AddSingleton(timeGates);
 builder.Services.AddSingleton(unlocks);
-// Aion:Boost (OURS): //boost raises an alt to Level (45) for Price Kinah (10000000) once the account has a character at RequiredLevel (45).
+// Aion:Boost (OURS): /boost raises an alt to Level (45) for Price Kinah (10000000) once the account has a character at RequiredLevel (45).
 var boost = (builder.Configuration.GetSection("Aion:Boost").Get<Aion.World.BoostOptions>() ?? Aion.World.BoostOptions.Default).Validated(Aion.World.GameData.Embedded.MaxLevel);
 builder.Services.AddSingleton(boost);
+// Aion:Daevanion (OURS, docs/DAEVANION.md): PointRate, ExtraPoints, FreeReset, MaxBoardLevel, DisabledBoards, LevelPoints.
+builder.Services.AddSingleton((builder.Configuration.GetSection("Aion:Daevanion").Get<Aion.World.DaevanionOptions>() ?? Aion.World.DaevanionOptions.Default).Validated());
 if (native.LoginPort is not null || native.GamePort is not null)
 {
     if (!native.Development && !accountsReady)

@@ -5,11 +5,11 @@ using Aion.Protocol.Native;
 
 namespace Aion.World;
 
-// Aion:Boost (OURS, FriendsRules.cs): "//boost" in chat. Once any character of the account has reached the required level,
+// Aion:Boost (OURS, FriendsRules.cs): "/boost" in chat. Once any character of the account has reached the required level,
 // a character below the boost level pays the price in Kinah and is raised to it (the usual level-up messages), its race's
 // released main story, regional and exploration quests (sealed dungeons included) up to the quest level are marked
 // rewarded (no rewards paid), a gear set of the best items its class can wear at that level lands in its bag, and the map
-// is revealed. "//boost" alone says what it costs and whether this character may use it; "//boost confirm" buys it.
+// is revealed. "/boost" alone says what it costs and whether this character may use it; "/boost confirm" buys it.
 public sealed partial class GameSession
 {
     /// <summary>The setting that records a boost (per character).</summary>
@@ -44,13 +44,13 @@ public sealed partial class GameSession
         return gear;
     }
 
-    /// <summary>Whether //boost is on for this host (Aion:Boost:Enabled).</summary>
+    /// <summary>Whether /boost is on for this host (Aion:Boost:Enabled).</summary>
     public bool BoostEnabled => options.Boost.Enabled;
 
     /// <summary>A quest's status in this character's journal (EQuestStatus), or 0 when it is not there.</summary>
     public int QuestStatus(string code) => questLog?.Get(code)?.Status ?? 0;
 
-    /// <summary>"//boost [confirm]": the answer and the packets of a bought boost.</summary>
+    /// <summary>"/boost [confirm]": the answer and the packets of a bought boost.</summary>
     public async Task<(string Message, List<byte[]> Packets)> BoostCommandAsync(string args, CancellationToken ct)
     {
         var boost = options.Boost;
@@ -74,13 +74,13 @@ public sealed partial class GameSession
         var kinah = storedItems.Values.Where(i => i.TemplateId == KinaItemId && i.Location == "bag").Sum(i => i.Quantity);
         if (!string.Equals(args.Trim(), "confirm", StringComparison.OrdinalIgnoreCase))
             return pending
-                ? ($"Your boost was paid but did not finish. Type //boost confirm to finish it (no charge).", [])
-                : ($"{offer} Unlocked by {unlockedBy}. You have {kinah.ToString("N0", CultureInfo.InvariantCulture)} Kinah. Type //boost confirm to buy it for this character.", []);
+                ? ($"Your boost was paid but did not finish. Type /boost confirm to finish it (no charge).", [])
+                : ($"{offer} Unlocked by {unlockedBy}. You have {kinah.ToString("N0", CultureInfo.InvariantCulture)} Kinah. Type /boost confirm to buy it for this character.", []);
 
         var replies = new List<byte[]>();
         var from = pending && record!.Value.TryGetProperty("from", out var f) && f.TryGetInt32(out var fromLevel) ? fromLevel : level;
         var gear = boost.Gear ? BoostGear(data, className, profileRace, boost.Level).Select(id => (id, 1L)).ToList() : [];
-        const string unfinished = " Type //boost confirm again to finish it (no extra charge).";
+        const string unfinished = " Type /boost confirm again to finish it (no extra charge).";
         if (!pending)
         {
             // Pay and take the gear in one transaction, then record the paid boost before anything else is saved.

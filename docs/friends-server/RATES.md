@@ -61,9 +61,9 @@ nothing back. That gives 1,463 skins, 207 pets and every wing of the race. The b
 Feathers (Empyrean Traces, the 2,560 collectibles in the world) are not modelled by the server yet: it has no table or
 message for them, so they cannot be given out until the client data and a capture show how they are stored and sent.
 
-## Alt boost (`//boost`)
+## Alt boost (`/boost`)
 
-Type `//boost` in chat on any character to see the price and whether it is unlocked; `//boost confirm` buys it. It
+Type `/boost` in chat on any character to see the price and whether it is unlocked; `/boost confirm` buys it. It
 unlocks once any character of the account has reached level 45 (`Aion__Boost__RequiredLevel`). The character it is used
 on (below level 45) pays 10,000,000 Kinah (`Aion__Boost__Price`) and gets:
 
@@ -76,7 +76,7 @@ on (below level 45) pays 10,000,000 Kinah (`Aion__Boost__Price`) and gets:
   1,412 item level (`Aion__Boost__Gear`);
 - the whole world map revealed.
 
-If a save fails part way (the database drops out), the payment stays on record and `//boost confirm` finishes the boost
+If a save fails part way (the database drops out), the payment stays on record and `/boost confirm` finishes the boost
 without charging again; a character is boosted once. Then go to character select and back in so the quest journal refreshes. `Aion__Boost__Enabled=false` turns it off. The
 Kinah price is meant to be hard to earn even at 10x Kinah (our guess, not measured); change it freely.
 

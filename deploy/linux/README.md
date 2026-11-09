@@ -97,7 +97,7 @@ Defaults are made for a small friends server (see docs/friends-server/RATES.md):
 and quest experience 5, Kinah 10, Kinah drop chance x2, drops 4, gathering/crafting/pet experience 10), no time gates
 (`Aion__TimeGates__*`: no shop purchase caps, no dungeon timers, every collection open, gather nodes back after 10 s, revive
 after 5 s; dungeon entry limits stay off), every pet maxed and every wing for every character, crafts always succeed and
-pets cost half the souls (`Aion__Unlocks__*`), the `//boost` alt boost (`Aion__Boost__*`), PvP on, monsters respawn
+pets cost half the souls (`Aion__Unlocks__*`), the `/boost` alt boost (`Aion__Boost__*`), PvP on, monsters respawn
 30 s after a kill, no player cap beyond 200 connections per port. `Aion__Rates__Profile=official` gives all rates 1. To change them, put the keys you want in `/etc/aion/game.env`
 (install.sh and update.sh rewrite `aion.env` but never touch this file; the service reads it last) and restart:
 

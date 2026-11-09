@@ -245,15 +245,21 @@ public sealed partial class GameSession
     List<byte[]> PassiveAbnormals(bool resend = false)
     {
         if (resend) passiveUids.Clear();
+        var wanted = learned.Order().SelectMany(Boxes.Passives).Concat(DaevanionPassiveAbnormals()).Distinct().ToList();
+        // Passives no longer owned (a closed Daevanion Passive node, a board reset): removed from the client.
+        var gone = passiveUids.Where(p => !wanted.Contains(p.Key)).ToList();
+        foreach (var (abnormal, _) in gone) passiveUids.Remove(abnormal);
         var fresh = new List<AbnormalWire>();
-        foreach (var skill in learned.Order())
-            foreach (var abnormal in Boxes.Passives(skill))
-            {
-                if (passiveUids.ContainsKey(abnormal)) continue;
-                var uid = passiveUids[abnormal] = FirstPassiveUid + passiveUids.Count;
-                fresh.Add(new AbnormalWire(uid, abnormal, -1, PassiveExpireTime, CasterKey: playerKey, Level: 1, RangeBase: position ?? Vector3d.Zero));
-            }
-        return fresh.Count == 0 ? [] : [PlayerPackets.AbnormalAdd(playerKey, fresh)];
+        foreach (var abnormal in wanted)
+        {
+            if (passiveUids.ContainsKey(abnormal)) continue;
+            var uid = passiveUids[abnormal] = passiveUids.Count == 0 ? FirstPassiveUid : passiveUids.Values.Max() + 1;
+            fresh.Add(new AbnormalWire(uid, abnormal, -1, PassiveExpireTime, CasterKey: playerKey, Level: 1, RangeBase: position ?? Vector3d.Zero));
+        }
+        var replies = new List<byte[]>();
+        if (gone.Count > 0) replies.Add(PlayerPackets.AbnormalRemove(playerKey, gone.Select(p => (p.Value, ExpireEtc)).ToList()));
+        if (fresh.Count > 0) replies.Add(PlayerPackets.AbnormalAdd(playerKey, fresh));
+        return replies;
     }
 
     /// <summary>The active buffs as other players' 0x3645 carries them.</summary>
