@@ -95,6 +95,71 @@ public sealed class BotBrain(GameData data, GameSession bot, GameSession leader,
     public const double LootSearch = 2500, LootReach = 300;
     /// <summary>Heals and buffs are cast from within this share of the skill-effects heal_range.</summary>
     public const double HealReachShare = 0.8;
+    /// <summary>A combo follow-up ("after") is open this long after its opener by default (ms, OURS).</summary>
+    public const int ComboWindowMs = 3000;
+    /// <summary>A "behind" melee bot is in place within this distance of its spot at the monster's back (cm).</summary>
+    public const double BehindTolerance = 120;
+    /// <summary>A non-tank bot a monster attacks runs to its tank bot when farther than ToTankBeyond, stopping within ToTankWithin (cm).</summary>
+    public const double ToTankBeyond = 500, ToTankWithin = 250;
+    /// <summary>Gap closers and ranged openers reach this far (cm): the 20 m of their skill text. Farther, the bot walks first.</summary>
+    public const double GapCloserReach = 2000;
+    /// <summary>A bot stepping out of a boss's area special stops this far outside its reach (cm).</summary>
+    public const double EscapeMargin = 200;
+
+    /// <summary>Diagnostics: ticks spent stepping out of a boss's area special.</summary>
+    public int Escapes { get; private set; }
+
+    /// <summary>The group's tank bot (alive, in the world), not this bot.</summary>
+    GameSession? TankBot(List<GameSession> group) =>
+        group.FirstOrDefault(s => s != bot && s.BotRole == "tank" && !s.Dead && s.WorldPosition is not null);
+
+    /// <summary>
+    /// Where to stand while a monster fighting the group winds up an area special that would reach the bot: straight away from
+    /// the monster, just outside its reach; Hold when it is already just outside (it may still cast, but takes no step). Null when
+    /// the bot is well clear or is the special's victim.
+    /// </summary>
+    (Vector3d Spot, bool Hold)? Escape(Vector3d me, List<(Target Npc, GameSession Victim)> threats)
+    {
+        if (bot.SharedMap?.Ai is not { } ai) return null;
+        foreach (var (npc, victim) in threats)
+        {
+            if (victim == bot || ai.WindingArea(npc) is not { } reach) continue;
+            var d = Flat(me, npc.Position);
+            if (d >= reach + EscapeMargin + 100) continue;
+            if (d >= reach + 50) return (me, true);   // out of it: no steps (a melee bot would walk back in) until the special lands
+            var (dx, dy) = d > 1 ? ((me.X - npc.Position.X) / d, (me.Y - npc.Position.Y) / d) : (Math.Cos(Slot), Math.Sin(Slot));
+            return (new Vector3d(npc.Position.X + dx * (reach + EscapeMargin), npc.Position.Y + dy * (reach + EscapeMargin), me.Z), false);
+        }
+        return null;
+    }
+
+    /// <summary>A victim dodges a monster's special this long before it lands (ms, OURS; the dodge evades for GameSession.DodgeEvadeMs).</summary>
+    public const int DodgeLeadMs = 300;
+    public int Dodges { get; private set; }
+    (int Npc, long Due)? dodged;
+    /// <summary>The bot's class Dodge (each class has its own, GameSession.IsDodge), or null when it has not learned one.</summary>
+    public int? DodgeSkill => Enumerable.Range(11, 8).Select(c => c * 1_000_000 + 100).Where(bot.Knows).Cast<int?>().FirstOrDefault();
+
+    /// <summary>
+    /// The dodge request when the bot is the victim of a monster's special landing within <see cref="DodgeLeadMs"/> and it can
+    /// dodge (its class Dodge learned, SP, off cooldown); once per special. A short dash straight away from the monster.
+    /// </summary>
+    List<byte[]>? DodgeSpecial(Vector3d me, List<(Target Npc, GameSession Victim)> threats, long now)
+    {
+        if (bot.SharedMap?.Ai is not { } ai || DodgeSkill is not { } own || now < bot.CooldownUntil(own) || now < refused.GetValueOrDefault(own)) return null;
+        if (data.Skill(own) is not { } dodge || bot.Resource.Sp < dodge.Cost.Sp) return null;
+        foreach (var (npc, victim) in threats)
+        {
+            if (victim != bot || ai.SpecialDueAt(npc) is not { } due || due <= now || due - now > DodgeLeadMs || dodged == (npc.Key, due)) continue;
+            dodged = (npc.Key, due);
+            Dodges++;
+            var d = Math.Max(1, Flat(me, npc.Position));
+            var dash = new Vector3d(me.X + (me.X - npc.Position.X) / d * 100, me.Y + (me.Y - npc.Position.Y) / d * 100, me.Z);
+            uid = (byte)(uid % 255 + 1);
+            return [BotRequests.CastBegin(), BotRequests.Cast(own, bot.PlayerKey, yaw, dash, uid), BotRequests.CastEnd()];
+        }
+        return null;
+    }
 
     public BotMovement Movement { get; set; } = BotMovement.Follow;
     public bool Assist { get; set; } = true;
@@ -126,7 +191,14 @@ public sealed class BotBrain(GameData data, GameSession bot, GameSession leader,
     double yaw;
     readonly Dictionary<int, long> refused = [];
     readonly HashSet<long> lootTried = [];
-    (int Skill, byte Uid, int Target, bool Friendly)? lastCast;
+    (int Skill, byte Uid, int Target, bool Friendly, bool Interrupting)? lastCast;
+    /// <summary>This bot's debuffs, dots and stuns on monsters: (skill, NPC key) to when they wear off (from skill-effects.json).</summary>
+    readonly Dictionary<(int Skill, int Npc), long> applied = [];
+    (int Skill, long At)? lastAccepted;
+
+    /// <summary>Diagnostics: accepted interrupt casts (entries with target_casting), and accepted area casts.</summary>
+    public int Interrupts { get; private set; }
+    public int AreaCasts { get; private set; }
 
     static double Flat(Vector3d a, Vector3d b) => Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
     static double Yaw(Vector3d from, Vector3d to) => Math.Atan2(to.Y - from.Y, to.X - from.X) * 180 / Math.PI;
@@ -148,9 +220,29 @@ public sealed class BotBrain(GameData data, GameSession bot, GameSession leader,
             return StopMoving(me, now);
         var group = Group();
         var threats = Threats(group, lead);
+        // Boss mechanics first. The victim of a special about to land dodges through it (a Dodge evades the hits during it,
+        // GameSession.GuardHit), even while it is stepping out of another monster's area.
+        if (DodgeSpecial(me, threats, now) is { } dodge) return dodge;
+        // Out of an area special being wound up (unless the bot is its victim, who takes it anyway).
+        var hold = false;
+        if (Escape(me, threats) is { } safe)
+        {
+            if (!safe.Hold)
+            {
+                Escapes++;
+                return MoveToward(me, safe.Spot, ArriveWithin / 2, now);
+            }
+            hold = true;
+        }
+        // Held just outside an area special: casts from where the bot stands, no steps.
+        List<byte[]> MoveToward(Vector3d from, Vector3d to, double within, long at) => hold ? StopMoving(from, at) : this.MoveToward(from, to, within, at);
+        // A monster on a non-tank bot: bring it to the group's tank bot (mod-playerbots' "flee to tank"), so the tank picks it up
+        // and the monster is not dragged off to its leash.
+        if (Role != "tank" && TankBot(group) is { WorldPosition: { } tankAt } && threats.Any(x => x.Victim == bot) && Flat(me, tankAt) > ToTankBeyond)
+            return MoveToward(me, tankAt, ToTankWithin, now);
         var target = Assist ? Fight(now, me, lead, threats) : null;
         FightingKey = target?.Key;
-        var choice = now >= nextCastAt ? Choose(target, now, group, Fighting(target, group, threats, now)) : null;
+        var choice = now >= nextCastAt ? Choose(target, now, group, Fighting(target, group, threats, now), me, threats) : null;
         // Heals, resurrection and buffs: run within reach of the group member, stop, cast.
         if (choice is { Ally: { } ally } && ally.WorldPosition is { } there)
         {
@@ -162,10 +254,20 @@ public sealed class BotBrain(GameData data, GameSession bot, GameSession leader,
         }
         if (target is not null)
         {
-            var range = rotation?.Range ?? 300;
-            if (Flat(me, target.Position) > range) return MoveToward(me, target.Position, range * 0.8, now);
+            var range = Range;
+            // A gap closer or a ranged opener reaches from farther than the bot's own range: cast it from where the bot stands.
+            var distance = Flat(me, target.Position);
+            var reachesFromHere = choice is { Enemy: not null, Step.Condition.TargetDistanceAbove: { } far } && distance > far && distance <= GapCloserReach;
+            if (!reachesFromHere && distance > range) return MoveToward(me, target.Position, range * 0.8, now);
+            // Melee damage dealers work from the monster's back while it is busy with someone else (positional bonuses, no cleaves):
+            // they walk round between casts, and never hold a ready cast back for it.
+            if (choice is null && BehindSpot(target, range) is { } back && Flat(me, back) > BehindTolerance)
+                return MoveToward(me, back, BehindTolerance / 2, now);
             var requests = StopMoving(me, now);
-            if (choice is { Enemy: { } enemy }) requests.AddRange(CastAt(choice.Step, enemy.Key, enemy.Position, me, now, friendly: false));
+            if (choice is { Enemy: { } enemy })
+                requests.AddRange(choice.Step.IsArea
+                    ? CastAt(choice.Step, bot.PlayerKey, choice.Step.Area == "self" ? me : enemy.Position, me, now, friendly: false, facing: enemy.Position)
+                    : CastAt(choice.Step, enemy.Key, enemy.Position, me, now, friendly: false));
             return requests;
         }
         if (Assist && Loot(me, lead, now) is { } loot) return loot;
@@ -174,6 +276,25 @@ public sealed class BotBrain(GameData data, GameSession bot, GameSession leader,
         if (moving ? Flat(me, spot) > ArriveWithin : Flat(me, lead) > FollowFar) return MoveToward(me, spot, ArriveWithin / 2, now);
         return StopMoving(me, now);
     }
+
+    /// <summary>How close the bot gets to its fight before it casts: the class range, or its role's (a healer keeps its distance).</summary>
+    public int Range => rotation?.RangeFor(Role) ?? 300;
+
+    /// <summary>
+    /// A "behind" dps bot's spot: at its range behind the monster (opposite its facing) while the monster attacks someone else; null
+    /// otherwise (the bot is the victim, it is not a dps bot of a "behind" class, or the monster has no victim yet).
+    /// </summary>
+    public Vector3d? BehindSpot(Target target, double range)
+    {
+        if (rotation?.Position != "behind" || Role != "dps" || Victim(target) is not { } victim || victim == bot.PlayerKey) return null;
+        var back = (target.Direction + 180) * Math.PI / 180;
+        var distance = Math.Max(100, Math.Min(range * 0.7, range - 50));
+        return new Vector3d(target.Position.X + distance * Math.Cos(back), target.Position.Y + distance * Math.Sin(back), target.Position.Z);
+    }
+
+    /// <summary>The player a monster attacks now (its NpcAi brain's victim), or null.</summary>
+    int? Victim(Target target) =>
+        bot.SharedMap?.Ai.Brains.GetValueOrDefault(target.Key) is { Engaged: true, VictimIsNpc: false, VictimKey: not 0 } brain ? brain.VictimKey : null;
 
     /// <summary>The cast reply for the last cast this brain sent (from the session's replies): refused skills rest a while.</summary>
     public void Observe(IEnumerable<byte[]> replies, long now)
@@ -185,6 +306,14 @@ public sealed class BotBrain(GameData data, GameSession bot, GameSession leader,
             if (BitConverter.ToUInt16(reply, 3) == 0)
             {
                 CastsAccepted++;
+                lastAccepted = (cast.Skill, now);
+                if (!cast.Friendly && cast.Target != bot.PlayerKey && EffectMs(cast.Skill) is > 0 and var lasts)
+                {
+                    if (applied.Count > 64) foreach (var gone in applied.Where(a => a.Value <= now).Select(a => a.Key).ToList()) applied.Remove(gone);
+                    applied[(cast.Skill, cast.Target)] = now + lasts;
+                }
+                if (cast.Interrupting) Interrupts++;
+                if (!cast.Friendly && cast.Target == bot.PlayerKey) AreaCasts++;
                 castLog.Add((now, cast.Skill));
                 if (castLog.Count > 100) castLog.RemoveAt(0);
                 if (cast.Friendly)
@@ -199,7 +328,11 @@ public sealed class BotBrain(GameData data, GameSession bot, GameSession leader,
         }
     }
 
-    double HealRange => (bot.Options.SkillEffects ?? SkillEffectTable.Embedded).HealRange;
+    SkillEffectTable Effects => bot.Options.SkillEffects ?? SkillEffectTable.Embedded;
+    double HealRange => Effects.HealRange;
+
+    /// <summary>How long this skill's debuff, dot or stun lasts on a monster (the longest of its enemy effects), 0 without one.</summary>
+    int EffectMs(int skill) => Effects.Of(skill) is { Target: "enemy" } set ? set.Effects.Select(e => e.DurationMs).DefaultIfEmpty(0).Max() : 0;
 
     /// <summary>The bot's group on its map and copy: itself, its leader, and their party members.</summary>
     public List<GameSession> Group()
@@ -250,12 +383,13 @@ public sealed class BotBrain(GameData data, GameSession bot, GameSession leader,
     static bool Fighting(Target? target, List<GameSession> group, List<(Target Npc, GameSession Victim)> threats, long now) =>
         target is not null || threats.Count > 0 || group.Any(s => s.AttackTarget(now) is not null);
 
-    List<byte[]> CastAt(BotRotationStep step, int targetKey, Vector3d at, Vector3d me, long now, bool friendly)
+    List<byte[]> CastAt(BotRotationStep step, int targetKey, Vector3d at, Vector3d me, long now, bool friendly, Vector3d? facing = null)
     {
         nextCastAt = now + globalCooldownMs;
         uid = (byte)(uid % 255 + 1);
-        if (targetKey != bot.PlayerKey) yaw = Yaw(me, at);
-        lastCast = (step.Skill, uid, targetKey, friendly);
+        if (facing is { } face) yaw = Yaw(me, face);
+        else if (targetKey != bot.PlayerKey) yaw = Yaw(me, at);
+        lastCast = (step.Skill, uid, targetKey, friendly, step.Condition.TargetCasting == true);
         CastsSent++;
         // CANDIDATE: a targeted cast's location is the target's position (the session uses it only for self-centred areas).
         return [BotRequests.CastBegin(), BotRequests.Cast(step.Skill, targetKey, yaw, at, uid), BotRequests.CastEnd()];
@@ -266,14 +400,14 @@ public sealed class BotBrain(GameData data, GameSession bot, GameSession leader,
     {
         var group = Group();
         var threats = leader.WorldPosition is { } lead ? Threats(group, lead) : [];
-        return Choose(target, now, group, Fighting(target, group, threats, now));
+        return Choose(target, now, group, Fighting(target, group, threats, now), bot.WorldPosition ?? default, threats);
     }
 
     /// <summary>
     /// The first rotation entry the bot may cast now: learned, its role, conditions, off cooldown, affordable; a friendly entry
     /// needs a group member that meets its conditions (the lowest HP first for "ally"), an enemy entry the fight's target.
     /// </summary>
-    BotChoice? Choose(Target? target, long now, List<GameSession> group, bool fighting)
+    BotChoice? Choose(Target? target, long now, List<GameSession> group, bool fighting, Vector3d me, List<(Target Npc, GameSession Victim)> threats)
     {
         if (rotation is null) return null;
         var (hp, hpMax, mp, mpMax, sp, _) = bot.Resource;
@@ -285,30 +419,62 @@ public sealed class BotBrain(GameData data, GameSession bot, GameSession leader,
             if (!BotCondition.SupportedTargets.Contains(when.Target)) continue;
             if (when.SelfHpBelow is { } selfBelow && hpMax > 0 && hp * 100.0 / hpMax >= selfBelow) continue;
             if (when.SelfMpAbove is { } mpAbove && mpMax > 0 && mp * 100.0 / mpMax <= mpAbove) continue;
+            if (when.SelfMpBelow is { } mpBelow && mpMax > 0 && mp * 100.0 / mpMax >= mpBelow) continue;
+            var window = when.AfterWithinMs ?? ComboWindowMs;
+            if (when.AfterCritical == true && now - bot.LastCriticalAt > window) continue;
+            if (when.AfterBlock == true && now - bot.LastBlockAt > window) continue;
+            if (when.AfterEvasion == true && now - bot.LastEvadeAt > window) continue;
+            if (when.AfterDodge == true && now - bot.LastDodgeAt > window) continue;
+            if (when.After is { Length: > 0 } after && (lastAccepted is not { } last || !after.Contains(last.Skill) || now - last.At > (when.AfterWithinMs ?? ComboWindowMs))) continue;
             if (when.InCombat is { } combat && combat != fighting) continue;
             if (data.Skill(step.Skill) is not { } skill || mp < skill.Cost.Mp || sp < skill.Cost.Sp || hp <= skill.Cost.Hp) continue;
             if (now < bot.CooldownUntil(step.Skill)) continue;
             if (when.Friendly)
             {
-                if (Ally(step, when, group, now) is { } ally) return new BotChoice(step, ally, null);
+                if (Ally(step, when, group, now, threats) is { } ally) return new BotChoice(step, ally, null);
                 continue;
             }
-            if (target is null || !HpHolds(when, target.HpMax > 0 ? target.Hp * 100.0 / target.HpMax : 0)) continue;
+            if (target is null || !HpHolds(when, target.HpMax > 0 ? target.Hp * 100.0 / target.HpMax : 0) || !EnemyHolds(step, when, target, now, me, threats)) continue;
             return new BotChoice(step, null, target);
         }
         return null;
+    }
+
+    /// <summary>The enemy conditions of an entry against the fight's target (docs/PLAYERBOTS.md).</summary>
+    bool EnemyHolds(BotRotationStep step, BotCondition when, Target target, long now, Vector3d me, List<(Target Npc, GameSession Victim)> threats)
+    {
+        var ai = bot.SharedMap?.Ai;
+        if (when.TargetCasting is { } casting && casting != (ai?.CastingSpecial(target) is not null)) return false;
+        if (when.TargetStunned is { } stunned && stunned != (target.Stunned(now) || target.Held)) return false;
+        if (when.TargetSlowed is { } slowed && slowed != (target.SpeedScale(now) < 1.0)) return false;
+        if (when.TargetElite is { } elite && elite != target.Elite) return false;
+        if (when.TargetBoss is { } boss && boss != target.Boss) return false;
+        if (when.TargetOnSelf is { } onSelf && (Victim(target) is not { } victim || onSelf != (victim == bot.PlayerKey))) return false;
+        if (when.TargetEffectMissing == true && now < applied.GetValueOrDefault((step.Skill, target.Key))) return false;
+        if (when.TargetHas is { Length: > 0 } has && !has.Any(skill => now < applied.GetValueOrDefault((skill, target.Key)))) return false;
+        if (when.TargetDistanceAbove is { } far && Flat(me, target.Position) <= far) return false;
+        if (when.EnemiesAtLeast is { } count)
+        {
+            var centre = step.Area == "self" ? me : target.Position;
+            var reach = GameSession.AreaRange;
+            var near = threats.Select(x => x.Npc).Append(target).Distinct().Count(n => !n.Dead && Flat(centre, n.Position) <= reach);
+            if (near < count) return false;
+        }
+        return true;
     }
 
     static bool HpHolds(BotCondition when, double pct) =>
         (when.TargetHpBelow is not { } below || pct < below) && (when.TargetHpAbove is not { } above || pct > above);
 
     /// <summary>The group member a friendly entry lands on: alive (dead for dead_ally), its HP and buff conditions met; the neediest.</summary>
-    GameSession? Ally(BotRotationStep step, BotCondition when, List<GameSession> group, long now)
+    GameSession? Ally(BotRotationStep step, BotCondition when, List<GameSession> group, long now, List<(Target Npc, GameSession Victim)> threats)
     {
+        var tank = Tank(group, threats);
         IEnumerable<GameSession> candidates = when.Target switch
         {
             "self" => [bot],
             "leader" => group.Contains(leader) ? [leader] : [],
+            "tank" => tank is null ? [] : [tank],
             "dead_ally" => group.Where(s => s != bot),
             _ => group,
         };
@@ -317,10 +483,19 @@ public sealed class BotBrain(GameData data, GameSession bot, GameSession leader,
             .Where(s => s.InWorld && s.Dead == wantDead && s.WorldPosition is not null && s.Resource.HpMax > 0)
             .Where(s => wantDead || HpHolds(when, s.Resource.Hp * 100.0 / s.Resource.HpMax))
             .Where(s => when.BuffMissing != true || !s.HasSkillBuff(step.Skill, now))
-            .OrderBy(s => wantDead ? 0 : s.Resource.Hp * 100.0 / s.Resource.HpMax)
+            // The tank counts TankHealBias points lower: at equal need it is healed first, it takes the hits.
+            .OrderBy(s => wantDead ? 0 : s.Resource.Hp * 100.0 / s.Resource.HpMax - (s == tank ? TankHealBias : 0))
             .ThenBy(s => s == leader ? 0 : 1)
             .FirstOrDefault();
     }
+
+    /// <summary>Heals favour the tank by this many HP points (%).</summary>
+    public const double TankHealBias = 10;
+
+    /// <summary>The group's tank: a tank bot (this one too), else the member the most monsters attack now, else nobody.</summary>
+    GameSession? Tank(List<GameSession> group, List<(Target Npc, GameSession Victim)> threats) =>
+        group.FirstOrDefault(s => s.BotRole == "tank" && !s.Dead)
+        ?? threats.GroupBy(x => x.Victim).OrderByDescending(g => g.Count()).Select(g => g.Key).FirstOrDefault(s => !s.Dead);
 
     /// <summary>
     /// After a fight: the bot's own drops (its share as the killer, GameSession.Loot.cs) within <see cref="LootSearch"/> are picked

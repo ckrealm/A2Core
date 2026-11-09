@@ -63,6 +63,17 @@ public sealed class Target
     public long SlowUntil { get; set; }
     public int TakenBonus(long now) => now < DamageTakenUntil ? DamageTakenBonus : 0;
     public double SpeedScale(long now) => now < SlowUntil ? Math.Clamp(SlowRatio, 0, 10_000) / 10_000.0 : 1.0;
+    /// <summary>A player's stun (skill-effects.json "stun", OURS): neither moves nor attacks until then; a pending special is interrupted.</summary>
+    public long StunnedUntil { get; set; }
+    /// <summary>After a stun the NPC shrugs off new stuns until then (OURS diminishing return: a party cannot stun-lock it).</summary>
+    public long StunImmuneUntil { get; set; }
+    public bool Stunned(long now) => now < StunnedUntil;
+    /// <summary>A boss's stuns since its last stagger (GameSession.BossStaggerStuns).</summary>
+    public int StaggerStuns { get; set; }
+    /// <summary>An elite or a boss (NpcData NpcSubType EliteMonster / HeroMonster): bots spend their long cooldowns on these.</summary>
+    public bool Elite => SubType is "EliteMonster" or "HeroMonster";
+    /// <summary>A boss (HeroMonster): a stun only interrupts its special and fills its stagger (GameSession.BossStaggerStuns), OURS.</summary>
+    public bool Boss => SubType == "HeroMonster";
     /// <summary>The corpse was removed (0x3642) and the NPC waits for its respawn.</summary>
     public bool CorpseRemoved { get; set; }
 
