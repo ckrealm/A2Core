@@ -310,6 +310,24 @@ public sealed class ServiceNativeCharacterStore(string token, WorldIdentity iden
         return await game.SaveBossChallengeAsync(identity.Account, character, record, ct);
     }
 
+    public async Task<IReadOnlyList<DungeonEntryRecord>> DungeonEntriesAsync(Guid character, CancellationToken ct)
+    {
+        await ValidateAsync(ct);
+        return await game.DungeonEntriesAsync(identity.Account, character, ct);
+    }
+
+    public async Task<bool> SaveDungeonEntryAsync(Guid character, DungeonEntryRecord entry, CancellationToken ct)
+    {
+        await ValidateAsync(ct);
+        return await game.SaveDungeonEntryAsync(identity.Account, character, entry, ct);
+    }
+
+    public async Task<int> ResetDungeonEntriesAsync(Guid character, CancellationToken ct)
+    {
+        await ValidateAsync(ct);
+        return await game.ResetDungeonEntriesAsync(identity.Account, character, ct);
+    }
+
     public async Task<IReadOnlyList<CollectionRecord>> CollectionsAsync(Guid character, CancellationToken ct)
     {
         await ValidateAsync(ct);

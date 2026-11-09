@@ -152,6 +152,20 @@ sudo systemctl restart aion-host
 journalctl -u aion-host | grep "Playerbots on"
 ```
 
+Dungeon entry limits are our own rule too and are off unless `Aion__Dungeons__EntryLimits=true`. Then each character may
+enter each expedition, awakening dungeon, daily dungeon and raid `Aion__Dungeons__DailyEntries` times a day (default 3;
+0 no limit); the day starts at `Aion__Dungeons__ResetHour` (server local time, default 9). `Aion__Dungeons__Entries__<id or
+name>=<n>` sets one dungeon's count (Dungeon.dat id or name, e.g. `Aion__Dungeons__Entries__KraoCave_Hard=1`; 0 lifts its
+limit; it also limits a dungeon of another type). A refused entry simply does not move the player (as for the level and
+item level rules). Going back into the party copy already counted is free. Staff are not limited; the builder command
+`ResetDungeonEntries [character]` clears today's counts of yourself or a character in the world. The client's data has no
+entry tickets or energy cost to apply, so there is none. `Aion__Dungeons__UntrackedObjectiveSeconds` (default 30) is how
+long a dungeon objective the server cannot follow yet (waves, puzzles, scores, collected items) waits before it counts as
+done; each one is logged. Some expedition and raid final bosses hit everyone within 5 m with their special attacks
+(tools/data/boss-area-skills.json, our own table until the skills' target shapes are extracted). `tools/server_env.py`
+options: `--dungeon-limits on|off`, `--dungeon-entries`, `--dungeon-entry DUNGEON=N` (repeatable), `--dungeon-reset-hour`,
+`--untracked-objective-seconds`.
+
 ## Updating
 
 Changes are made and tested on the development PC, committed and pushed to the private GitHub

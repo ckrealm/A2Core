@@ -302,6 +302,7 @@ public sealed class NativeGameListener(NativeOptions options, IServiceProvider s
             World = services.GetService<SharedWorld>(), DevelopmentMap = Options.Development ? Options.DevelopmentStartMap : null,
             WorldRace = services.GetService<WorldChoices>() is { } choices ? choices.Race : null,
             Rates = services.GetService<ServerRates>() ?? ServerRates.Official, Rules = services.GetService<WorldRules>() ?? WorldRules.Default,
+            Dungeons = services.GetService<DungeonOptions>() ?? DungeonOptions.Default,
         }, new Random());
         // With a shared world, sessions take turns (WorldTurn): world work alone, map work in parallel per map;
         // storage calls run outside the turn (TurnStore).

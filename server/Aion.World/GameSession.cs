@@ -36,6 +36,8 @@ public sealed record GameSessionOptions
     public ServerRates Rates { get; init; } = ServerRates.Official;
     /// <summary>Host switches (Aion:Rules): PvP and the monster respawn.</summary>
     public WorldRules Rules { get; init; } = WorldRules.Default;
+    /// <summary>Aion:Dungeons: daily entry limits (off by default) and the untracked-objective fallback delay.</summary>
+    public DungeonOptions Dungeons { get; init; } = DungeonOptions.Default;
     /// <summary>Heal/buff/debuff effects of class skills; null: the embedded tools/data/skill-effects.json (OURS values).</summary>
     public SkillEffectTable? SkillEffects { get; init; }
 }
@@ -1632,6 +1634,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
                 LoadAchievements(await store.AchievementsAsync(state.Summary.CharacterId, ct), await store.GroupRewardsTakenAsync(state.Summary.CharacterId, ct), now);
                 LoadCollections(await store.CollectionsAsync(state.Summary.CharacterId, ct));
                 LoadBossChallenges(await store.BossChallengesAsync(state.Summary.CharacterId, ct));
+                LoadDungeonEntries(await store.DungeonEntriesAsync(state.Summary.CharacterId, ct), now);
                 LoadTitles(extras);
                 LoadSkins(extras);
                 LoadMasteries(extras);

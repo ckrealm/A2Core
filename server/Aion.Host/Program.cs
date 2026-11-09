@@ -85,10 +85,16 @@ if (native.MaxPlayers is < 0) throw new InvalidOperationException("Aion:Native:M
 // Drop, QuestExperience) and Aion:Rules (Pvp, RespawnSeconds, PartyLoot freeforall|roundrobin|killer, FallbackLoot). Scheduled dashboard events multiply on top of the rates.
 var rates = (builder.Configuration.GetSection("Aion:Rates").Get<Aion.World.RatesOptions>() ?? new Aion.World.RatesOptions()).Resolve();
 var rules = (builder.Configuration.GetSection("Aion:Rules").Get<Aion.World.WorldRules>() ?? Aion.World.WorldRules.Default).Validated();
+// Aion:Dungeons (OURS): EntryLimits (default off), DailyEntries, Entries:<dungeon id or name> overrides, ResetHour (server
+// local time), UntrackedObjectiveSeconds (the map-event objectives the server cannot follow).
+var dungeonRules = (builder.Configuration.GetSection("Aion:Dungeons").Get<Aion.World.DungeonOptions>() ?? Aion.World.DungeonOptions.Default)
+    .Validated(Aion.World.DungeonOptions.KnownDungeon);
 builder.Services.AddSingleton(rates);
 builder.Services.AddSingleton(rules);
 // Playerbots (OURS, docs/PLAYERBOTS.md): Aion:Bots (Enabled, PlayersMayUse, MaxPerAccount, MaxTotal, JoinParty, TeleportBeyond).
 var bots = (builder.Configuration.GetSection("Aion:Bots").Get<Aion.World.BotOptions>() ?? new Aion.World.BotOptions()).Validated();
+
+builder.Services.AddSingleton(dungeonRules);
 if (native.LoginPort is not null || native.GamePort is not null)
 {
     if (!native.Development && !accountsReady)
@@ -249,8 +255,8 @@ builder.WebHost.ConfigureKestrel(options =>
 builder.Services.AddSingleton<WardrobeAccess>();
 var app = builder.Build();
 if (native.LoginPort is not null || native.GamePort is not null)
-    app.Logger.LogInformation("World rates: {Rates} (scheduled events multiply on top, each 0.1-10). Rules: {Rules}. Players: {Players}.",
-        rates, rules, native.MaxPlayers is > 0 and var maxPlayers ? $"at most {maxPlayers}" : $"no cap beyond {native.MaxConnections} connections per port");
+    app.Logger.LogInformation("World rates: {Rates} (scheduled events multiply on top, each 0.1-10). Rules: {Rules}. Players: {Players}. Dungeons: {Dungeons}.",
+        rates, rules, native.MaxPlayers is > 0 and var maxPlayers ? $"at most {maxPlayers}" : $"no cap beyond {native.MaxConnections} connections per port", dungeonRules);
 // Chat mutes and the chat log go through the staff tools when both exist.
 if (app.Services.GetService<Aion.Host.Authentication.ServerControl>() is { } serverControl && app.Services.GetService<ChatRelay>() is { } chatRelay)
     chatRelay.Moderation = serverControl;

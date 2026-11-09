@@ -985,6 +985,41 @@ public sealed class PostgresGameplayStore(NpgsqlDataSource source) : IGameplaySt
         await t.CommitAsync(ct); return true;
     }
 
+    public async Task<IReadOnlyList<DungeonEntryRecord>> DungeonEntriesAsync(VerifiedAccount account, Guid character, CancellationToken ct=default)
+    {
+        await using var c=await source.OpenConnectionAsync(ct); await using var t=await c.BeginTransactionAsync(ct);
+        if(!await Own(c,t,account.AccountId,character,ct)) return [];
+        var list=new List<DungeonEntryRecord>();
+        await using(var q=Query(c,t,"SELECT dungeon_id,period,count FROM game.character_dungeon_entries WHERE character_id=$1 ORDER BY dungeon_id",character))
+        {
+            await using var r=await q.ExecuteReaderAsync(ct);
+            while(await r.ReadAsync(ct)) list.Add(new(r.GetInt32(0),r.GetString(1),r.GetInt32(2)));
+        }
+        await t.CommitAsync(ct); return list;
+    }
+
+    public async Task<bool> SaveDungeonEntryAsync(VerifiedAccount account, Guid character, DungeonEntryRecord entry, CancellationToken ct=default)
+    {
+        if(entry.Count<1||entry.Period.Length is 0 or >16) return false;
+        await using var c=await source.OpenConnectionAsync(ct); await using var t=await c.BeginTransactionAsync(ct);
+        if(!await Own(c,t,account.AccountId,character,ct)) return false;
+        // Only the current counting day matters: the rows of other days go with each save.
+        await Execute(c,t,"DELETE FROM game.character_dungeon_entries WHERE character_id=$1 AND period<>$2",ct,character,entry.Period);
+        await Execute(c,t,"""
+            INSERT INTO game.character_dungeon_entries(character_id,dungeon_id,period,count,updated_at) VALUES($1,$2,$3,$4,now())
+            ON CONFLICT (character_id,dungeon_id,period) DO UPDATE SET count=EXCLUDED.count,updated_at=now()
+            """,ct,character,entry.DungeonId,entry.Period,entry.Count);
+        await t.CommitAsync(ct); return true;
+    }
+
+    public async Task<int> ResetDungeonEntriesAsync(VerifiedAccount account, Guid character, CancellationToken ct=default)
+    {
+        await using var c=await source.OpenConnectionAsync(ct); await using var t=await c.BeginTransactionAsync(ct);
+        if(!await Own(c,t,account.AccountId,character,ct)) return 0;
+        var removed=await ExecuteCount(c,t,"DELETE FROM game.character_dungeon_entries WHERE character_id=$1",ct,character);
+        await t.CommitAsync(ct); return removed;
+    }
+
     private static async Task<bool> Consume(NpgsqlConnection c, NpgsqlTransaction t, Guid character, Guid item, long revision, int count, CancellationToken ct)
     {
         // quantity>0 is a table check: the last units delete the row instead of reaching 0 (live 2026-10-16).

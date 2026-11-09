@@ -2884,6 +2884,161 @@ checks = 0;
 }
 Console.WriteLine($"{checks} class skill effect checks passed (heals, buffs, debuffs, damage over time, resurrection).");
 
+// ---------- Dungeons: daily entry limits, untracked objectives, boss area attacks (Aion:Dungeons, OURS) ----------
+checks = 0;
+{
+    // Options: off by default (nothing limited), the counting day turns at the reset hour, overrides by id or name, bad values badRefused.
+    var kraoEasy = MapEventTables.Embedded.Dungeon(600002)!;   // KraoCave_Easy (Party)
+    var storyLayer = MapEventTables.Embedded.Dungeon(2)!;       // World_L_A_Layer_01 (InstanceLayer)
+    Check(!DungeonOptions.Default.EntryLimits && DungeonOptions.Default.LimitOf(600002, kraoEasy) is null && DungeonOptions.Default.UntrackedObjectiveMs == MapEventRun.FallbackMs,
+          "Aion:Dungeons default: entry limits off, the untracked fallback 30 s");
+    var limits = new DungeonOptions { EntryLimits = true, DailyEntries = 2, ResetHour = 9, Zone = TimeZoneInfo.Utc };
+    Check(limits.LimitOf(600002, kraoEasy) == 2 && limits.LimitOf(2, storyLayer) is null, "limits on: an expedition gets DailyEntries; a story layer is not limited");
+    var tuned = limits with { Entries = new(StringComparer.OrdinalIgnoreCase) { ["kraocave_easy"] = 1, ["2"] = 4 } };
+    Check(tuned.LimitOf(600002, kraoEasy) == 1 && tuned.LimitOf(2, storyLayer) == 4 && (limits with { Entries = new() { ["600002"] = 0 } }).LimitOf(600002, kraoEasy) is null,
+          "per-dungeon overrides by name (any case) or id; an override limits any type; 0 lifts the limit");
+    var reset = new DateTimeOffset(2025, 10, 10, 9, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds();
+    Check(limits.Period(reset - 1000) == "2025-10-09" && limits.Period(reset) == "2025-10-10" && (limits with { ResetHour = 0 }).Period(reset - 1000) == "2025-10-10",
+          "the counting day turns at ResetHour (09:00 here), not at midnight");
+    foreach (var bad in new[] { limits with { DailyEntries = -1 }, limits with { ResetHour = 24 }, limits with { UntrackedObjectiveSeconds = 0 },
+                 limits with { Entries = new() { ["600002"] = -2 } }, limits with { Entries = new() { ["NoSuchDungeon"] = 1 } } })
+    {
+        var badRefused = false;
+        try { bad.Validated(DungeonOptions.KnownDungeon); } catch (InvalidOperationException) { badRefused = true; }
+        Check(badRefused, "an invalid Aion:Dungeons value stops the host at startup");
+    }
+    Check(tuned.Validated(DungeonOptions.KnownDungeon) == tuned && DungeonOptions.KnownDungeon("KraoCave_Easy") && DungeonOptions.KnownDungeon("600002"), "valid settings pass");
+
+    async Task<GameSession> Adventurer(DungeonOptions dungeons, string name, FakeStore? store = null, Action<FakeStore>? seed = null)
+    {
+        var session = new GameSession(data, new GameSessionOptions { Dungeons = dungeons }, new Random(17)) { Store = store };
+        await session.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+        await session.HandleAsync(new PacketWriter().U16(0x361b).String(name).U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
+        if (store is not null) seed?.Invoke(store);
+        await session.HandleAsync(store is null ? select : new PacketWriter().U16(0x361f).Varint(store.States[0].WireId << 16).I32(0).Vec3(Vector3d.Zero).ToArray(), Now);
+        await session.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+        return session;
+    }
+    // One run: the entry (badRefused: nothing sent), the load inside, the way out and the load back.
+    async Task<bool> Run(GameSession who, int dungeon, long at)
+    {
+        var moved = who.EnterDungeonById(dungeon, at);
+        if (moved.Count == 0) return false;
+        await who.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), at + 10);
+        var inside = who.InstanceKey != 0 && who.MapId == MapEventTables.Embedded.Dungeon(dungeon)!.Map;
+        ((IMapEventHost)who).MapExit("", "LastPosition");
+        await who.TickAsync(at + 20);
+        await who.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), at + 30);
+        return inside && who.InstanceKey == 0;
+    }
+    var noon = new DateTimeOffset(2025, 10, 9, 12, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds();
+
+    // Limits off: as before, any number of runs, nothing counted.
+    var free = await Adventurer(DungeonOptions.Default with { Zone = TimeZoneInfo.Utc }, "Free");
+    var freeRuns = 0;
+    for (var i = 0; i < 4; i++) freeRuns += await Run(free, 600002, noon + i * 1000) ? 1 : 0;
+    Check(freeRuns == 4 && free.DungeonEntriesToday(noon + 5000).Count == 0 && !free.MapEventNotes.Any(n => n.Contains("daily entries")),
+          "limits off: four runs of the same expedition, nothing counted, nothing refused");
+
+    // Limits on (2 a day): two runs, the third badRefused with the existing refusal (nothing sent, a note), still refused at 08:59
+    // the next day, open relogged at 09:00 with a fresh count.
+    var capped = await Adventurer(limits, "Capped");
+    Check(await Run(capped, 600002, noon) && await Run(capped, 600002, noon + 1000) && capped.DungeonEntriesToday(noon + 2000)[600002] == 2,
+          "limits on: two runs counted");
+    Check(capped.EnterDungeonById(600002, noon + 3000).Count == 0 && capped.InstanceKey == 0
+          && capped.MapEventNotes.Any(n => n.Contains("KraoCave_Easy: entry refused (2 of 2 daily entries used; the count resets at 09:00)")),
+          "the third entry is refused like the other entry rules: no move, the reason noted");
+    Check(capped.EnterDungeonById(600002, reset - 1000).Count == 0, "still refused one second before the reset hour");
+    Check(await Run(capped, 600002, reset) && capped.DungeonEntriesToday(reset + 100)[600002] == 1, "at the reset hour the count starts again: the run is allowed and counts 1");
+    Check(await Run(capped, 600002, reset + 1000) && capped.EnterDungeonById(600002, reset + 2000).Count == 0, "and the new day's limit applies again");
+
+    // Per-dungeon override (a story-free Abyss artifact dungeon, not limited by type) for a stored character: stored once the copy
+    // is joined, loaded at the next login (older days ignored), and reset by the GM command.
+    var single = limits with { Entries = new() { ["503001"] = 1 } };
+    var piaStore = new FakeStore();
+    var pia = await Adventurer(single, "Pia", piaStore);
+    Check(await Run(pia, 503001, noon) && pia.DungeonEntriesToday(noon)[503001] == 1, "an override limits a dungeon of any type (503001: 1 a day)");
+    await pia.TickAsync(noon + 100);
+    Check(piaStore.DungeonEntries.SequenceEqual([new DungeonEntryRecord(503001, "2025-10-09", 1)]), "the count is stored for the character's day");
+    Check(pia.EnterDungeonById(503001, noon + 200).Count == 0 && await Run(pia, 503002, noon + 300) && await Run(pia, 503002, noon + 350)
+          && !pia.DungeonEntriesToday(noon + 360).ContainsKey(503002), "the override's dungeon is refused; its neighbour (no override, not a limited type) is not counted");
+    var reloadStore = new FakeStore();
+    var relogged = await Adventurer(single, "Pia2", reloadStore, s => s.DungeonEntries.AddRange([new DungeonEntryRecord(503001, single.Period(Now), 1), new DungeonEntryRecord(600002, "2000-01-01", 9)]));
+    Check(relogged.DungeonEntriesToday(Now).GetValueOrDefault(503001) == 1 && !relogged.DungeonEntriesToday(Now).ContainsKey(600002) && relogged.EnterDungeonById(503001, Now + 10).Count == 0,
+          "stored counts come back at login: today's row refuses the entry, an older day's row is ignored");
+    // GM: ResetDungeonEntries <character> runs on that character's loop; its counts and stored rows go.
+    var dungeonPresence = new WorldPresence();
+    var dungeonBuilder = new BuilderCommands(dungeonPresence, new GmPolicy { DevelopmentNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Gamma" } }, (_, _, _) => { });
+    var gamma = await Adventurer(single, "Gamma");
+    dungeonPresence.Enter("Gamma", gamma, null);
+    dungeonPresence.Enter("Pia", pia, null);
+    Check(BuilderCommands.Supported.Contains("ResetDungeonEntries"), "ResetDungeonEntries is a builder command");
+    var resetReply = await dungeonBuilder.RunAsync(gamma, "ResetDungeonEntries Pia", noon + 400, default);
+    await pia.TickAsync(noon + 500);
+    Check(resetReply.Result == 0 && resetReply.Message == "Dungeon entries of Pia reset." && pia.DungeonEntriesToday(noon + 500).Count == 0 && piaStore.DungeonEntries.Count == 0
+          && await Run(pia, 503001, noon + 600), "the GM reset clears the character's counts and rows: the dungeon opens again");
+    Check((await dungeonBuilder.RunAsync(gamma, "ResetDungeonEntries Nobody", noon + 700, default)).Result == 1
+          && (await dungeonBuilder.RunAsync(pia, "ResetDungeonEntries", noon + 800, default)).Message == "GM permission required.", "an unknown character fails; players may not reset");
+    Check((await dungeonBuilder.RunAsync(gamma, "ResetDungeonEntries", noon + 900, default)).Message.StartsWith("Dungeon entries reset"), "without a name the GM's own counts reset");
+    // Re-entering the party copy already counted is free; a fresh copy counts.
+    var dungeonWorld = new SharedWorld(data);
+    async Task<GameSession> Member(string name)
+    {
+        var session = new GameSession(data, new GameSessionOptions { World = dungeonWorld, Dungeons = limits with { DailyEntries = 1 } }, new Random(19));
+        await session.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+        await session.HandleAsync(new PacketWriter().U16(0x361b).String(name).U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
+        await session.HandleAsync(select, Now);
+        await session.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+        return session;
+    }
+    var leader = await Member("Leader");
+    var follower = await Member("Follower");
+    await leader.HandleAsync(SocialRequests.EncodeServerAndName(SocialOpcodes.PartyInviteRq, 1204, follower.CharacterName!), noon);
+    var partyInvite = (await follower.TickAsync(noon + 1)).Single(b => (b[0] | b[1] << 8) == SocialOpcodes.PartyInviteNt);
+    await follower.HandleAsync(SocialRequests.EncodePartyInviteResponse([new PartyInviteReply(BitConverter.ToInt64(partyInvite, 2), PartyInviteAnswer.Accept)]), noon + 2);
+    await leader.TickAsync(noon + 3);
+    leader.EnterDungeonById(600002, noon + 10);
+    await leader.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), noon + 20);
+    Check(await Run(follower, 600002, noon + 30) && follower.DungeonEntriesToday(noon + 40)[600002] == 1, "a member joins the leader's copy: counted once");
+    Check(await Run(follower, 600002, noon + 50) && follower.DungeonEntriesToday(noon + 60)[600002] == 1, "back into the same copy: free, not counted again");
+    leader.ExitSharedWorld(); follower.ExitSharedWorld();
+
+    // Boss area attacks (tools/data/boss-area-skills.json, OURS): the expeditions' final bosses; their basic attack stays single-target.
+    var areas = BossAreaSkills.Embedded;
+    var finalBossSkills = data.NpcFromTemplate(2320171, "boss", [0, 0, 0], 0)!.Skills!.Where(id => data.NpcSkill(id) is not null).ToList();
+    Check(areas.Count >= 20 && areas.Of(2320171) is { Radius: 500, MaxTargets: 4 } && areas.Area(2320171, finalBossSkills[0], finalBossSkills[0]) is null
+          && areas.Area(2320171, finalBossSkills[1], finalBossSkills[0]) is not null && areas.Of(2701128) is null,
+          "the final bosses are listed (KraoCave_Hard's: 5 m, 4 players); the basic attack and unlisted NPCs keep one target");
+    var aoeAggro = new AggroShape("Circle", 1000, 0, 0, 1000, "Upper");
+    Target Boss(int npcId) => new() { Key = 3001, Name = "boss", NpcId = npcId, Hp = 5000, HpMax = 5000, Level = 7, Position = Vector3d.Zero, Aggressive = true,
+        WalkSpeed = 100, RunSpeed = 200, Radius = 120, Aggro = aoeAggro, Skills = [1220560] };
+    var party = new List<(int Key, Vector3d Position)> { (100_001, new Vector3d(200, 0, 0)), (100_002, new Vector3d(300, 200, 0)), (100_003, new Vector3d(2500, 0, 0)) };
+    (List<(int Key, int Damage)> Hits, List<byte[]> Packets) Fight(BossAreaSkills table, int npcId)
+    {
+        var bossAi = new NpcAi(new Random(2), data) { AreaSkills = table, DefenseOf = _ => 0 };
+        var boss = Boss(npcId);
+        var map = new Dictionary<int, Target> { [boss.Key] = boss };
+        var hitList = new List<(int, int)>();
+        var packets = new List<byte[]>();
+        foreach (var ms in new[] { 0L, 600L }) packets.AddRange(bossAi.Tick(map, party, ms, (key, damage) => { hitList.Add((key, damage)); return []; }));
+        return (hitList, packets);
+    }
+    var slam = new BossAreaSkills(new Dictionary<int, BossAreaSkill> { [999] = new(500, 4, [1220560]) });
+    var (areaHits, areaPackets) = Fight(slam, 999);
+    Check(areaHits.Select(h => h.Key).OrderBy(k => k).SequenceEqual([100_001, 100_002]) && areaHits.All(h => h.Damage is >= 45 and <= 55)
+          && areaPackets.Count(b => b.SequenceEqual(GamePackets.NpcSkillHit(100_001, 3001, 1220560, 1, 122056011, areaHits.First(h => h.Key == 100_001).Damage))) == 1
+          && areaPackets.Count(b => b.SequenceEqual(GamePackets.NpcSkillHit(100_002, 3001, 1220560, 1, 122056011, areaHits.First(h => h.Key == 100_002).Damage))) == 1
+          && !areaHits.Any(h => h.Key == 100_003),
+          "an area skill hits the victim and the player 3.6 m away, each with the per-target 0x3804 and its own roll; the player 23 m away is not hit");
+    var (singleHits, _) = Fight(BossAreaSkills.None, 999);
+    var (unlisted, _) = Fight(slam, 1000);
+    Check(singleHits.Select(h => h.Key).SequenceEqual([100_001]) && unlisted.Select(h => h.Key).SequenceEqual([100_001]),
+          "without a table entry (or for another NPC) the hit stays on the victim alone");
+    var (capHits, _) = Fight(new BossAreaSkills(new Dictionary<int, BossAreaSkill> { [999] = new(5000, 2, [1220560]) }), 999);
+    Check(capHits.Select(h => h.Key).OrderBy(k => k).SequenceEqual([100_001, 100_002]), "max_targets caps the players one hit reaches (2: the victim and the nearest)");
+}
+Console.WriteLine($"{checks} dungeon checks passed (entry limits, untracked objectives, boss area attacks).");
+
 // ---------- Playerbots (docs/PLAYERBOTS.md): sessions without a connection, driven by BotBrain ----------
 checks = 0;
 {
@@ -3115,6 +3270,20 @@ void Rejects(Action action, string name)
 
 sealed class FakeStore : INativeCharacterStore
 {
+    public List<DungeonEntryRecord> DungeonEntries { get; } = [];
+    public Task<IReadOnlyList<DungeonEntryRecord>> DungeonEntriesAsync(Guid character, CancellationToken ct) => Task.FromResult<IReadOnlyList<DungeonEntryRecord>>(DungeonEntries.ToList());
+    public Task<bool> SaveDungeonEntryAsync(Guid character, DungeonEntryRecord entry, CancellationToken ct)
+    {
+        DungeonEntries.RemoveAll(e => e.Period != entry.Period || e.DungeonId == entry.DungeonId);
+        DungeonEntries.Add(entry);
+        return Task.FromResult(true);
+    }
+    public Task<int> ResetDungeonEntriesAsync(Guid character, CancellationToken ct)
+    {
+        var removed = DungeonEntries.Count;
+        DungeonEntries.Clear();
+        return Task.FromResult(removed);
+    }
     public List<CharacterState> States { get; } = [];
     public List<CreatePlayer> Created { get; } = [];
     public List<int> SavedMaps { get; } = [];
