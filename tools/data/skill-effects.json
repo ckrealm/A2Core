@@ -41,6 +41,7 @@
     "16070000": { "name": "Soul's Cry", "target": "enemy", "effects": [ { "type": "stun", "duration_ms": 5000 } ] },
     "16140000": { "name": "Jointstrike: Curse", "target": "enemy", "effects": [ { "type": "dot", "duration_ms": 5000, "interval_ms": 1000, "flat": [10, 10], "ratio": [2000, 2000] } ] },
     "18060000": { "name": "Impactful Crush", "target": "enemy", "effects": [ { "type": "stun", "duration_ms": 3000 } ] },
-    "18080000": { "name": "Wave Blow", "target": "enemy", "effects": [ { "type": "stun", "duration_ms": 3000 } ] }
+    "18080000": { "name": "Wave Blow", "target": "enemy", "effects": [ { "type": "stun", "duration_ms": 3000 } ] },
+    "19420000": { "name": "Brawler 19420000 (OURS: the class has no English names yet)", "target": "enemy", "effects": [ { "type": "stun", "duration_ms": 2000 } ] }
   }
 }

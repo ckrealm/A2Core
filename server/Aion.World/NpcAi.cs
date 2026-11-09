@@ -725,7 +725,7 @@ public sealed class NpcAi(Random rng, GameData? data = null)
         // The victim's defense reduces the hit (the CANDIDATE 1000/(1000+defense) used for players' hits).
         var defense = brain.VictimIsNpc && current?.GetValueOrDefault(victim) is { } prey ? prey.Defense : DefenseOf?.Invoke(victim) ?? 0;
         var damage = Math.Max(1, (int)Math.Round(Damage(target, hit.Skill) * 1000.0 / (1000 + Math.Max(0, defense))));
-        if (!brain.VictimIsNpc && Guard is { } guard) damage = guard(victim, damage, now);
+        if (!brain.VictimIsNpc && Guard is { } guard) damage = guard(victim, damage, now, rng);
         LastAttacker = target.Key;
         List<byte[]> replies = [GamePackets.NpcSkillHit(victim, target.Key, hit.SkillId, hit.ActionSeq, hit.Skill.Effect, damage), .. hitPlayer(damage)];
         if (!brain.VictimIsNpc) replies.AddRange(AreaHits(target, brain, hit, now));
@@ -733,10 +733,10 @@ public sealed class NpcAi(Random rng, GameData? data = null)
     }
 
     /// <summary>
-    /// A player's guard against a landing hit (player key, damage, now) → the damage taken: 0 for an evaded hit (a dodge in
+    /// A player's guard against a landing hit (player key, damage, now, this AI's rng for the rolls) → the damage taken: 0 for an evaded hit (a dodge in
     /// progress or the evasion roll), less for a blocked one (GameSession.GuardHit, OURS). Null: every hit lands whole.
     /// </summary>
-    public Func<int, int, long, int>? Guard { get; set; }
+    public Func<int, int, long, Random, int>? Guard { get; set; }
 
     /// <summary>Named bosses' area specials (tools/data/boss-area-skills.json, OURS): every NPC skill hits one victim otherwise.</summary>
     public BossAreaSkills AreaSkills { get; set; } = BossAreaSkills.Embedded;
@@ -756,7 +756,7 @@ public sealed class NpcAi(Random rng, GameData? data = null)
                      .Where(p => p.D <= reach).OrderBy(p => p.D).ThenBy(p => p.Key).Take(area.MaxTargets - 1))
         {
             var damage = Math.Max(1, (int)Math.Round(Damage(target, hit.Skill) * 1000.0 / (1000 + Math.Max(0, DefenseOf?.Invoke(key) ?? 0))));
-            if (Guard is { } guard) damage = guard(key, damage, now);
+            if (Guard is { } guard) damage = guard(key, damage, now, rng);
             replies.Add(GamePackets.NpcSkillHit(key, target.Key, hit.SkillId, hit.ActionSeq, hit.Skill.Effect, damage));
             replies.AddRange(tickHit(key, damage));
         }
@@ -876,7 +876,7 @@ public sealed class NpcAi(Random rng, GameData? data = null)
         foreach (var (key, _) in players.Select(p => (p.Key, D: Distance(target.Position, Flat(p.Position)))).Where(p => p.D <= reach).OrderBy(p => p.D).ThenBy(p => p.Key))
         {
             var damage = Math.Max(1, (int)Math.Round(Damage(target, skill) * slam.Damage * 1000.0 / (1000 + Math.Max(0, DefenseOf?.Invoke(key) ?? 0))));
-            if (Guard is { } guard) damage = guard(key, damage, now);   // a block halves it, a Dodge's i-frames evade it
+            if (Guard is { } guard) damage = guard(key, damage, now, rng);   // a block halves it, a Dodge's i-frames evade it
             LastAttacker = target.Key;
             replies.Add(GamePackets.NpcSkillHit(key, target.Key, slam.Skill, seq, skill.Effect, damage));
             replies.AddRange(tickHit(key, damage));
