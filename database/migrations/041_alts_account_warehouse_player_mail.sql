@@ -7,7 +7,7 @@
 -- (character_posts.attached_items); Kinah travels as an ordinary attachment. sender_character is who sent it (audit).
 ALTER TABLE game.item_instances DROP CONSTRAINT item_instances_location_check;
 ALTER TABLE game.item_instances ADD CONSTRAINT item_instances_location_check
-    CHECK (location IN ('bag','equipment','storage','buyback','account_storage','mail'));
+    CHECK (location IN ('bag','equipment','storage','buyback','market','account_storage','mail'));
 ALTER TABLE game.item_instances ADD COLUMN warehouse_account uuid, ADD COLUMN warehouse_world integer;
 ALTER TABLE game.item_instances ADD CONSTRAINT item_instances_warehouse_check
     CHECK ((location = 'account_storage') = (warehouse_account IS NOT NULL AND warehouse_world IS NOT NULL));

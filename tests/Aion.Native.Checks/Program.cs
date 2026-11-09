@@ -4306,7 +4306,7 @@ sealed class FakeStore : INativeCharacterStore
     {
         var index = Posts.FindIndex(p => p.Id == id && !p.Taken);
         if (index < 0) return Task.FromResult(false);
-        // A player's item (migration 040) travels as it is; the rest is granted.
+        // A player's item (migration 041) travels as it is; the rest is granted.
         if (Escrow.Remove(id, out var held))
         {
             Items.AddRange(held.Select(i => i with { Location = "bag", Slot = null, Revision = i.Revision + 1 }));
@@ -4316,7 +4316,7 @@ sealed class FakeStore : INativeCharacterStore
         Posts[index] = Posts[index] with { Taken = true, Read = true };
         return Task.FromResult(true);
     }
-    // Aion:Alts account warehouse (migration 040): the list is shared by the FakeStores of one account.
+    // Aion:Alts account warehouse (migration 041): the list is shared by the FakeStores of one account.
     public List<ItemState> Warehouse { get; set; } = [];
     static bool Bound(ItemState i) => i.Upgrades.ValueKind == System.Text.Json.JsonValueKind.Object && i.Upgrades.TryGetProperty("soul_bind", out _);
     public Task<IReadOnlyList<ItemState>> AccountWarehouseAsync(Guid character, CancellationToken ct)

@@ -174,7 +174,7 @@ public interface IGameplayStore
     /// <summary>Grants a post's attachments once and marks it taken.</summary>
     Task<bool> TakePostAsync(VerifiedAccount account, Guid character, long id, CancellationToken ct = default) => Task.FromResult(false);
     /// <summary>
-    /// Aion:Alts:SharedWarehouse: the account's warehouse on the character's world (location 'account_storage', migration 040),
+    /// Aion:Alts:SharedWarehouse: the account's warehouse on the character's world (location 'account_storage', migration 041),
     /// after the character's own warehouse rows ('storage') join it (slots kept where free).
     /// </summary>
     Task<IReadOnlyList<ItemState>> AccountWarehouseAsync(VerifiedAccount account, Guid character, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ItemState>>([]);

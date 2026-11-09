@@ -794,7 +794,7 @@ public sealed partial class PostgresGameplayStore(NpgsqlDataSource source) : IGa
         var attachments=(JsonSerializer.Deserialize<long[][]>(r.GetString(9)) ?? []).Where(a=>a.Length>=2).Select(a=>((int)a[0],a[1])).ToList();
         return new(r.GetInt64(0),r.GetInt16(1),r.GetInt16(2),r.GetInt32(3),r.GetString(4),r.GetBoolean(5),r.GetBoolean(6),r.GetFieldValue<DateTimeOffset>(7),r.GetFieldValue<DateTimeOffset>(8),attachments,r.GetInt32(10));
     }
-    // Items sent by players (migration 040, location 'mail' until taken) are listed after the granted attachments.
+    // Items sent by players (migration 041, location 'mail' until taken) are listed after the granted attachments.
     const string PostColumns="p.post_id,p.post_type,p.save_tab,p.post_data_id,p.msg_params,p.read,p.taken,p.sent_at,p.expire_at,"
         +"(p.attachments||COALESCE((SELECT jsonb_agg(jsonb_build_array(i.template_id,i.quantity) ORDER BY i.instance_id) FROM game.item_instances i WHERE i.instance_id=ANY(p.attached_items)),'[]'::jsonb))::text,p.reason";
 
@@ -847,7 +847,7 @@ public sealed partial class PostgresGameplayStore(NpgsqlDataSource source) : IGa
         if(!await Own(c,t,account.AccountId,character,ct)) return false;
         var attachmentsText=await Scalar(c,t,"SELECT attachments::text FROM game.character_posts WHERE post_id=$1 AND character_id=$2 AND NOT taken AND NOT deleted FOR UPDATE",ct,id,character) as string;
         if(attachmentsText is null) return false;
-        // A player's item (migration 040) waits under the recipient in location 'mail': it moves into the bag as it is.
+        // A player's item (migration 041) waits under the recipient in location 'mail': it moves into the bag as it is.
         await Execute(c,t,"UPDATE game.item_instances SET location='bag',slot=NULL,character_id=$2 WHERE location='mail' AND instance_id IN (SELECT unnest(attached_items) FROM game.character_posts WHERE post_id=$1)",ct,id,character);
         var build=await Scalar(c,t,"SELECT build_id FROM catalog.builds ORDER BY imported_at DESC LIMIT 1",ct) as string;
         foreach(var a in JsonSerializer.Deserialize<long[][]>(attachmentsText) ?? [])

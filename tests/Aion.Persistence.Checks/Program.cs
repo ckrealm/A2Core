@@ -286,7 +286,7 @@ await using(var source=NpgsqlDataSource.Create(connectionString))
     immutableItem.Parameters.AddWithValue(item.InstanceId);
     try { await immutableItem.ExecuteNonQueryAsync(); throw new Exception("Item wire ID changed"); }
     catch(PostgresException e) when(e.SqlState=="P0001") { Check(true,"item wire ID immutable"); }
-    // Aion:Alts (migration 040): the account warehouse is shared by the account's characters on the world; player mail
+    // Aion:Alts (migration 041): the account warehouse is shared by the account's characters on the world; player mail
     // carries the item itself to a character by name.
     var altId=await game.CreateAsync(first,draft with {RequestId=Guid.NewGuid(),Name="Altfirst",LobbySlot=7});
     await game.AdminAsync(second,new AdminCommand(Guid.NewGuid(),id,"grant","test",101));

@@ -38,7 +38,7 @@
 ## 2026-11-09 — alts: account warehouse and player mail
 - **Account warehouse** (`Aion:Alts:SharedWarehouse`, on): the Storage NPC's warehouse (container 2, `kStorage`) is shared by the account's characters on the world; old per-character warehouses join it on load. Moves are locked per account and revision-checked, and the account's other online characters are refreshed, so two sessions of one account cannot duplicate items. Soul-bound items stay out.
 - **Player mail** (`Aion:Alts:PlayerMail`, on; `MailFee` 0, `MailDays` 365): `//mail <name> <subject> | <text>`, `//sendkinah <name> <amount>`, `//senditem <name> <bag slot> [count]`. The client has no send request, so these are chat commands; mail arrives in the real mailbox and items keep their upgrades.
-- Migration 040, `docs/friends-server/ALTS.md`, checks in Aion.Native.Checks and Aion.Persistence.Checks.
+- Migration 041, `docs/friends-server/ALTS.md`, checks in Aion.Native.Checks and Aion.Persistence.Checks.
 
 ## 2026-11-09 — Market and market bot (`//ah`)
 - **Auction house in chat**: `//ah search|list|more|buy|sell|mine|cancel|price` for every player with a stored character. Listed items wait in escrow (enchants kept), buyers pay Kinah from the bag, sellers are paid by mail minus `SaleTaxPercent` (5%), unsold items return after `ListingHours` (48). Per world unless `CrossWorld`.

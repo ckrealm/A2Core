@@ -2,7 +2,7 @@
 
 Two things that make playing several characters easier, both switched by `Aion:Alts` (code: `server/Aion.World/AltRules.cs`,
 `GameSession.Alts.cs`; storage: `server/Aion.Infrastructure/Postgres/PostgresAltsStore.cs`; migration
-`040_alts_account_warehouse_player_mail.sql`). Both are on by default. With both off the server behaves as before them.
+`041_alts_account_warehouse_player_mail.sql`). Both are on by default. With both off the server behaves as before them.
 
 | Key | Default | Meaning |
 | --- | --- | --- |

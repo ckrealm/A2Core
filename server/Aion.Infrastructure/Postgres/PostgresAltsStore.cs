@@ -5,7 +5,7 @@ using Npgsql;
 
 namespace Aion.Infrastructure.Postgres;
 
-// Aion:Alts (OURS, docs/friends-server/ALTS.md; migration 040): the account warehouse and player mail.
+// Aion:Alts (OURS, docs/friends-server/ALTS.md; migration 041): the account warehouse and player mail.
 public sealed partial class PostgresGameplayStore
 {
     const int KinahItemId = 930100001;

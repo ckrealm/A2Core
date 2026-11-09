@@ -5,7 +5,7 @@ namespace Aion.World;
 /// Both switches off reproduce the behaviour before them: a warehouse per character and no player mail.
 /// <para>
 /// <see cref="SharedWarehouse"/>: the Storage NPCs' depot (EItemContainerType kStorage = 2, what ItemMove_RQ and the item list
-/// already use) is one warehouse for all of the account's characters on the world (location 'account_storage', migration 040).
+/// already use) is one warehouse for all of the account's characters on the world (location 'account_storage', migration 041).
 /// The client's enum also has kCharacterStorage (15), so kStorage being the account warehouse is CANDIDATE (from the names;
 /// official Aion 2 has an account warehouse); container 15 is not served. A character's old per-character warehouse joins the
 /// account warehouse at its next load (slots kept where free). Soul-bound items stay out, as in a trade.
