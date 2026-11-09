@@ -1,0 +1,7 @@
+# Reference prices for the market bot (Aion:Market:PriceFile; docs/MARKET.md).
+# One line per item: item ID or exact item name, then the price each in Kinah (k/m suffixes allowed).
+# Fill this from the official NA East Siel market (the in-game Trade Post, or a price site that allows it).
+# The seller bot lists these items around this price; the buyer bot pays at most 80% of it.
+item,price
+# 610710006,250
+# Iron Ore,1.2k

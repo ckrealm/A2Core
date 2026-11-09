@@ -56,7 +56,7 @@ public sealed partial class GameSession
             {
                 var (items, kinah) = RollLoot(target, fighter.Session.profileRace);
                 if (kinah > 0) items.Add((KinaItemId, kinah));
-                if (items.Count > 0) fighter.Session.ShareLoot(items);
+                if (items.Count > 0) fighter.Session.ShareLoot(items, target.Position);
             }
         if (rank != FieldRank.Boss) return;
         var name = FunFeatures.DisplayName(target.Name);

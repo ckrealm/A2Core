@@ -2697,6 +2697,24 @@ checks = 0;
     await mate.TickAsync(t0 + 50);
     Check(alone.Count == 5 && KinahIn(alone) == 90 && mateStore.Items.Count == mateLines, "a member out of range gets no share: all items and Kinah to the killer");
     await Place(mate, spot with { X = spot.X + 300 }, t0 + 60);
+    // A member who dies before its share is granted (or whose bag refuses it) finds the share on the ground at the kill site, not lost.
+    var deadRows = mateStore.Items.Count;
+    var deadKept = lead.ShareLootWithParty(Gear(2), 40, spot);
+    mate.NpcHitsPlayer(mate.Resource.HpMax * 10, t0 + 62, killerKey: 2001);
+    await mate.TickAsync(t0 + 63);
+    var mateGround = mate.GroundDropItems.ToList();
+    Check(mate.Dead && mateStore.Items.Count == deadRows && KinahIn(mateGround) == 20 && mateGround.Count + deadKept.Count == 4 && mate.SharedLootDropped == mateGround.Count,
+          $"a member dead when its share arrives: its items and Kinah lie on the ground at the kill site for it ({mateGround.Count} lines), nothing lost");
+    var fullWorld = new SharedWorld(data);
+    var (fullLead, _) = await LootMember(fullWorld, robinRules, "Olga");
+    var (fullMate, fullStore) = await LootMember(fullWorld, robinRules, "Pete");
+    await Join(fullLead, fullMate, t0 + 70);
+    await Place(fullLead, spot, t0 + 72); await Place(fullMate, spot with { X = spot.X + 300 }, t0 + 72);
+    fullStore.RefuseLoot = true;
+    fullLead.ShareLootWithParty(Gear(1), 10, spot);
+    await fullMate.TickAsync(t0 + 74);
+    Check(KinahIn(fullMate.GroundDropItems) == 5 && fullMate.SharedLootReceived == 0 && fullMate.SharedLootDropped > 0,
+          "a member whose bag refuses its share (full) finds it on the ground at the kill site");
 
     // A real kill through the party: an elite monster always pays Kinah (kinah-drops.json), split between the two and scaled by Aion:Rates:Kinah.
     var richWorld = new SharedWorld(data);
@@ -2822,16 +2840,20 @@ checks = 0;
           && dummyNpc.Hp == dummyHp && cleric.Resource.Mp == mpBefore, "a heal at a monster is refused");
     foe.SetResource('H', 10);
     Check((await cleric.HandleAsync(Cast(HealingLight, foe.PlayerKey, castAt), t)).Single()[3] == 1 && foe.Resource.Hp == 10 && foe.MapId == cleric.MapId, "a heal at an enemy (the other race) is refused");
-    // Another player: the heal reaches their session (their bars) and the caster sees their HP.
+    // Another player: the heal is applied on their own loop (WorldTurn: the caster never touches another session's state), their
+    // bars to them, then their HP to the caster.
     await ally.TickAsync(t);
     ally.SetResource('H', 10);
     var allyHeal = await cleric.HandleAsync(Cast(HealingLight, ally.PlayerKey, castAt), t);
+    var hpBeforeAllyLoop = ally.Resource.Hp;
     var allyHears = await ally.TickAsync(t + 1);
-    Check(allyHeal[0][3] == 0 && ally.Resource.Hp > 10 && allyHeal.Any(b => b.SequenceEqual(GamePackets.NpcHp(ally.PlayerKey, ally.Resource.Hp)))
-          && allyHears.Any(b => Op(b) == 0x8d00 && KeyOf(b) == ally.PlayerKey), "Healing Light on an ally heals their session in the shared world");
+    var casterSees = await cleric.TickAsync(t + 1);
+    Check(allyHeal[0][3] == 0 && hpBeforeAllyLoop == 10 && ally.Resource.Hp > 10 && casterSees.Any(b => b.SequenceEqual(GamePackets.NpcHp(ally.PlayerKey, ally.Resource.Hp)))
+          && allyHears.Any(b => Op(b) == 0x8d00 && KeyOf(b) == ally.PlayerKey), "Healing Light on an ally heals their session on its own loop, the caster sees their HP");
     // Heal over time on the ally: ticks every 2 s for 10 s, then stops.
     ally.SetResource('H', 10);
     await cleric.HandleAsync(Cast(Regeneration, ally.PlayerKey, castAt), t + 10);
+    await ally.TickAsync(t + 10);
     var hp0 = ally.Resource.Hp;
     await ally.TickAsync(t + 10 + 2_000);
     var hp1 = ally.Resource.Hp;
@@ -2879,9 +2901,11 @@ checks = 0;
     var priest = await ClassSession(4, 16, "Priest", reviveTable);
     t += 40_000;
     Check((await priest.HandleAsync(Cast(HealingLight, ally.PlayerKey, castAt), t)).Single()[3] == 1, "a resurrection at a living ally is refused");
+    await ally.TickAsync(t);   // its regeneration clock up to date: the revive below runs on its loop (WorldTurn), regeneration with it
     ally.NpcHitsPlayer(ally.Resource.HpMax * 2, t);
     Check(ally.Dead, "the ally died");
     var revivedAlly = await priest.HandleAsync(Cast(HealingLight, ally.PlayerKey, castAt), t + 10);
+    await ally.TickAsync(t + 10);
     Check(revivedAlly[0][3] == 0 && !ally.Dead && ally.Resource.Hp == ally.Resource.HpMax * 3000 / 10_000, "a resurrection skill revives the dead ally with 30% HP");
     foreach (var s in new[] { cleric, ally, foe, sorcerer, priest }) s.ExitSharedWorld();
 }
@@ -3179,6 +3203,36 @@ checks = 0;
     watcher.ExitSharedWorld();
     await bots.TickAsync(t += 50);
     Check(bots.All.Count == 0, "a bot whose leader left the world (lobby, logout) leaves on the next tick");
+}
+// A bot whose leaving throws is still removed, and the other bots keep ticking (the bot loop never stops on one bot).
+{
+    var faultWorld = new SharedWorld(data);
+    var faultOptions = new GameSessionOptions { World = faultWorld, TrainingDummy = true };
+    long t = Now + 2_500_000;
+    var faultLead = new GameSession(data, faultOptions, new Random(41));
+    await faultLead.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), t);
+    await faultLead.HandleAsync(new PacketWriter().U16(0x361b).String("Boss").U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), t);
+    await faultLead.HandleAsync(select, t);
+    await faultLead.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    var faulty = new PlayerBots(data, new BotOptions { Enabled = true, MaxPerAccount = 3, MaxTotal = 3 }, faultWorld);
+    await faulty.CommandAsync(faultLead, "add Broken", t, default);
+    await faulty.CommandAsync(faultLead, "add Fine", t, default);
+    await faulty.TickAsync(t += 50);
+    var broken = faulty.All.Single(b => b.Name == "Broken");
+    var fine = faulty.All.Single(b => b.Name == "Fine");
+    Check(broken.State == PlayerBot.Phase.InWorld && fine.State == PlayerBot.Phase.InWorld, "two bots in the world");
+    faulty.LeaveFault = b => { if (b == broken) throw new InvalidOperationException("leave failed"); };
+    faulty.Remove(faultLead, "Broken");
+    var threw = false;
+    try { await faulty.TickAsync(t += 50); } catch (Exception) { threw = true; }
+    Check(!threw && broken.State == PlayerBot.Phase.Gone && broken.LastError == nameof(InvalidOperationException) && !faulty.All.Contains(broken),
+          "a bot whose leave throws is still removed (Gone, its error kept) and the tick does not throw");
+    var ticked = fine.Session.PlayerKey;
+    for (var k = 0; k < 5; k++) await faulty.TickAsync(t += 50);
+    Check(fine.State == PlayerBot.Phase.InWorld && faulty.All.Single() == fine && faultWorld.Online.ContainsKey(ticked), "the other bot keeps ticking in the world");
+    faulty.LeaveFault = null;
+    faultLead.ExitSharedWorld();
+    await faulty.OwnerLeftAsync(faultLead);
 }
 // Playerbots looking after their group: heals, resurrection, buffs, self-defence, a tank, looting, party dungeons.
 {
@@ -3559,7 +3613,7 @@ Console.WriteLine($"{checks} progression checks passed (unlocks past 25, fallbac
     await lucky.HandleAsync(new PacketWriter().U16(0x361f).Varint(luckyStore.States[0].WireId << 16).I32(0).Vec3(Vector3d.Zero).ToArray(), Now);
     await lucky.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
     var luckyGear = MonsterRewards.Embedded.FallbackBand(45).First(i => EnchantTables.Embedded.MaxLevel(i) > 0);
-    lucky.ShareLoot([(luckyGear, 1)]);
+    lucky.ShareLoot([(luckyGear, 1)], Vector3d.Zero);
     await lucky.TickAsync(Now + 10);
     var luckyRow = luckyStore.Items.Single(i => i.TemplateId == luckyGear);
     Check(luckyRow.Upgrades.TryGetProperty("enchant", out var luckyLevel) && luckyLevel.GetInt32() is >= 1 and <= 3,
@@ -3769,8 +3823,11 @@ sealed class FakeStore : INativeCharacterStore
         }
         return Task.FromResult(true);
     }
+    /// <summary>GrantLootAsync answers false (a full bag).</summary>
+    public bool RefuseLoot { get; set; }
     public Task<bool> GrantLootAsync(Guid character, IReadOnlyList<(int TemplateId, long Count)> items, CancellationToken ct)
     {
+        if (RefuseLoot) return Task.FromResult(false);
         var wire = Math.Max(Items.Count == 0 ? 0 : Items.Max(i => i.WireId) + 1, 5000);   // granted stacks keep clear of the fixtures' hand-picked wire keys
         var empty = System.Text.Json.JsonSerializer.SerializeToElement(new { });
         foreach (var (template, quantity) in items)

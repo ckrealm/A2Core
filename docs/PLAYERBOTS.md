@@ -140,7 +140,8 @@ Kills by bots go through the session's normal kill and loot path (`GameSession.L
 decides who gets what:
 
 - **killer**: everything lies on the ground for the killer. When a bot is the killer, the loot is its own.
-- **roundrobin** and **freeforall**: the other members' parts go straight into their bags, as for players. The killer's
+- **roundrobin** and **freeforall**: the other members' parts go straight into their bags, as for players (a part a bag
+  cannot take, a dead member's or a full bag's, lies on the ground at the kill site for that member). The killer's
   part, which can be a bot's, lies on the ground.
 
 A bot picks up what lies on the ground for it. After the fight it walks to its own drops (within 2500 cm of itself

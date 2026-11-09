@@ -32,6 +32,14 @@
 - Skills unlock to level 100 (OURS spread of the client's dev-menu class kits over 26–100), +10% damage/heal per skill level, fallback damage rows for skills without data, MP max by level and class, combat power computed and sent in the existing appear-message field. 17 checks. See PROGRESSION.md.
 - `dev` pushed to `BrandonGWoW/A2Core` as branch `friends-server`.
 
+## 2026-11-09 — Market and market bot (`//ah`)
+- **Auction house in chat**: `//ah search|list|more|buy|sell|mine|cancel|price` for every player with a stored character. Listed items wait in escrow (enchants kept), buyers pay Kinah from the bag, sellers are paid by mail minus `SaleTaxPercent` (5%), unsold items return after `ListingHours` (48). Per world unless `CrossWorld`.
+- **Seller bot** ("Market Trader", like `mod-ah-bot`): keeps `TargetListings` (250) listings of crafting materials and crafted items (equipment optional, level range, include/exclude, fixed prices) at 3× their vendor value ±20%.
+- **Buyer bot**: buys player listings priced up to 2× vendor value after 10 minutes, by chance, a few per cycle, at most 1,000,000 Kinah a day. It always pays less than the seller bot's lowest price and NPC merchants' prices, so nothing can be resold to it at a profit.
+- Config `Aion:Market:*` (all on by default), migration `040_market.sql`, `docs/MARKET.md`. 78 checks (`tests/Aion.Market.Checks`, `tools/check_market.py`).
+- Not yet: the client's own Trade Post window (its browse protocol is not captured).
+- **Reference prices** (`Aion:Market:PriceFile`, CSV or JSON): the bots follow a price table (e.g. official NA East Siel prices) instead of vendor values; the buyer pays at most 80% of the reference, so overpriced listings stay unsold. No licensed live feed exists, so the table is filled by hand (`deploy/market-prices.example.csv`).
+
 ## 2026-11-09 — fun features (`Aion:Fun`, docs/friends-server/FUN.md)
 - **Field bosses**: the 13 open-world field bosses respawn after a random 60–90 minutes (59 named elites: 10–15 minutes) instead of every 30 s. Server-wide notices when a boss is defeated and when it is back. Everyone who fought it rolls its loot.
 - **Lucky drops**: equipment drops may come one grade up (Common/Rare → Epic, Epic → Unique) at 2% from normal monsters, 6% from elites and 12% from named elites and bosses. Looted gear may arrive enchanted (20% +1..+3, 4% +4..+6, 0.5% +7..max).

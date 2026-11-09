@@ -96,6 +96,13 @@ var bots = (builder.Configuration.GetSection("Aion:Bots").Get<Aion.World.BotOpti
 // Friends-server extras (OURS, docs/friends-server/FUN.md): Aion:Fun (FieldBosses with Boss/Named respawn windows,
 // BossAnnouncements, SharedBossLoot, BuffCommand/BuffMinutes/BuffSkills, HubCommand, DuelRestore). All on by default.
 var fun = (builder.Configuration.GetSection("Aion:Fun").Get<Aion.World.FunOptions>() ?? Aion.World.FunOptions.Default).Validated();
+// Market (OURS, docs/MARKET.md): Aion:Market (Enabled, ListingHours, SaleTaxPercent, CrossWorld, ...), Aion:Market:Seller and
+// Aion:Market:Buyer (the market bot). Needs the game database.
+var market = (builder.Configuration.GetSection("Aion:Market").Get<Aion.World.MarketOptions>() ?? new Aion.World.MarketOptions()).Validated();
+// Aion:Market:PriceFile: reference prices (docs/MARKET.md); a bad file stops the host here with the reason.
+var marketReferences = market.PriceFile is { Length: > 0 } priceFile ? Aion.World.MarketReferencePrices.Load(priceFile)
+    : market.BundledPrices ? Aion.World.MarketReferencePrices.Embedded()
+    : ((Dictionary<int, long> ById, Dictionary<string, long> ByName)?)null;
 
 builder.Services.AddSingleton(dungeonRules);
 if (native.LoginPort is not null || native.GamePort is not null)
@@ -140,10 +147,27 @@ if (native.LoginPort is not null || native.GamePort is not null)
         builder.Services.AddSingleton(new Aion.World.FunFeatures(fun));
         builder.Services.AddHostedService<Aion.Host.Native.FunNoticeService>();
     }
+    if (market.Enabled && native.GamePort is not null && !string.IsNullOrWhiteSpace(connectionString))
+    {
+        builder.Services.AddSingleton(market);
+        builder.Services.AddSingleton<Aion.Application.Market.IMarketStore, PostgresMarketStore>();
+        builder.Services.AddSingleton(provider => new Aion.World.MarketCommands(provider.GetRequiredService<Aion.Application.Market.IMarketStore>(), market,
+            Aion.World.MarketPricing.Embedded, provider.GetRequiredService<Aion.World.SharedWorld>()));
+        builder.Services.AddSingleton(provider =>
+        {
+            var world = provider.GetRequiredService<Aion.World.SharedWorld>();
+            var log = provider.GetRequiredService<ILoggerFactory>().CreateLogger("Aion.Market");
+            return new Aion.World.MarketBot(provider.GetRequiredService<Aion.Application.Market.IMarketStore>(), market, Aion.World.MarketPricing.Embedded,
+                mailed: (seller, post) => world.FindOnline(seller)?.Send(Aion.World.GameSession.PostReceived(post)),
+                log: message => log.LogInformation("{Message}", message), references: marketReferences);
+        });
+        builder.Services.AddHostedService<MarketBotService>();
+    }
     builder.Services.AddSingleton<IChatCommandHandler>(provider =>
         new Aion.World.GmCommands(provider.GetRequiredService<Aion.World.WorldPresence>(), provider.GetRequiredService<Aion.World.BuilderCommands>())
         {
             Bots = provider.GetService<Aion.World.PlayerBots>(),
+            Market = provider.GetService<Aion.World.MarketCommands>(),
             Fun = provider.GetService<Aion.World.FunFeatures>(),
             // "//report <text>" opens a ticket for the staff dashboard (accounts only).
             Report = provider.GetService<IStaffTools>() is { } staffTools ? async (sender, name, text, ct) =>
