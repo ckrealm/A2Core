@@ -61,6 +61,11 @@
 - **Daevanion boards** (`GameSession.Daevanion.cs`, `docs/DAEVANION.md`): each class's boards from the client's own tables (Brawler/Fighter included), nodes opened next to opened ones for Daevanion points, closed for Kinah, board reset, open all and open route; stats, skill levels and passives applied; per-character state in `character_settings`; point items (`GetDaevanionPoint`, `Fix_DaevanionPoint`). Config `Aion:Daevanion:*` (PointRate, ExtraPoints, FreeReset, MaxBoardLevel, DisabledBoards, LevelPoints). 20 checks + 3 Python tests.
 - The board data (`tools/data/daevanion.json`) is a placeholder until `tools/daevanion_data.py` runs on a client export (needs the archive key from the running game).
 
+## 2026-11-09 — Dungeon waves and boss phases
+- **Waves tracked**: the Ludra raid's `StartWave`/`EndWave` bring and remove the client's own wave spawns (`{wave}_{n}`, dormant until started, parts in order, sent at the nearest player); `ClearWave` counts when the wave dies instead of after a 30 s timer. Ferocious Horn Den's totem wave is hand-made (Lycans around the totem). `ResetRebirthLimit`/`SetAbnormalVolumeState` are known no-ops; the `HpRemaining` condition reads HP.
+- **Boss phases** for 68 Season 1 bosses (`tools/boss_phases.py` → `tools/data/boss-phases.json`, OURS): telegraphed slams using each boss's own long-cast skill (hit everyone inside, dodge by walking out), adds at 70%, fury at 40%, enrage at 20%, and the hard modes' 4-minute frenzy (global's rule). Adds vanish on a wipe or the kill and never respawn.
+- Config `Aion:Bosses:*` (Phases, Frenzy, FrenzySeconds, DamageScale). 32 server checks, 6 data tests. See BOSSES.md.
+
 ## 2026-11-09 — Brawler (branch `claude/project-thread-zvu8x9`)
 - **Brawler class** (client class Fighter): kit rebuilt from the client's own SkillAcquireData (levels 1-25) plus the developer kit past 25 (OURS), Light/Dark profiles (OURS creation IDs 45/46, CANDIDATE pc_id 45-48), the Brawler's Fist as starter weapon, gauntlets for Brawlers only. Bots get the Brawler with its hand-made plan in a follow-up. Made by class change (`//ClassChange Fighter`); the creation screen can't offer it. Gauntlets scale with gear (OURS) since the client has only level-1 fists. Needs a live test of the character model: docs/friends-server/BRAWLER.md.
 

@@ -3219,6 +3219,181 @@ checks = 0;
 }
 Console.WriteLine($"{checks} dungeon checks passed (entry limits, entry levels, /dungeon, hard-mode revives, untracked objectives, boss area attacks).");
 
+// ---------- Boss phases and scripted waves (tools/data/bpBoss-phases.json, Aion:Bosses, OURS) ----------
+checks = 0;
+{
+    // The embedded bpTable: every Season 1 Expedition mode, the Transcendence dungeons and Ludra; bosses placed on their dungeon's map.
+    var bpTable = BossPhases.Embedded;
+    Check(bpTable.Count >= 60 && bpTable.Of(2320171) is { Role: "final", Frenzy.AfterMs: 240_000, Telegraph: { Skill: 1800140, WindUpMs: 8000 } }
+          && bpTable.Of(2300171) is { Role: "final", Frenzy: null } && bpTable.Of(2310171) is { Frenzy: null }
+          && bpTable.Of(2301014) is { Role: "raid_final", Telegraph.Radius: 900 } && bpTable.Of(2301006) is { Role: "raid" } && bpTable.Of(2301008) is null,
+          "Krao Cave Hard's boss slams with its own 8 s skill and frenzies at 4 minutes; Normal and Easy do not frenzy; Durbati and Lagta are scripted, the Orcus Gem is left to its script");
+    var misplaced = bpTable.All.Where(b => MapEventTables.Embedded.DungeonNamed(b.Script.Dungeon) is not { } room || data.NpcPlaced(b.NpcId, room.Map) is null
+        || !MapEventTables.Embedded.Serves(room.Map)).Select(b => b.NpcId).ToList();
+    Check(misplaced.Count == 0, $"every scripted boss stands in its served dungeon ({string.Join(',', misplaced)})");
+    Check(bpTable.All.All(b => b.Script.Ordered.Select(p => p.At).SequenceEqual(b.Script.Ordered.Select(p => p.At).OrderByDescending(a => a)))
+          && bpTable.All.Where(b => b.Script.Role == "final").All(b => b.Script.Ordered.Any(p => p.Adds is not null)),
+          "phases run from high HP to low; every final boss calls adds");
+    Check(bpTable.Wave(600092, "FierceHornCave_Wave_01") is { Around: "M_PD_FierceHornCave_LycanTotem_01_001", Count: 3 } && bpTable.Wave(600091, "FierceHornCave_Wave_01") is null,
+          "Fierce Horn Den's totem wave is hand-made per map");
+    foreach (var bad in new[] { new BossOptions { FrenzySeconds = -1 }, new BossOptions { DamageScale = 0 } })
+    {
+        var bpRefused = false;
+        try { bad.Validated(); } catch (InvalidOperationException) { bpRefused = true; }
+        Check(bpRefused, "an invalid Aion:Bosses value stops the host at startup");
+    }
+
+    // A bpFight against a scripted bpBoss (NpcAi alone): the slam winds up, then bpHits everyone inside its radius, the victim too;
+    // stepping out dodges it; phases call bpAdds and raise damage; the frenzy comes on time; the bpAdds go when the bpBoss dies.
+    var slamSkill = 1220560;
+    var bpScript = new BossScript("Test_Boss", "KraoCave_Easy", "final", new BossTelegraph(slamSkill, 10_000, 2000, 500, 2.0, "slam!"),
+        [new BossPhase(70, "call", Adds: new BossAdds(2310102, 2), Notice: "help!"), new BossPhase(40, "enrage", Damage: 2.0, Haste: 0.5)],
+        new BossFrenzy(60_000, 3.0, 0.5, "frenzy!"));
+    var bpAggro = new AggroShape("Circle", 1000, 0, 0, 1000, "Upper");
+    var bpBoss = new Target { Key = 3001, Name = "Test_Boss", NpcId = 999, Hp = 10_000, HpMax = 10_000, Level = 7, Position = Vector3d.Zero, Aggressive = true,
+        WalkSpeed = 100, RunSpeed = 200, Radius = 120, Aggro = bpAggro, Skills = [slamSkill], SubType = "HeroMonster" };
+    var bpFightAi = new NpcAi(new Random(3), data) { Bosses = new BossPhases(new Dictionary<int, BossScript> { [999] = bpScript }), DefenseOf = _ => 0 };
+    var bpArena = new Dictionary<int, Target> { [bpBoss.Key] = bpBoss };
+    var bpPlayers = new List<(int Key, Vector3d Position)> { (100_001, new Vector3d(200, 0, 0)), (100_002, new Vector3d(300, 200, 0)), (100_003, new Vector3d(2500, 0, 0)) };
+    var bpHits = new List<(int Key, int Damage, long At)>();
+    var bpFightPackets = new List<byte[]>();
+    long bpClock = 0;
+    void Step(long until)
+    {
+        for (; bpClock <= until; bpClock += 50)
+            bpFightPackets.AddRange(bpFightAi.Tick(bpArena, bpPlayers, bpClock, (key, damage) => { bpHits.Add((key, damage, bpClock)); return []; }));
+    }
+    Step(100);
+    var bpFight = bpFightAi.FightOf(bpBoss);
+    Check(bpFight is { Reached: 0, Damage: 1.0 } && bpFight.NextSlamMs is > 0 and <= 5_100, "the pull starts the boss's fight; its first slam comes half an interval in");
+    Step(5_000);
+    var windingAt = bpClock;
+    while (bpFightAi.TelegraphArea(bpBoss) is null && bpClock < 8_000) Step(bpClock);
+    var bpDue = bpFightAi.TelegraphDueAt(bpBoss);
+    Check(bpFightAi.TelegraphArea(bpBoss) == 620 && bpDue is { } d && d - bpClock is > 2_000 and <= 2_650
+          && bpFightPackets.Any(b => b.SequenceEqual(GameSession.Notice("slam!", 22, "FF8040"))),
+          "the slam winds up (2 s wind-up plus the hit delay): its area is 5 m plus the boss's radius, the warning goes out");
+    Check(bpFightAi.WindingArea(bpBoss) == 620 && bpFightAi.SpecialDueAt(bpBoss) == bpDue && !bpFightAi.Interrupt(bpBoss, bpClock),
+          "the bots' WindingArea and SpecialDueAt report the slam; an interrupt skill does not break it");
+    bpHits.Clear();
+    Step(bpDue!.Value + 50);
+    var slamHits = bpHits.Where(h => h.At >= bpDue).ToList();
+    Check(slamHits.Select(h => h.Key).OrderBy(k => k).SequenceEqual([100_001, 100_002]) && slamHits.All(h => h.Damage is >= 90 and <= 110)
+          && bpFightAi.SlamsLanded == 1 && bpFight!.Slams == 1,
+          "the slam lands on the victim and the player 3.6 m away at twice a normal hit; the player 25 m away is not touched");
+    // Dodge: the victim steps 15 m away during the next wind-up.
+    while (bpFightAi.TelegraphArea(bpBoss) is null && bpClock < 30_000) Step(bpClock);
+    bpPlayers[0] = (100_001, new Vector3d(1500, 0, 0));
+    bpHits.Clear();
+    Step(bpFightAi.TelegraphDueAt(bpBoss)!.Value + 50);
+    Check(bpFight!.Slams == 2 && bpHits.Where(h => h.Key == 100_001).All(h => h.At < bpClock - 700) && bpHits.Any(h => h.Key == 100_002),
+          "a player who walked out of the radius during the wind-up is not hit; the one who stayed is");
+    // The Guard hook (blocks, a Dodge's i-frames) applies to slams: the player 100_002 evades this one.
+    bpFightAi.Guard = (key, damage, _, _) => key == 100_002 ? 0 : damage;
+    while (bpFightAi.TelegraphArea(bpBoss) is null && bpClock < 60_000) Step(bpClock);
+    bpHits.Clear();
+    Step(bpFightAi.TelegraphDueAt(bpBoss)!.Value + 50);
+    Check(bpHits.Any(h => h.Key == 100_001 && h.Damage > 0) && bpHits.Where(h => h.Key == 100_002).All(h => h.Damage == 0), "a guarded (dodged) slam does no damage");
+    bpFightAi.Guard = null;
+    // A stun during the wind-up breaks the slam; it comes again 4 s later instead of a whole interval.
+    while (bpFightAi.TelegraphArea(bpBoss) is null && bpClock < 80_000) Step(bpClock);
+    bpBoss.StunnedUntil = bpClock + 500;
+    Step(bpClock + 100);
+    Check(bpFightAi.TelegraphArea(bpBoss) is null && bpFight!.NextSlamMs - bpClock is > 3_000 and <= NpcAi.SlamRetryMs, "a stun breaks the wind-up and the slam is retried soon after");
+    bpBoss.StunnedUntil = 0;
+    bpPlayers[0] = (100_001, new Vector3d(200, 0, 0));
+    // Phases: 70 % bpCalls the bpAdds (the host places them), 40 % doubles the damage and halves the cooldowns.
+    bpBoss.Hp = 6_900;
+    Step(bpClock + 100);
+    var bpCalls = bpFightAi.TakeSummons();
+    Check(bpFight.Reached == 1 && bpCalls.Count == 1 && bpCalls[0].Adds is { Npc: 2310102, Count: 2 } && bpCalls[0].Fight == bpFight
+          && bpFightPackets.Any(b => b.SequenceEqual(GameSession.Notice("help!", 22, "FFB040"))), "70 %: the boss calls two adds and says so");
+    var bpAdds = Summons.Spawn(data, bpArena, 600002, 2310102, bpBoss.Position, 2, 500);
+    Check(bpAdds.Count == 2 && bpAdds.All(a => Summons.IsSummon(a.Key) && a.NpcId == 2310102 && a.Name.EndsWith(Summons.NameSuffix, StringComparison.Ordinal) && a.Hostile && !a.Dead && bpArena.ContainsKey(a.Key))
+          && bpAdds[0].Key + 1 == bpAdds[1].Key && Math.Abs(bpAdds[0].Position.X - bpBoss.Position.X - 500) < 1,
+          "Summons.Spawn copies the dungeon's monster (its placed spawn's template) around the boss with keys of their own");
+    bpFight.Adds.AddRange(bpAdds.Select(a => a.Key));
+    bpBoss.Hp = 3_000;
+    Step(bpClock + 100);
+    Check(bpFight.Reached == 2 && bpFight.Damage == 2.0 && bpFight.Haste == 0.5 && !bpFight.Frenzied, "40 %: double damage, half cooldowns");
+    Step(61_000);
+    Check(bpFight.Frenzied && bpFight.Damage == 6.0 && bpFight.Haste == 0.25 && bpFightPackets.Any(b => b.SequenceEqual(GameSession.Notice("frenzy!", 24, "FF4040"))),
+          "a minute in the frenzy triples the damage again, announced");
+    bpBoss.Hp = 0;
+    var bpDeath = bpFightAi.Tick(bpArena, bpPlayers, bpClock += 50, (_, _) => []);
+    Check(bpFightAi.FightOf(bpBoss) is null && bpAdds.All(a => a.Dead && a.CorpseRemoved) && bpAdds.All(a => bpDeath.Any(b => b.SequenceEqual(GamePackets.Death(a.Key, 7)))),
+          "the boss dies: its adds vanish (0x3642 flag 7) and the fight is over");
+    // Aion:Bosses:Phases false: no bpFight, the slam skill is an ordinary special again.
+    var bpCalm = new Target { Key = 3002, Name = "Test_Boss", NpcId = 999, Hp = 10_000, HpMax = 10_000, Level = 7, Position = Vector3d.Zero, Aggressive = true,
+        WalkSpeed = 100, RunSpeed = 200, Radius = 120, Aggro = bpAggro, Skills = [slamSkill], SubType = "HeroMonster" };
+    var offAi = new NpcAi(new Random(3), data) { Bosses = bpFightAi.Bosses, BossRules = new BossOptions { Phases = false }, DefenseOf = _ => 0 };
+    var calmMap = new Dictionary<int, Target> { [bpCalm.Key] = bpCalm };
+    for (long ms = 0; ms < 20_000; ms += 50) offAi.Tick(calmMap, bpPlayers, ms, (_, _) => []);
+    Check(offAi.FightOf(bpCalm) is null && offAi.TelegraphArea(bpCalm) is null && offAi.SlamsLanded == 0, "Aion:Bosses:Phases false: the boss fights as before");
+
+    // Scripted waves in the Ludra raid copy: the parts wait dormant from the load, come in order, and the clear reaches ClearWave.
+    var raider = new GameSession(data, new GameSessionOptions(), new Random(23));
+    await raider.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+    await raider.HandleAsync(new PacketWriter().U16(0x361b).String("Raider").U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
+    await raider.HandleAsync(select, Now);
+    await raider.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    var t0 = Now + 10_000;
+    Check(raider.EnterDungeonById(600082, t0).Count > 0, "the raid copy opens");
+    await raider.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t0 + 10);
+    IEnumerable<Target> Part(string name) => raider.Targets.Values.Where(x => x.Name == name);
+    const string W1 = "ReforgedAbyss_1PartyWave_01", W2 = "ReforgedAbyss_1PartyWave_02";
+    var raidHost = (IMapEventHost)raider;
+    Check(raider.MapId == 600082 && Part(W1 + "_1").Count() == 7 && Part(W1 + "_1").Concat(Part(W1 + "_2")).All(x => x.Dead && x.CorpseRemoved)
+          && Part("ReforgedAbyss_01_Wave_03_3").All(x => x.Dead) && raidHost.WaveKnown(W1) && !raidHost.WaveKnown("FierceHornCave_Wave_01"),
+          "Ludra's wave spawns wait dormant from the load (no 300 monsters standing in the raid); the waves are known");
+    var gateRun = raider.MapEventRuns.First(r => r.Name == "ReforgedAbyss_Normal_1PartyWave_MapEvent");
+    raidHost.StartWave(W1);
+    await raider.TickAsync(t0 + 100);
+    Check(Part(W1 + "_1").All(x => !x.Dead) && Part(W1 + "_2").All(x => x.Dead) && raider.RunningWaves.Contains(W1), "StartWave brings the first part only");
+    foreach (var x in Part(W1 + "_1")) x.Hp = 0;
+    await raider.TickAsync(t0 + 200);
+    Check(Part(W1 + "_2").All(x => !x.Dead) && !raider.ClearedWaves.Contains(W1), "the first part dead: the second comes");
+    foreach (var x in Part(W1 + "_2")) x.Hp = 0;
+    await raider.TickAsync(t0 + 300);
+    Check(raider.ClearedWaves.Contains(W1) && gateRun.Goals.Length > 1 && gateRun.Goals[1] == 1 && gateRun.FellBack == 0
+          && raider.MapEventNotes.Any(n => n == $"wave {W1} cleared"), "the last part dead: the wave is clear and the script's ClearWave objective counts, no timer");
+    raidHost.StartWave(W2);
+    await raider.TickAsync(t0 + 400);
+    await raider.TickAsync(t0 + 400 + GameSession.WavePartMs);
+    Check(Part(W2 + "_1").All(x => !x.Dead) && Part(W2 + "_2").All(x => !x.Dead) && Part(W2 + "_3").All(x => x.Dead),
+          $"a part still fighting after {GameSession.WavePartMs / 1000} s does not hold up the next");
+    raidHost.EndWave(W2);
+    await raider.TickAsync(t0 + 500 + GameSession.WavePartMs);
+    Check(Part(W2 + "_1").Concat(Part(W2 + "_2")).All(x => x.Dead && x.CorpseRemoved) && !raider.RunningWaves.Contains(W2), "EndWave takes the wave away");
+
+    // Fierce Horn Den's hand-made bpTotem wave: Lycans come around the bpTotem while it lives; dead bpTotem and bpAdds clear it.
+    var hunter = new GameSession(data, new GameSessionOptions(), new Random(24));
+    await hunter.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+    await hunter.HandleAsync(new PacketWriter().U16(0x361b).String("Hunter").U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
+    await hunter.HandleAsync(select, Now);
+    await hunter.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    Check(hunter.EnterDungeonById(600092, t0).Count > 0, "Ferocious Horn Den (Normal) opens");
+    await hunter.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t0 + 10);
+    var huntHost = (IMapEventHost)hunter;
+    const string Totem = "M_PD_FierceHornCave_LycanTotem_01_001";
+    huntHost.Spawn(Totem, 0);
+    Check(huntHost.WaveKnown("FierceHornCave_Wave_01"), "the totem wave is known (hand-made)");
+    huntHost.StartWave("FierceHornCave_Wave_01");
+    await hunter.TickAsync(t0 + 100);
+    var bpLycans = hunter.Targets.Values.Where(x => Summons.IsSummon(x.Key)).ToList();
+    var bpTotem = hunter.Targets.Values.First(x => x.Name == Totem);
+    Check(bpLycans.Count == 3 && bpLycans.All(x => !x.Dead && x.NpcId == 2300902 && Math.Sqrt(x.Position.DistanceSquared(bpTotem.Position)) is > 590 and < 610),
+          "three Lycans come around the totem");
+    await hunter.TickAsync(t0 + 100 + 15_000);
+    Check(hunter.Targets.Values.Count(x => Summons.IsSummon(x.Key)) == 6, "15 s later three more");
+    foreach (var x in hunter.Targets.Values.Where(x => Summons.IsSummon(x.Key) || x.Name == Totem)) x.Hp = 0;
+    await hunter.TickAsync(t0 + 100 + 15_100);
+    Check(hunter.ClearedWaves.Contains("FierceHornCave_Wave_01"), "totem and Lycans dead: the wave is clear");
+    await hunter.TickAsync(t0 + 100 + 15_100 + 600_000);
+    Check(hunter.Targets.Values.Where(x => Summons.IsSummon(x.Key)).All(x => x.Dead), "summoned monsters never respawn");
+}
+Console.WriteLine($"{checks} boss checks passed (phases, slams, adds, frenzy, waves).");
+
 // ---------- Playerbots (docs/PLAYERBOTS.md): sessions without a connection, driven by BotBrain ----------
 checks = 0;
 {
