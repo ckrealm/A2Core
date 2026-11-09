@@ -3113,7 +3113,7 @@ checks = 0;
     var botPresence = new WorldPresence();
     var bots = new PlayerBots(data, botOptions, botWorld, presence: botPresence);
     Check(BotRotations.Embedded.For("Gladiator") is { Range: > 0, Rotation.Length: > 2 } glad && glad.Rotation[^1].Skill == 11020000
-          && BotRotations.Embedded.Classes.Count == 8, "bot-rotations.json is embedded: every playable class, the filler last");
+          && BotRotations.Embedded.Classes.Count == 9, "bot-rotations.json is embedded: every playable class, the filler last");
     Check((await bots.CommandAsync(leader, "add Leader", t, default)).Contains("yourself") && (await bots.CommandAsync(leader, "add Nobody", t, default)).Contains("not one of your characters"),
           "a bot is one of the summoner's other characters");
     Check(await bots.CommandAsync(leader, "add Alt", t, default) == "Summoning Alt." && bots.All.Single().State == PlayerBot.Phase.Pending, "//bot add queues the character");
@@ -3444,6 +3444,8 @@ checks = 0;
           && rots.For("Assassin")!.Position == "behind" && rots.For("Templar")!.Position == "front"
           && rots.For("Cleric")!.RangeFor("heal") == 1500 && rots.For("Cleric")!.RangeFor("dps") == 1800,
           "bot-rotations.json: every class but the Cleric has an interrupt; positions and role ranges load");
+    Check(GameSession.IsDodge(19000100) && GameSession.IsDodge(11000100) && !GameSession.IsDodge(19010000) && rots.For("Fighter") is { Range: 250 },
+          "the Brawler's own Dodge counts as a dodge; its rotation loads");
     var rotWorld = new SharedWorld(data, seed: 41);
     var rotOptions = new GameSessionOptions { World = rotWorld, TrainingDummy = true, CharacterLevel = 20 };
     long t = Now + 5_000_000;
@@ -3663,9 +3665,13 @@ checks = 0;
         .OrderBy(x => Apart3(x.a.Position, lead.WorldPosition!.Value)).First();
     await Go(pair.a);
     await Run(60);
+    // Both sturdy and side by side, so the pack lasts and stays inside one area whatever ran before this check.
+    (pair.a.Hp, pair.b.Hp) = (Sturdy, Sturdy);
+    pair.b.Position = pair.a.Position with { X = pair.a.Position.X + 100 };
     rai.ForceAggro(pair.a, lead.PlayerKey, t);
     rai.ForceAggro(pair.b, lead.PlayerKey, t);
     await Run(600, () => team.All.Any(b => b.Brain!.AreaCasts > 0));
+    (pair.a.Hp, pair.b.Hp) = (Math.Min(pair.a.Hp, pair.a.HpMax), Math.Min(pair.b.Hp, pair.b.HpMax));
     Check(team.All.Any(b => b.Brain!.AreaCasts > 0), "with two monsters on the group a melee bot casts an area skill around itself");
     // Blocks and evasions (GameSession.GuardHit) with fixed rolls: under the class's evasion chance evades, under the gear's
     // block chance blocks (half), above both lands whole; a block opens the after-block skill (Debilitating Smash).

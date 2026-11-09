@@ -2229,8 +2229,8 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
     /// <summary>OURS: a dodge (CombatDodge / NormalDodge) evades every monster hit that lands within this long of its start.</summary>
     public const int DodgeEvadeMs = DodgeAbnormalMs + DodgeAbnormalOffMs;
     long dodgingUntil;
-    /// <summary>A class's own Dodge (Skill.dat "Dodge", class base + 100: 11000100 Gladiator ... 18000100 Chanter) or NormalDodge.</summary>
-    public static bool IsDodge(int skill) => skill == NormalDodge || skill % 1_000_000 == 100 && skill / 1_000_000 is >= 11 and <= 18;
+    /// <summary>A class's own Dodge (Skill.dat "Dodge", class base + 100: 11000100 Gladiator ... 18000100 Chanter, 19000100 Brawler) or NormalDodge.</summary>
+    public static bool IsDodge(int skill) => skill == NormalDodge || skill % 1_000_000 == 100 && skill / 1_000_000 is >= 11 and <= 19;
     /// <summary>When this player last blocked, evaded or dodged (the bots' after-block/evasion/dodge skills).</summary>
     public long LastBlockAt { get; private set; } = long.MinValue / 2;
     public long LastEvadeAt { get; private set; } = long.MinValue / 2;

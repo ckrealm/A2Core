@@ -39,20 +39,22 @@ PROGRESSION = ROOT / 'tools/data/progression.json'
 OUT = ROOT / 'tools/data/bot-rotations.json'
 
 # Bot playable classes (Novice/Test/Tutorial are not player classes).
-CLASSES = ('Gladiator', 'Templar', 'Assassin', 'Cleric', 'Ranger', 'Elementalist', 'Sorcerer', 'Chanter')
+CLASSES = ('Gladiator', 'Templar', 'Assassin', 'Cleric', 'Ranger', 'Elementalist', 'Sorcerer', 'Chanter', 'Fighter')
 # OURS: how close the bot stands to its target before it casts (cm). Melee weapons close in (4 m
 # skills), ranged ones keep their distance (20 m skills, the bot stands at 18 m).
 RANGE = {'Greatsword': 300, 'Sword': 300, 'Dagger': 250, 'Mace': 300, 'Staff': 300,
-         'Bow': 1800, 'Orb': 1800, 'Magicbook': 1800}
+         'Bow': 1800, 'Orb': 1800, 'Magicbook': 1800, 'Gauntlet': 250}
 # The Cleric fights with 20 m spells although it holds a mace; a heal Cleric stands a little closer to its group.
 CLASS_RANGE = {'Cleric': 1800}
 ROLE_RANGES = {'Cleric': {'heal': 1500}}
 # Where a melee bot stands: "behind" works from the monster's back while it attacks someone else.
 POSITION = {'Gladiator': 'behind', 'Templar': 'front', 'Assassin': 'behind', 'Chanter': 'behind',
-            'Cleric': 'ranged', 'Ranger': 'ranged', 'Elementalist': 'ranged', 'Sorcerer': 'ranged'}
+            'Cleric': 'ranged', 'Ranger': 'ranged', 'Elementalist': 'ranged', 'Sorcerer': 'ranged',
+            'Fighter': 'behind'}
 # OURS: roles each class may take (mod-playerbots style); the first is a new bot's role.
 ROLES = {'Gladiator': ['dps', 'tank'], 'Templar': ['tank', 'dps'], 'Assassin': ['dps'], 'Ranger': ['dps'],
-         'Elementalist': ['dps'], 'Sorcerer': ['dps'], 'Cleric': ['heal', 'dps'], 'Chanter': ['heal', 'dps']}
+         'Elementalist': ['dps'], 'Sorcerer': ['dps'], 'Cleric': ['heal', 'dps'], 'Chanter': ['heal', 'dps'],
+         'Fighter': ['dps', 'tank']}
 # OURS: the support entries made from a skill-effects.json entry, by (its target, its effect type).
 # Each is (when, roles): roles 'heal' keeps the entry to heal bots, 'other' to the class's other
 # roles, None to every role. Percentages are of the chosen target's HP. A buff whose duration is
@@ -236,6 +238,22 @@ PLAN = {
         E(18010000, area='self', enemies_at_least=PACK, filler=True),      # Onslaught on a pack
         E(18040000, self_mp_above=60, filler=True),
         E(18010000, filler=True),                                          # Onslaught: restores MP
+    ],
+    # The Brawler (client class "Fighter", Korea-only; docs/friends-server/BRAWLER.md). The client has no English names
+    # ("???"), so the order is by unlock level and cooldown (OURS): 19420000 (level 4, 10 s) is taken as the stun that
+    # interrupts, the 20-30 s skills as cooldowns, 19040000 (self-centred, 3 hits) as the pack filler.
+    'Fighter': [
+        E(19420000, target_casting=True),                                  # the interrupt (OURS stun)
+        E(19160000, target_elite=True),                                    # 30 s: on elites and bosses
+        E(19070000),                                                       # 20 s cooldowns
+        E(19230000),
+        E(19090000),                                                       # 15 s
+        E(19170000),                                                       # 10 s
+        E(19200000),
+        E(19420000, target_boss=False),                                    # the stun on cooldown (kept for a boss's casts)
+        E(19040000, area='self', enemies_at_least=PACK, filler=True),      # self-centred 3 hits on a pack
+        E(19250000, filler=True),                                          # 4 hits
+        E(19010000, filler=True),                                          # 3 hits
     ],
 }
 
