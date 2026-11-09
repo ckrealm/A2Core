@@ -2423,7 +2423,15 @@ presence.Enter("Player1", game, null);
 presence.Enter("Visitor", stored, null);
 Check((await gm.HandleAsync(chatter, "player1", "//help", default)).StartsWith("Builder commands"), "configured development GM");
 Check((await gm.HandleAsync(chatter, "[GM] Player1", "//help", default)).StartsWith("Builder commands"), "chat under the displayed name finds the character");
-Check(await gm.HandleAsync(chatter, "Visitor", "//help", default) == "Commands: //report <text> sends a report to the staff.", "players get the report command as help");
+Check(await gm.HandleAsync(chatter, "Visitor", "//help", default) == "Commands: /report <text> sends a report to the staff. " + GameSession.DungeonHelp, "players get the report and dungeon commands as help");
+async Task<string> ChatOnLoop(GameSession loop, string name, string line)
+{
+    var pending = gm.HandleAsync(chatter, name, line, default);
+    for (var i = 0; i < 50 && !pending.IsCompleted; i++) { await Task.Delay(10); await loop.TickAsync(Now); }
+    return await pending;
+}
+Check((await ChatOnLoop(stored, "Visitor", "/dungeon")).StartsWith("Dungeons (/dungeon") && await ChatOnLoop(stored, "Visitor", "//dungeon help") == GameSession.DungeonHelp,
+      "/dungeon (and //dungeon) reach the player's dungeon command on its game loop");
 Check(await gm.HandleAsync(chatter, "Visitor", "//report the bridge is broken", default) == "Reports are not available on this server.", "no reports without staff tools");
 var reports = new List<string>();
 var reporting = new GmCommands(presence, builder) { Report = (_, name, text, _) => { reports.Add(name + ":" + text); return Task.FromResult("sent"); } };
@@ -2431,7 +2439,10 @@ Check(await reporting.HandleAsync(chatter, "[GM] Visitor", "//report  the bridge
     "//report from any player (no world entry needed) carries the stored name and the text");
 Check((await reporting.HandleAsync(chatter, "Visitor", "//report x", default)).StartsWith("Write what happened") && reports.Count == 1, "a report needs some text");
 Check((await Gm(stored, "Visitor", "//SetInvisible true")).Reply == "GM permission required.", "others are denied commands");
-Check(await gm.HandleAsync(chatter, "Player1", "/dance", default) == "Unknown command. Use //help." && await gm.HandleAsync(chatter, "Player1", "/gm help", default) == "Unknown command. Use //help.", "only // reaches the builder commands");
+Check(await gm.HandleAsync(chatter, "Player1", "/dance", default) == "Unknown command. Use /help." && await gm.HandleAsync(chatter, "Player1", "/gm help", default) == "Unknown command. Use /help."
+      && await gm.HandleAsync(chatter, "Player1", "/SetInvisible true", default) == "Unknown command. Use /help.", "only // reaches the builder commands");
+Check(await gm.HandleAsync(chatter, "Visitor", "/help", default) == "Commands: /report <text> sends a report to the staff. " + GameSession.DungeonHelp
+      && await gm.HandleAsync(chatter, "Visitor", "/report the bridge is broken", default) == "Reports are not available on this server.", "player commands work with one slash");
 var hidden = await Gm(game, "Player1", "//SetInvisible true");
 Check(hidden.Reply == "Invisible." && hidden.Packets.Any(b => b.SequenceEqual(new byte[] { 0x4d, 0x36, 1 })) && game.Invisible, "SetInvisible true sends 0x364d true; NPCs stop seeing the GM");
 Check((await Gm(game, "Player1", "//setinvisible false")).Packets.Any(b => b.SequenceEqual(new byte[] { 0x4d, 0x36, 0 })), "names are case-insensitive; false sends 0x364d false");
@@ -3055,6 +3066,132 @@ checks = 0;
     Check(await Run(follower, 600002, noon + 50) && follower.DungeonEntriesToday(noon + 60)[600002] == 1, "back into the same copy: free, not counted again");
     leader.ExitSharedWorld(); follower.ExitSharedWorld();
 
+    // Entry levels (Aion:Dungeons:LevelGates, KoreaOnly): the client's placeholder 99 becomes global's level, Korea-only content is closed.
+    {
+        var tables = MapEventTables.Embedded;
+        var kraoHard = tables.Dungeon(600004)!; var daily = tables.Dungeon(900003)!; var fafnite = tables.Dungeon(610070)!; var arkanis = tables.Dungeon(600061)!;
+        var rules = DungeonOptions.Default;
+        Check(rules.MinLevelOf(kraoHard) == 45 && rules.MinLevelOf(arkanis) == 45 && rules.MinLevelOf(daily) == 30 && rules.MinLevelOf(kraoEasy) == 20
+              && rules.MinLevelOf(tables.Dungeon(910015)!) == 45 && rules.MinLevelOf(tables.Dungeon(600082)!) == 45,
+              "global gates: hard modes, Transcendence, Insane trials and Ludra at 45, daily dungeons at 30, real client levels kept");
+        Check((rules with { LevelGates = "client" }).MinLevelOf(kraoHard) == 99, "LevelGates=client keeps the client's 99");
+        Check(!rules.IsOpen(fafnite) && !rules.IsOpen(tables.Dungeon(620021)!) && rules.IsOpen(kraoHard) && DungeonOptions.IsKoreaOnly(tables.Dungeon(600151)!)
+              && (rules with { KoreaOnly = true }).IsOpen(fafnite) && (rules with { KoreaOnly = true, KoreaOnlyLevel = 50 }).MinLevelOf(fafnite) == 50,
+              "Korea-only dungeons and raids are closed by default; KoreaOnly opens them at KoreaOnlyLevel");
+        Check(DungeonOptions.IsHardMode(kraoHard) && DungeonOptions.IsHardMode(tables.Dungeon(610044)!) && !DungeonOptions.IsHardMode(kraoEasy) && !DungeonOptions.IsHardMode(arkanis),
+              "the hard modes are the Party rows named *_Hard");
+        Check(DungeonChoices.All.All(c => c.Modes.All(m => tables.Dungeon(m.Id) is not null)) && DungeonChoices.All.Count(c => c.Kind == "Expedition" && c.Modes.Any(m => rules.IsOpen(tables.Dungeon(m.Id)!))) == 6
+              && DungeonChoices.All.SelectMany(c => c.Modes).Select(m => m.Id).Distinct().Count() == DungeonChoices.All.Sum(c => c.Modes.Count),
+              "every /dungeon choice is a known dungeon, once; six Expeditions are open as on global");
+        foreach (var bad in new[] { rules with { LevelGates = "korea" }, rules with { GlobalLevel = 0 }, rules with { KoreaOnlyLevel = 100 }, rules with { HardModeRevives = -1 } })
+        {
+            var gateRefused = false;
+            try { bad.Validated(DungeonOptions.KnownDungeon); } catch (InvalidOperationException) { gateRefused = true; }
+            Check(gateRefused, "an invalid entry-level setting stops the host");
+        }
+        async Task<GameSession> AtLevel(DungeonOptions dungeons, string name, int lvl) =>
+            await Adventurer(dungeons, name, new FakeStore(), s => s.States[0] = s.States[0] with { Progress = s.States[0].Progress with { Level = lvl } });
+        var low = await AtLevel(rules, "Lowbie", 29);
+        Check(low.EnterDungeonById(900003, noon).Count == 0 && low.MapEventNotes.Any(n => n.Contains("Dungeon_Daily_0002: entry refused (level 29 < 30)")), "a level 29 is refused from a daily dungeon (30)");
+        low.NpcHitsPlayer(1, noon + 5);
+        Check(low.InCombat && low.DungeonCommand("daily3", noon + 6).Reply == "Not while in combat.", "/dungeon is no escape from a fight");
+        var thirty = await AtLevel(rules, "Thirty", 30);
+        Check(await Run(thirty, 900003, noon), "level 30 enters the daily dungeon the client marks 99");
+        var korea = await AtLevel(rules, "Capped45", 45);
+        Check(korea.EnterDungeonById(610070, noon).Count == 0 && korea.MapEventNotes.Any(n => n.Contains("FafniteGully_G_01: entry refused (Korea-only")), "Korea-only content refused by default");
+        var koreaOpen = await AtLevel(rules with { KoreaOnly = true }, "Korean", 45);
+        Check(await Run(koreaOpen, 610070, noon), "KoreaOnly=true: enterReply at 45");
+        var clientGates = await AtLevel(rules with { LevelGates = "client" }, "Strict", 45);
+        Check(clientGates.EnterDungeonById(900003, noon).Count == 0, "LevelGates=client: still 99");
+
+        // /dungeon: the list, an entry at a difficulty, the refusals with reasons.
+        var dungeonList = thirty.DungeonCommand("", noon + 100).Reply;
+        Check(dungeonList.Contains("krao (easy/normal/hard") && dungeonList.Contains("ludra") && dungeonList.Contains("trial6") && !dungeonList.Contains("dramata") && dungeonList.Contains("Korea-only dungeons are closed"),
+              "/dungeon lists global's dungeons with their difficulties, not the Korea-only ones");
+        Check(thirty.DungeonCommand("dramata hard", noon + 200).Reply.Contains("Korea-only") && thirty.DungeonCommand("krao hard", noon + 300).Reply.Contains("level 30 < 45")
+              && thirty.DungeonCommand("krao insane", noon + 400).Reply == "Krao Cave has easy, normal, hard." && thirty.DungeonCommand("nowhere", noon + 500).Reply.StartsWith("No dungeon called nowhere"),
+              "/dungeon refuses with the reason: Korea-only, level, unknown difficulty or name");
+        Check(thirty.DungeonCommand("krao easy", noon + 550).Reply == "Krao Cave (easy): item level 0 < 200.", "the item level gate stays the client's");
+        var (enterReply, enterPackets) = thirty.DungeonCommand("daily3", noon + 600);
+        Check(enterReply == "Entering Daily dungeon 3 (normal)." && enterPackets.Count > 0 && thirty.InstanceKey != 0
+              && thirty.DungeonCommand("daily1", noon + 700).Reply == "Leave this dungeon first.", "/dungeon daily3 moves the player; inside, another /dungeon waits");
+    }
+
+    // Hard-mode revives (Aion:Dungeons:HardModeRevives, global 3): the fourth death's revive puts the player outside.
+    {
+        var diver = await Adventurer(DungeonOptions.Default with { Zone = TimeZoneInfo.Utc }, "Diver");
+        diver.EnterDungeonById(600004, noon);
+        await diver.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), noon + 10);
+        var insideHard = diver.InstanceKey != 0;
+        var stillInside = true;
+        for (var dying = 1; dying <= 3; dying++)
+        {
+            var died = diver.NpcHitsPlayer(diver.Resource.HpMax * 10, noon + dying * 10_000, killerKey: 2001);
+            await diver.HandleAsync(new PacketWriter().U16(0x8d22).U8(2).I64(0).ToArray(), noon + dying * 10_000 + 100);
+            await diver.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), noon + dying * 10_000 + 200);
+            stillInside &= died.Count > 0 && diver.InstanceKey != 0 && !diver.Dead;
+        }
+        var lastDeath = diver.NpcHitsPlayer(diver.Resource.HpMax * 10, noon + 50_000, killerKey: 2001);
+        Check(insideHard && stillInside && lastDeath.Any(b => b.SequenceEqual(GameSession.Notice("No revives left: you will leave the dungeon when you revive.", color: "FF6060"))),
+              "three deaths in a hard mode revive inside; the fourth warns that no revives are left");
+        diver.StaffRestore(noon + 50_050);
+        Check(!diver.Dead && diver.InstanceKey != 0, "a resurrection in place (staff, a Cleric, a rebirth) keeps the player in, even out of revives");
+        diver.NpcHitsPlayer(diver.Resource.HpMax * 10, noon + 50_080, killerKey: 2001);
+        await diver.HandleAsync(new PacketWriter().U16(0x8d22).U8(2).I64(0).ToArray(), noon + 50_100);
+        await diver.TickAsync(noon + 50_150);
+        await diver.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), noon + 50_200);
+        Check(!diver.Dead && diver.InstanceKey == 0, "the revive after the fourth death is outside the dungeon");
+        var easyDiver = await Adventurer(DungeonOptions.Default with { Zone = TimeZoneInfo.Utc }, "EasyDiver");
+        easyDiver.EnterDungeonById(600002, noon);
+        await easyDiver.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), noon + 10);
+        for (var dying = 1; dying <= 5; dying++)
+        {
+            easyDiver.NpcHitsPlayer(easyDiver.Resource.HpMax * 10, noon + dying * 10_000, killerKey: 2001);
+            await easyDiver.HandleAsync(new PacketWriter().U16(0x8d22).U8(2).I64(0).ToArray(), noon + dying * 10_000 + 100);
+            await easyDiver.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), noon + dying * 10_000 + 200);
+        }
+        Check(easyDiver.InstanceKey != 0 && !easyDiver.Dead, "no revive limit outside the hard modes");
+
+        // Out of revives, a party member's copy can't be rejoined (counted per character, not per login).
+        // The playerbot block's area-skill fight later in this file turns out differently when the host-wide map-event run id
+        // counter has moved further, so this block puts it back (the bot check depends on run order, not on this change).
+        var idField = typeof(GameSession).GetField("nextMapEventId", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        var savedId = idField.GetValue(null);
+        var reviveWorld = new SharedWorld(data);
+        async Task<GameSession> Raider(string name)
+        {
+            var session = new GameSession(data, new GameSessionOptions { World = reviveWorld, Dungeons = DungeonOptions.Default }, new Random(23));
+            await session.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+            await session.HandleAsync(new PacketWriter().U16(0x361b).String(name).U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
+            await session.HandleAsync(select, Now);
+            await session.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+            return session;
+        }
+        var tank = await Raider("Tank");
+        var dps = await Raider("Dps");
+        await tank.HandleAsync(SocialRequests.EncodeServerAndName(SocialOpcodes.PartyInviteRq, 1204, dps.CharacterName!), noon);
+        var raidInvite = (await dps.TickAsync(noon + 1)).Single(b => (b[0] | b[1] << 8) == SocialOpcodes.PartyInviteNt);
+        await dps.HandleAsync(SocialRequests.EncodePartyInviteResponse([new PartyInviteReply(BitConverter.ToInt64(raidInvite, 2), PartyInviteAnswer.Accept)]), noon + 2);
+        await tank.TickAsync(noon + 3);
+        tank.EnterDungeonById(600004, noon + 10);
+        await tank.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), noon + 20);
+        dps.EnterDungeonById(600004, noon + 30);
+        await dps.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), noon + 40);
+        var sameCopy = dps.InstanceKey != 0 && dps.InstanceKey == tank.InstanceKey;
+        for (var dying = 1; dying <= 4; dying++)
+        {
+            dps.NpcHitsPlayer(dps.Resource.HpMax * 10, noon + dying * 10_000, killerKey: 2001);
+            await dps.HandleAsync(new PacketWriter().U16(0x8d22).U8(2).I64(0).ToArray(), noon + dying * 10_000 + 100);
+            await dps.TickAsync(noon + dying * 10_000 + 150);
+            await dps.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), noon + dying * 10_000 + 200);
+        }
+        Check(sameCopy && dps.InstanceKey == 0 && tank.InstanceKey != 0, "the member out of revives is put out; the party stays in");
+        Check(dps.EnterDungeonById(600004, noon + 60_000).Count == 0 && dps.MapEventNotes.Any(n => n.Contains("KraoCave_Hard: entry refused (no revives left in this copy)")),
+              "and can't rejoin that copy for a fresh life");
+        tank.ExitSharedWorld(); dps.ExitSharedWorld();
+        idField.SetValue(null, savedId);
+    }
+
     // Boss area attacks (tools/data/boss-area-skills.json, OURS): the expeditions' final bosses; their basic attack stays single-target.
     var areas = BossAreaSkills.Embedded;
     var finalBossSkills = data.NpcFromTemplate(2320171, "boss", [0, 0, 0], 0)!.Skills!.Where(id => data.NpcSkill(id) is not null).ToList();
@@ -3089,7 +3226,182 @@ checks = 0;
     var (capHits, _) = Fight(new BossAreaSkills(new Dictionary<int, BossAreaSkill> { [999] = new(5000, 2, [1220560]) }), 999);
     Check(capHits.Select(h => h.Key).OrderBy(k => k).SequenceEqual([100_001, 100_002]), "max_targets caps the players one hit reaches (2: the victim and the nearest)");
 }
-Console.WriteLine($"{checks} dungeon checks passed (entry limits, untracked objectives, boss area attacks).");
+Console.WriteLine($"{checks} dungeon checks passed (entry limits, entry levels, /dungeon, hard-mode revives, untracked objectives, boss area attacks).");
+
+// ---------- Boss phases and scripted waves (tools/data/bpBoss-phases.json, Aion:Bosses, OURS) ----------
+checks = 0;
+{
+    // The embedded bpTable: every Season 1 Expedition mode, the Transcendence dungeons and Ludra; bosses placed on their dungeon's map.
+    var bpTable = BossPhases.Embedded;
+    Check(bpTable.Count >= 60 && bpTable.Of(2320171) is { Role: "final", Frenzy.AfterMs: 240_000, Telegraph: { Skill: 1800140, WindUpMs: 8000 } }
+          && bpTable.Of(2300171) is { Role: "final", Frenzy: null } && bpTable.Of(2310171) is { Frenzy: null }
+          && bpTable.Of(2301014) is { Role: "raid_final", Telegraph.Radius: 900 } && bpTable.Of(2301006) is { Role: "raid" } && bpTable.Of(2301008) is null,
+          "Krao Cave Hard's boss slams with its own 8 s skill and frenzies at 4 minutes; Normal and Easy do not frenzy; Durbati and Lagta are scripted, the Orcus Gem is left to its script");
+    var misplaced = bpTable.All.Where(b => MapEventTables.Embedded.DungeonNamed(b.Script.Dungeon) is not { } room || data.NpcPlaced(b.NpcId, room.Map) is null
+        || !MapEventTables.Embedded.Serves(room.Map)).Select(b => b.NpcId).ToList();
+    Check(misplaced.Count == 0, $"every scripted boss stands in its served dungeon ({string.Join(',', misplaced)})");
+    Check(bpTable.All.All(b => b.Script.Ordered.Select(p => p.At).SequenceEqual(b.Script.Ordered.Select(p => p.At).OrderByDescending(a => a)))
+          && bpTable.All.Where(b => b.Script.Role == "final").All(b => b.Script.Ordered.Any(p => p.Adds is not null)),
+          "phases run from high HP to low; every final boss calls adds");
+    Check(bpTable.Wave(600092, "FierceHornCave_Wave_01") is { Around: "M_PD_FierceHornCave_LycanTotem_01_001", Count: 3 } && bpTable.Wave(600091, "FierceHornCave_Wave_01") is null,
+          "Fierce Horn Den's totem wave is hand-made per map");
+    foreach (var bad in new[] { new BossOptions { FrenzySeconds = -1 }, new BossOptions { DamageScale = 0 } })
+    {
+        var bpRefused = false;
+        try { bad.Validated(); } catch (InvalidOperationException) { bpRefused = true; }
+        Check(bpRefused, "an invalid Aion:Bosses value stops the host at startup");
+    }
+
+    // A bpFight against a scripted bpBoss (NpcAi alone): the slam winds up, then bpHits everyone inside its radius, the victim too;
+    // stepping out dodges it; phases call bpAdds and raise damage; the frenzy comes on time; the bpAdds go when the bpBoss dies.
+    var slamSkill = 1220560;
+    var bpScript = new BossScript("Test_Boss", "KraoCave_Easy", "final", new BossTelegraph(slamSkill, 10_000, 2000, 500, 2.0, "slam!"),
+        [new BossPhase(70, "call", Adds: new BossAdds(2310102, 2), Notice: "help!"), new BossPhase(40, "enrage", Damage: 2.0, Haste: 0.5)],
+        new BossFrenzy(60_000, 3.0, 0.5, "frenzy!"));
+    var bpAggro = new AggroShape("Circle", 1000, 0, 0, 1000, "Upper");
+    var bpBoss = new Target { Key = 3001, Name = "Test_Boss", NpcId = 999, Hp = 10_000, HpMax = 10_000, Level = 7, Position = Vector3d.Zero, Aggressive = true,
+        WalkSpeed = 100, RunSpeed = 200, Radius = 120, Aggro = bpAggro, Skills = [slamSkill], SubType = "HeroMonster" };
+    var bpFightAi = new NpcAi(new Random(3), data) { Bosses = new BossPhases(new Dictionary<int, BossScript> { [999] = bpScript }), DefenseOf = _ => 0 };
+    var bpArena = new Dictionary<int, Target> { [bpBoss.Key] = bpBoss };
+    var bpPlayers = new List<(int Key, Vector3d Position)> { (100_001, new Vector3d(200, 0, 0)), (100_002, new Vector3d(300, 200, 0)), (100_003, new Vector3d(2500, 0, 0)) };
+    var bpHits = new List<(int Key, int Damage, long At)>();
+    var bpFightPackets = new List<byte[]>();
+    long bpClock = 0;
+    void Step(long until)
+    {
+        for (; bpClock <= until; bpClock += 50)
+            bpFightPackets.AddRange(bpFightAi.Tick(bpArena, bpPlayers, bpClock, (key, damage) => { bpHits.Add((key, damage, bpClock)); return []; }));
+    }
+    Step(100);
+    var bpFight = bpFightAi.FightOf(bpBoss);
+    Check(bpFight is { Reached: 0, Damage: 1.0 } && bpFight.NextSlamMs is > 0 and <= 5_100, "the pull starts the boss's fight; its first slam comes half an interval in");
+    Step(5_000);
+    var windingAt = bpClock;
+    while (bpFightAi.TelegraphArea(bpBoss) is null && bpClock < 8_000) Step(bpClock);
+    var bpDue = bpFightAi.TelegraphDueAt(bpBoss);
+    Check(bpFightAi.TelegraphArea(bpBoss) == 620 && bpDue is { } d && d - bpClock is > 2_000 and <= 2_650
+          && bpFightPackets.Any(b => b.SequenceEqual(GameSession.Notice("slam!", 22, "FF8040"))),
+          "the slam winds up (2 s wind-up plus the hit delay): its area is 5 m plus the boss's radius, the warning goes out");
+    Check(bpFightAi.WindingArea(bpBoss) == 620 && bpFightAi.SpecialDueAt(bpBoss) == bpDue && !bpFightAi.Interrupt(bpBoss, bpClock),
+          "the bots' WindingArea and SpecialDueAt report the slam; an interrupt skill does not break it");
+    bpHits.Clear();
+    Step(bpDue!.Value + 50);
+    var slamHits = bpHits.Where(h => h.At >= bpDue).ToList();
+    Check(slamHits.Select(h => h.Key).OrderBy(k => k).SequenceEqual([100_001, 100_002]) && slamHits.All(h => h.Damage is >= 90 and <= 110)
+          && bpFightAi.SlamsLanded == 1 && bpFight!.Slams == 1,
+          "the slam lands on the victim and the player 3.6 m away at twice a normal hit; the player 25 m away is not touched");
+    // Dodge: the victim steps 15 m away during the next wind-up.
+    while (bpFightAi.TelegraphArea(bpBoss) is null && bpClock < 30_000) Step(bpClock);
+    bpPlayers[0] = (100_001, new Vector3d(1500, 0, 0));
+    bpHits.Clear();
+    Step(bpFightAi.TelegraphDueAt(bpBoss)!.Value + 50);
+    Check(bpFight!.Slams == 2 && bpHits.Where(h => h.Key == 100_001).All(h => h.At < bpClock - 700) && bpHits.Any(h => h.Key == 100_002),
+          "a player who walked out of the radius during the wind-up is not hit; the one who stayed is");
+    // The Guard hook (blocks, a Dodge's i-frames) applies to slams: the player 100_002 evades this one.
+    bpFightAi.Guard = (key, damage, _, _) => key == 100_002 ? 0 : damage;
+    while (bpFightAi.TelegraphArea(bpBoss) is null && bpClock < 60_000) Step(bpClock);
+    bpHits.Clear();
+    Step(bpFightAi.TelegraphDueAt(bpBoss)!.Value + 50);
+    Check(bpHits.Any(h => h.Key == 100_001 && h.Damage > 0) && bpHits.Where(h => h.Key == 100_002).All(h => h.Damage == 0), "a guarded (dodged) slam does no damage");
+    bpFightAi.Guard = null;
+    // A stun during the wind-up breaks the slam; it comes again 4 s later instead of a whole interval.
+    while (bpFightAi.TelegraphArea(bpBoss) is null && bpClock < 80_000) Step(bpClock);
+    bpBoss.StunnedUntil = bpClock + 500;
+    Step(bpClock + 100);
+    Check(bpFightAi.TelegraphArea(bpBoss) is null && bpFight!.NextSlamMs - bpClock is > 3_000 and <= NpcAi.SlamRetryMs, "a stun breaks the wind-up and the slam is retried soon after");
+    bpBoss.StunnedUntil = 0;
+    bpPlayers[0] = (100_001, new Vector3d(200, 0, 0));
+    // Phases: 70 % bpCalls the bpAdds (the host places them), 40 % doubles the damage and halves the cooldowns.
+    bpBoss.Hp = 6_900;
+    Step(bpClock + 100);
+    var bpCalls = bpFightAi.TakeSummons();
+    Check(bpFight.Reached == 1 && bpCalls.Count == 1 && bpCalls[0].Adds is { Npc: 2310102, Count: 2 } && bpCalls[0].Fight == bpFight
+          && bpFightPackets.Any(b => b.SequenceEqual(GameSession.Notice("help!", 22, "FFB040"))), "70 %: the boss calls two adds and says so");
+    var bpAdds = Summons.Spawn(data, bpArena, 600002, 2310102, bpBoss.Position, 2, 500);
+    Check(bpAdds.Count == 2 && bpAdds.All(a => Summons.IsSummon(a.Key) && a.NpcId == 2310102 && a.Name.EndsWith(Summons.NameSuffix, StringComparison.Ordinal) && a.Hostile && !a.Dead && bpArena.ContainsKey(a.Key))
+          && bpAdds[0].Key + 1 == bpAdds[1].Key && Math.Abs(bpAdds[0].Position.X - bpBoss.Position.X - 500) < 1,
+          "Summons.Spawn copies the dungeon's monster (its placed spawn's template) around the boss with keys of their own");
+    bpFight.Adds.AddRange(bpAdds.Select(a => a.Key));
+    bpBoss.Hp = 3_000;
+    Step(bpClock + 100);
+    Check(bpFight.Reached == 2 && bpFight.Damage == 2.0 && bpFight.Haste == 0.5 && !bpFight.Frenzied, "40 %: double damage, half cooldowns");
+    Step(61_000);
+    Check(bpFight.Frenzied && bpFight.Damage == 6.0 && bpFight.Haste == 0.25 && bpFightPackets.Any(b => b.SequenceEqual(GameSession.Notice("frenzy!", 24, "FF4040"))),
+          "a minute in the frenzy triples the damage again, announced");
+    bpBoss.Hp = 0;
+    var bpDeath = bpFightAi.Tick(bpArena, bpPlayers, bpClock += 50, (_, _) => []);
+    Check(bpFightAi.FightOf(bpBoss) is null && bpAdds.All(a => a.Dead && a.CorpseRemoved) && bpAdds.All(a => bpDeath.Any(b => b.SequenceEqual(GamePackets.Death(a.Key, 7)))),
+          "the boss dies: its adds vanish (0x3642 flag 7) and the fight is over");
+    // Aion:Bosses:Phases false: no bpFight, the slam skill is an ordinary special again.
+    var bpCalm = new Target { Key = 3002, Name = "Test_Boss", NpcId = 999, Hp = 10_000, HpMax = 10_000, Level = 7, Position = Vector3d.Zero, Aggressive = true,
+        WalkSpeed = 100, RunSpeed = 200, Radius = 120, Aggro = bpAggro, Skills = [slamSkill], SubType = "HeroMonster" };
+    var offAi = new NpcAi(new Random(3), data) { Bosses = bpFightAi.Bosses, BossRules = new BossOptions { Phases = false }, DefenseOf = _ => 0 };
+    var calmMap = new Dictionary<int, Target> { [bpCalm.Key] = bpCalm };
+    for (long ms = 0; ms < 20_000; ms += 50) offAi.Tick(calmMap, bpPlayers, ms, (_, _) => []);
+    Check(offAi.FightOf(bpCalm) is null && offAi.TelegraphArea(bpCalm) is null && offAi.SlamsLanded == 0, "Aion:Bosses:Phases false: the boss fights as before");
+
+    // Scripted waves in the Ludra raid copy: the parts wait dormant from the load, come in order, and the clear reaches ClearWave.
+    var raider = new GameSession(data, new GameSessionOptions(), new Random(23));
+    await raider.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+    await raider.HandleAsync(new PacketWriter().U16(0x361b).String("Raider").U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
+    await raider.HandleAsync(select, Now);
+    await raider.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    var t0 = Now + 10_000;
+    Check(raider.EnterDungeonById(600082, t0).Count > 0, "the raid copy opens");
+    await raider.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t0 + 10);
+    IEnumerable<Target> Part(string name) => raider.Targets.Values.Where(x => x.Name == name);
+    const string W1 = "ReforgedAbyss_1PartyWave_01", W2 = "ReforgedAbyss_1PartyWave_02";
+    var raidHost = (IMapEventHost)raider;
+    Check(raider.MapId == 600082 && Part(W1 + "_1").Count() == 7 && Part(W1 + "_1").Concat(Part(W1 + "_2")).All(x => x.Dead && x.CorpseRemoved)
+          && Part("ReforgedAbyss_01_Wave_03_3").All(x => x.Dead) && raidHost.WaveKnown(W1) && !raidHost.WaveKnown("FierceHornCave_Wave_01"),
+          "Ludra's wave spawns wait dormant from the load (no 300 monsters standing in the raid); the waves are known");
+    var gateRun = raider.MapEventRuns.First(r => r.Name == "ReforgedAbyss_Normal_1PartyWave_MapEvent");
+    raidHost.StartWave(W1);
+    await raider.TickAsync(t0 + 100);
+    Check(Part(W1 + "_1").All(x => !x.Dead) && Part(W1 + "_2").All(x => x.Dead) && raider.RunningWaves.Contains(W1), "StartWave brings the first part only");
+    foreach (var x in Part(W1 + "_1")) x.Hp = 0;
+    await raider.TickAsync(t0 + 200);
+    Check(Part(W1 + "_2").All(x => !x.Dead) && !raider.ClearedWaves.Contains(W1), "the first part dead: the second comes");
+    foreach (var x in Part(W1 + "_2")) x.Hp = 0;
+    await raider.TickAsync(t0 + 300);
+    Check(raider.ClearedWaves.Contains(W1) && gateRun.Goals.Length > 1 && gateRun.Goals[1] == 1 && gateRun.FellBack == 0
+          && raider.MapEventNotes.Any(n => n == $"wave {W1} cleared"), "the last part dead: the wave is clear and the script's ClearWave objective counts, no timer");
+    raidHost.StartWave(W2);
+    await raider.TickAsync(t0 + 400);
+    await raider.TickAsync(t0 + 400 + GameSession.WavePartMs);
+    Check(Part(W2 + "_1").All(x => !x.Dead) && Part(W2 + "_2").All(x => !x.Dead) && Part(W2 + "_3").All(x => x.Dead),
+          $"a part still fighting after {GameSession.WavePartMs / 1000} s does not hold up the next");
+    raidHost.EndWave(W2);
+    await raider.TickAsync(t0 + 500 + GameSession.WavePartMs);
+    Check(Part(W2 + "_1").Concat(Part(W2 + "_2")).All(x => x.Dead && x.CorpseRemoved) && !raider.RunningWaves.Contains(W2), "EndWave takes the wave away");
+
+    // Fierce Horn Den's hand-made bpTotem wave: Lycans come around the bpTotem while it lives; dead bpTotem and bpAdds clear it.
+    var hunter = new GameSession(data, new GameSessionOptions(), new Random(24));
+    await hunter.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+    await hunter.HandleAsync(new PacketWriter().U16(0x361b).String("Hunter").U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
+    await hunter.HandleAsync(select, Now);
+    await hunter.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    Check(hunter.EnterDungeonById(600092, t0).Count > 0, "Ferocious Horn Den (Normal) opens");
+    await hunter.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t0 + 10);
+    var huntHost = (IMapEventHost)hunter;
+    const string Totem = "M_PD_FierceHornCave_LycanTotem_01_001";
+    huntHost.Spawn(Totem, 0);
+    Check(huntHost.WaveKnown("FierceHornCave_Wave_01"), "the totem wave is known (hand-made)");
+    huntHost.StartWave("FierceHornCave_Wave_01");
+    await hunter.TickAsync(t0 + 100);
+    var bpLycans = hunter.Targets.Values.Where(x => Summons.IsSummon(x.Key)).ToList();
+    var bpTotem = hunter.Targets.Values.First(x => x.Name == Totem);
+    Check(bpLycans.Count == 3 && bpLycans.All(x => !x.Dead && x.NpcId == 2300902 && Math.Sqrt(x.Position.DistanceSquared(bpTotem.Position)) is > 590 and < 610),
+          "three Lycans come around the totem");
+    await hunter.TickAsync(t0 + 100 + 15_000);
+    Check(hunter.Targets.Values.Count(x => Summons.IsSummon(x.Key)) == 6, "15 s later three more");
+    foreach (var x in hunter.Targets.Values.Where(x => Summons.IsSummon(x.Key) || x.Name == Totem)) x.Hp = 0;
+    await hunter.TickAsync(t0 + 100 + 15_100);
+    Check(hunter.ClearedWaves.Contains("FierceHornCave_Wave_01"), "totem and Lycans dead: the wave is clear");
+    await hunter.TickAsync(t0 + 100 + 15_100 + 600_000);
+    Check(hunter.Targets.Values.Where(x => Summons.IsSummon(x.Key)).All(x => x.Dead), "summoned monsters never respawn");
+}
+Console.WriteLine($"{checks} boss checks passed (phases, slams, adds, frenzy, waves).");
 
 // ---------- Playerbots (docs/PLAYERBOTS.md): sessions without a connection, driven by BotBrain ----------
 checks = 0;
@@ -3122,7 +3434,7 @@ checks = 0;
     var botPresence = new WorldPresence();
     var bots = new PlayerBots(data, botOptions, botWorld, presence: botPresence);
     Check(BotRotations.Embedded.For("Gladiator") is { Range: > 0, Rotation.Length: > 2 } glad && glad.Rotation[^1].Skill == 11020000
-          && BotRotations.Embedded.Classes.Count == 8, "bot-rotations.json is embedded: every playable class, the filler last");
+          && BotRotations.Embedded.Classes.Count == 9, "bot-rotations.json is embedded: every playable class, the filler last");
     Check((await bots.CommandAsync(leader, "add Leader", t, default)).Contains("yourself") && (await bots.CommandAsync(leader, "add Nobody", t, default)).Contains("not one of your characters"),
           "a bot is one of the summoner's other characters");
     Check(await bots.CommandAsync(leader, "add Alt", t, default) == "Summoning Alt." && bots.All.Single().State == PlayerBot.Phase.Pending, "//bot add queues the character");
@@ -3453,7 +3765,9 @@ checks = 0;
           && rots.For("Assassin")!.Position == "behind" && rots.For("Templar")!.Position == "front"
           && rots.For("Cleric")!.RangeFor("heal") == 1500 && rots.For("Cleric")!.RangeFor("dps") == 1800,
           "bot-rotations.json: every class but the Cleric has an interrupt; positions and role ranges load");
-    var rotWorld = new SharedWorld(data);
+    Check(GameSession.IsDodge(19000100) && GameSession.IsDodge(11000100) && !GameSession.IsDodge(19010000) && rots.For("Fighter") is { Range: 250 },
+          "the Brawler's own Dodge counts as a dodge; its rotation loads");
+    var rotWorld = new SharedWorld(data, seed: 41);
     var rotOptions = new GameSessionOptions { World = rotWorld, TrainingDummy = true, CharacterLevel = 20 };
     long t = Now + 5_000_000;
     var lead = new GameSession(data, rotOptions, new Random(41));
@@ -3648,7 +3962,8 @@ checks = 0;
     var evadeBase = guard.Session.Evasions;
     guard.Session.SetResource('S', guard.Session.Resource.SpMax);
     Check(await guard.Session.HandleAsync(Cast(guard.Brain.DodgeSkill!.Value, guard.Session.PlayerKey, guard.Session.WorldPosition!.Value), t += 1000) is [var dodgeReply, ..] && dodgeReply[3] == 0
-          && guard.Session.GuardHit(100, t + 10) == 0 && guard.Session.GuardHit(100, t + GameSession.DodgeEvadeMs - 10) == 0 && guard.Session.Evasions == evadeBase + 2,
+          && guard.Session.GuardHit(100, t + 10, new FixedRoll(0.99)) == 0 && guard.Session.GuardHit(100, t + GameSession.DodgeEvadeMs - 10, new FixedRoll(0.99)) == 0
+          && guard.Session.GuardHit(100, t + GameSession.DodgeEvadeMs + 10, new FixedRoll(0.99)) == 100 && guard.Session.Evasions == evadeBase + 2,
           "a Dodge evades every monster hit for its first half second");
     rai.Brains[blast.Key].Pending = null;
     rai.AreaSkills = BossAreaSkills.Embedded;
@@ -3671,17 +3986,30 @@ checks = 0;
         .OrderBy(x => Apart3(x.a.Position, lead.WorldPosition!.Value)).First();
     await Go(pair.a);
     await Run(60);
+    // Both sturdy and side by side, so the pack lasts and stays inside one area whatever ran before this check.
+    (pair.a.Hp, pair.b.Hp) = (Sturdy, Sturdy);
+    pair.b.Position = pair.a.Position with { X = pair.a.Position.X + 100 };
     rai.ForceAggro(pair.a, lead.PlayerKey, t);
     rai.ForceAggro(pair.b, lead.PlayerKey, t);
     await Run(600, () => team.All.Any(b => b.Brain!.AreaCasts > 0));
+    (pair.a.Hp, pair.b.Hp) = (Math.Min(pair.a.Hp, pair.a.HpMax), Math.Min(pair.b.Hp, pair.b.HpMax));
     Check(team.All.Any(b => b.Brain!.AreaCasts > 0), "with two monsters on the group a melee bot casts an area skill around itself");
+    // Blocks and evasions (GameSession.GuardHit) with fixed rolls: under the class's evasion chance evades, under the gear's
+    // block chance blocks (half), above both lands whole; a block opens the after-block skill (Debilitating Smash).
+    var blocksBefore = guard.Session.Blocks;
+    var evadedBefore = guard.Session.Evasions;
+    Check(guard.Session.GuardHit(100, t, new FixedRoll(0.01)) == 0 && guard.Session.Evasions == evadedBefore + 1
+          && guard.Session.GuardHit(100, t, new FixedRoll(0.99)) == 100,
+          "a roll under the evasion chance evades the hit; a high roll lands it whole");
+    await Run(400, () => t >= guard.Session.CooldownUntil(12270000));
+    Check(guard.Session.GuardHit(100, t, new FixedRoll(0.1)) == (int)Math.Round(100 * GameSession.BlockTaken) && guard.Session.Blocks == blocksBefore + 1
+          && guard.Session.LastBlockAt == t, "the tank's sword blocks a roll under its block chance (half damage)");
+    var blockedAt = t;
+    await Run(60, () => guard.Brain!.CastLog.Any(c => c.Skill == 12270000 && c.At >= blockedAt));
+    Check(guard.Brain!.CastLog.Any(c => c.Skill == 12270000 && c.At >= blockedAt && c.At - blockedAt <= BotBrain.ComboWindowMs),
+          "then Debilitating Smash, its after-block skill (after_block)");
     await Run(2000, () => pair.a.Dead && pair.b.Dead);
     Check(pair.a.Dead && pair.b.Dead, "the party kills both");
-    // Blocks and evasions (GameSession.GuardHit): over these fights the tank blocked hits and someone evaded one; a blocked or
-    // evaded hit opens the after-block skill (Debilitating Smash for the Templar).
-    Check(guard.Session.Blocks > 0 && team.All.Sum(b => b.Session.Evasions) > 0,
-          $"monster hits are blocked ({guard.Session.Blocks}) and evaded ({team.All.Sum(b => b.Session.Evasions)})");
-    Check(guard.Brain!.CastLog.Any(c => c.Skill == 12270000), "the tank uses Debilitating Smash, its after-block skill (after_block)");
     lead.ExitSharedWorld();
     await team.OwnerLeftAsync(lead);
 }
@@ -3746,6 +4074,147 @@ checks = 0;
 }
 Console.WriteLine($"{checks} progression checks passed (unlocks past 25, fallback damage, skill-level scaling, MP max, combat power).");
 
+{
+    // Aion:Fun (docs/friends-server/FUN.md): field bosses, //buff, //hub, duel restore.
+    checks = 0;
+    static bool OptionsRefused(Func<FunOptions> make) { try { make(); return false; } catch (InvalidOperationException) { return true; } }
+    Check(OptionsRefused(() => new FunOptions { BossRespawnMinMinutes = 90, BossRespawnMaxMinutes = 60 }.Validated()) && OptionsRefused(() => new FunOptions { BuffMinutes = 0 }.Validated())
+          && !OptionsRefused(() => FunOptions.Default.Validated()), "Aion:Fun refuses a boss window with min > max and BuffMinutes 0");
+    Check(FunFeatures.DisplayName("M_D1_FieldBoss_Kashapa_02_1") == "Kashapa" && FunFeatures.DisplayName("M_D1_IoI_OdiumGartua_01_001") == "Odium Gartua"
+          && FunFeatures.DisplayName("M_D2_FieldBoss_BeritraD_01_001_1") == "Beritra", "field boss display names come from the spawn names");
+    var funWorld = new SharedWorld(data);
+    var fun = new FunFeatures(FunOptions.Default);
+    async Task<GameSession> FunSession(string name, FunFeatures? features)
+    {
+        var session = new GameSession(data, new GameSessionOptions { World = funWorld, Fun = features }, new Random(11));
+        await session.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+        await session.HandleAsync(new PacketWriter().U16(0x361b).String(name).U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
+        await session.HandleAsync(select, Now);
+        await session.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+        return session;
+    }
+    var hunter = await FunSession("Hunter", fun);
+    var helper = await FunSession("Helper", fun);
+    var faraway = await FunSession("Faraway", fun);
+    foreach (var s in new[] { hunter, helper, faraway })
+    {
+        s.Teleport(1010, new Vector3d(138089, 71985, 24700), Now);
+        await s.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    }
+    var kashapa = hunter.Targets.Values.Single(t => t.Name == "M_L1_FieldBoss_Kashapa_01_1");
+    var trash = hunter.Targets.Values.First(t => t.SubType == "NormalMonster" && t.Hostile);
+    var named = hunter.Targets.Values.First(t => t.SubType == "HeroMonster" && t.Hostile && !t.Name.Contains("Boss") && t.Grade < 6);
+    Check(hunter.FieldRankOf(kashapa) == FieldRank.Boss && hunter.FieldRankOf(named) == FieldRank.Named && hunter.FieldRankOf(trash) == FieldRank.None,
+          "open-world FieldBoss spawns rank as bosses, other HeroMonsters as named elites, the rest as nothing");
+    var funAt = Now + 1_000_000;
+    await helper.HandleAsync(Cast(basic, kashapa.Key, kashapa.Position), funAt);
+    await faraway.HandleAsync(Cast(basic, kashapa.Key, kashapa.Position), funAt);
+    faraway.Teleport(1010, new Vector3d(138089 + 30_000, 71985, 24700), funAt + 100);
+    await faraway.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), funAt + 100);
+    kashapa.Hp = 1;
+    await hunter.HandleAsync(Cast(basic, kashapa.Key, kashapa.Position), funAt + 1_000);
+    Check(kashapa.Dead && kashapa.KilledAtMs == funAt + 1_000, "the field boss falls");
+    var bossNotices = fun.TakeDue(funAt + 1_000);
+    Check(bossNotices.Count == 1 && bossNotices[0].StartsWith("Hunter and 1 other defeated the field boss Kashapa") && fun.Pending == 1,
+          $"its kill is announced server-wide and its next appearance waits ({string.Join(" | ", bossNotices)})");
+    await helper.TickAsync(funAt + 2_000);
+    await faraway.TickAsync(funAt + 2_000);
+    Check(helper.SharedLootReceived > 0, "a player who fought the boss rolls its loot too (Aion:Fun:SharedBossLoot)");
+    Check(faraway.SharedLootReceived == 0, "a fighter who is far away when the boss dies gets no roll");
+    faraway.ExitSharedWorld();
+    await hunter.TickAsync(funAt + 1_000 + GameSession.CorpseMs);
+    Check(kashapa.CorpseRemoved, "the corpse still goes after CorpseMs with a long respawn");
+    await hunter.TickAsync(funAt + 1_000 + 59 * 60_000);
+    Check(kashapa.Dead && fun.TakeDue(funAt + 1_000 + 59 * 60_000).Count == 0, "no field boss before its 60-minute window opens");
+    await hunter.TickAsync(funAt + 1_000 + 90 * 60_000);
+    var bossBack = fun.TakeDue(funAt + 1_000 + 90 * 60_000);
+    Check(!kashapa.Dead && bossBack.Count == 1 && bossBack[0].Contains("Kashapa (level 48) has appeared in the Light lands"),
+          $"the boss is back within 90 minutes and its appearance is announced ({string.Join(" | ", bossBack)})");
+    named.Hp = 1;
+    await hunter.HandleAsync(Cast(basic, named.Key, named.Position), funAt + 100 * 60_000);
+    await hunter.TickAsync(funAt + 100 * 60_000 + 9 * 60_000);
+    Check(named.Dead && fun.TakeDue(funAt + 110 * 60_000).Count == 0, "a named elite waits at least 10 minutes and is not announced");
+    await hunter.TickAsync(funAt + 100 * 60_000 + 15 * 60_000 + 1_000);
+    Check(!named.Dead, "a named elite is back within 15 minutes");
+    trash.Hp = 1;
+    await hunter.HandleAsync(Cast(basic, trash.Key, trash.Position), funAt + 120 * 60_000);
+    await hunter.TickAsync(funAt + 120 * 60_000 + GameSession.RespawnMs);
+    Check(!trash.Dead, "ordinary monsters keep Aion:Rules:RespawnSeconds");
+    // //buff and //hub through chat, for every player.
+    var funPresence = new WorldPresence();
+    var funBuilder = new BuilderCommands(funPresence, new GmPolicy(), (_, _, _) => { });
+    var funChat = new GmCommands(funPresence, funBuilder) { Fun = fun };
+    funPresence.Enter("Hunter", hunter, null);
+    var funClock = funAt + 200 * 60_000;
+    async Task<(string Reply, List<byte[]> Packets)> FunSay(string text)
+    {
+        var reply = funChat.HandleAsync(chatter, "Hunter", text, default);
+        var packets = await hunter.TickAsync(funClock += 1_000);
+        return (await reply, packets);
+    }
+    Check((await FunSay("/help")).Reply.Contains("/buff") && (await FunSay("/help")).Reply.Contains("/hub"), "players see /buff and /hub in /help");
+    var buffed = await FunSay("/buff");
+    Check(buffed.Reply.EndsWith("buffs applied for 30 minutes.") && hunter.ActiveBuffs.Count >= 4 && buffed.Packets.Any(b => Op(b) == 0x382a),
+          $"//buff applies the food and scroll buffs ({buffed.Reply}, {hunter.ActiveBuffs.Count} active)");
+    Check((await FunSay("/hub")).Reply.StartsWith("Teleports: 1. Verteron") && (await FunSay("//hub")).Reply.StartsWith("Teleports: 1. Verteron"), "/hub (or //hub) lists the race's destinations");
+    Check((await FunSay("//hub 9")).Reply.StartsWith("Pick a number"), "//hub refuses an unknown number");
+    Check((await FunSay("//hub 3")).Reply == "The Abyss needs level 45.", "//hub keeps low levels out of the Abyss");
+    var hubbed = await FunSay("//hub 2");
+    Check(hubbed.Reply == "Teleporting to Eltnen: Changarnerk Camp (Light zone 2)." && hubbed.Packets.Any(b => b[0] == 0x21 && b[1] == 0x36 && BitConverter.ToInt32(b, 6) == 1011),
+          "//hub <number> teleports to that town (0x3621 to map 1011)");
+    Check(!(await new GmCommands(funPresence, funBuilder).HandleAsync(chatter, "Hunter", "//buff", default)).Contains("buffs applied"), "without Aion:Fun there is no //buff");
+    // A duel's end restores both duelists.
+    hunter.Teleport(1010, new Vector3d(138089, 71985, 24700), funClock);
+    await hunter.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), funClock);
+    helper.SetResource('H', helper.Resource.HpMax / 2);
+    var helperBefore = helper.Resource.Hp;
+    await hunter.HandleAsync(SocialRequests.EncodeKey(SocialOpcodes.DuelCallOutRq, helper.PlayerKey), funClock + 10);
+    var funDuel = funWorld.Social.Duels.Single().Key;
+    await helper.HandleAsync(SocialRequests.EncodeDuelAnswer(SocialOpcodes.DuelCallOutAcceptRq, funDuel, hunter.PlayerKey), funClock + 20);
+    await hunter.TickAsync(funClock + 20 + Duel.CountdownMs);
+    hunter.SetResource('H', 10);
+    helper.SetResource('H', 20);
+    helper.SetResource('M', 0);
+    hunter.ExitSharedWorld();
+    Check(funWorld.Social.Duels.Count == 0 && helper.Resource.Hp == helperBefore && helper.Resource.Mp == helper.Resource.MpMax,
+          "a duel's end gives back the HP and MP the duel cost (Aion:Fun:DuelRestore)");
+    helper.ExitSharedWorld();
+    // Lucky drops: the next grade of the same kind, and enchanted pieces up to the item's max.
+    var luckRng = new Random(3);
+    Check(EnchantTables.Embedded.Grade(110150005) == 1 && EnchantTables.Embedded.Grade(110140022) == 2 && EnchantTables.Embedded.Grade(110130047) == 3,
+          "item grades come from Enchant.dat (Rare, Epic/Legend, Unique)");
+    Check(LootUpgrades.NextGrade(110150005, luckRng) is { } epic && EnchantTables.Embedded.Grade(epic) == 2 && data.Item(epic)!.Category == "Greatsword"
+          && Math.Abs(data.Item(epic)!.Level - 25) <= 5, "a Rare greatsword's lucky upgrade is an Epic greatsword of about its level");
+    Check(LootUpgrades.NextGrade(110140028, luckRng) is { } unique && EnchantTables.Embedded.Grade(unique) == 3 && LootUpgrades.NextGrade(110130047, luckRng) is null,
+          "an Epic upgrades to Unique; Unique is the top");
+    var always = FunOptions.Default with { UpgradeChanceHero = 100, UpgradeChanceNormal = 0 };
+    Check(LootUpgrades.Apply([(110150005, 1), (GameSession.KinaItemId, 50)], "HeroMonster", always, luckRng) is [var up, (GameSession.KinaItemId, 50)]
+          && EnchantTables.Embedded.Grade(up.ItemId) == 2 && LootUpgrades.Apply([(110150005, 1)], "NormalMonster", always, luckRng)[0].ItemId == 110150005,
+          "the upgrade chance goes by monster rank and only touches equipment");
+    var low = FunOptions.Default with { EnchantLowChance = 100, EnchantMidChance = 0, EnchantHighChance = 0 };
+    var high = FunOptions.Default with { EnchantLowChance = 0, EnchantMidChance = 0, EnchantHighChance = 100 };
+    var lows = Enumerable.Range(0, 200).Select(_ => LootUpgrades.EnchantLevel(110130047, low, luckRng)).ToList();
+    var highs = Enumerable.Range(0, 200).Select(_ => LootUpgrades.EnchantLevel(110130047, high, luckRng)).ToList();
+    Check(lows.All(l => l is >= 1 and <= 3) && highs.All(l => l >= 7 && l <= EnchantTables.Embedded.MaxLevel(110130047)) && EnchantTables.Embedded.MaxLevel(110130047) == 15
+          && Enumerable.Range(0, 200).All(_ => LootUpgrades.EnchantLevel(110150005, high, luckRng) <= 5),
+          "lucky enchant levels stay in their band and never pass the item's max (+15 Unique, +5 Rare)");
+    Check(Enumerable.Range(0, 200).All(_ => LootUpgrades.EnchantLevel(110130047, FunOptions.Default with { LuckyDrops = false }, luckRng) == 0), "LuckyDrops off: no enchanted drops");
+    // Through a stored character: a looted piece arrives enchanted in the bag (stored upgrades.enchant).
+    var luckyStore = new FakeStore();
+    var lucky = new GameSession(data, new GameSessionOptions { World = new SharedWorld(data), Fun = new FunFeatures(low) }, new Random(13)) { Store = luckyStore };
+    await lucky.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+    await lucky.HandleAsync(new PacketWriter().U16(0x361b).String("Lucky").U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
+    await lucky.HandleAsync(new PacketWriter().U16(0x361f).Varint(luckyStore.States[0].WireId << 16).I32(0).Vec3(Vector3d.Zero).ToArray(), Now);
+    await lucky.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    var luckyGear = MonsterRewards.Embedded.FallbackBand(45).First(i => EnchantTables.Embedded.MaxLevel(i) > 0);
+    lucky.ShareLoot([(luckyGear, 1)], Vector3d.Zero);
+    await lucky.TickAsync(Now + 10);
+    var luckyRow = luckyStore.Items.Single(i => i.TemplateId == luckyGear);
+    Check(luckyRow.Upgrades.TryGetProperty("enchant", out var luckyLevel) && luckyLevel.GetInt32() is >= 1 and <= 3,
+          "a looted piece is stored already enchanted (+1..+3 at EnchantLowChance 100)");
+    lucky.ExitSharedWorld();
+}
+Console.WriteLine($"{checks} fun feature checks passed (Aion:Fun: field bosses, //buff, //hub, duel restore, lucky drops).");
 // ---------- Daevanion boards (docs/DAEVANION.md): a small board in the client tables' shape ----------
 checks = 0;
 {
@@ -4386,3 +4855,10 @@ sealed class FakeStore : INativeCharacterStore
 }
 
 sealed class FakeDbException() : System.Data.Common.DbException("constraint violated");
+
+/// <summary>A Random whose every NextDouble is one value (fixed block/evasion rolls in the checks).</summary>
+sealed class FixedRoll(double value) : Random
+{
+    public override double NextDouble() => value;
+    protected override double Sample() => value;
+}

@@ -30,6 +30,8 @@ public sealed class DungeonCopy(GameSession host, int dungeonId, long now)
     public HashSet<int> CubeBossesKilled { get; } = [];
     /// <summary>Player deaths in this copy (the death-limit achievements).</summary>
     public int Deaths { get; set; }
+    /// <summary>Deaths per character (stored id, else name: the hard modes' revive limit, Aion:Dungeons:HardModeRevives); survives a relog or a rejoin.</summary>
+    public Dictionary<string, int> PlayerDeaths { get; } = [];
     /// <summary>The final boss's cube reward each player took (player key → items), once per run.</summary>
     public Dictionary<int, List<(int ItemId, long Count)>> CubeTaken { get; } = [];
 }
@@ -84,13 +86,15 @@ public sealed partial class GameSession
 
     /// <summary>
     /// MapEntrance.dat: the character's level and equipment item level, and the quest step the entry needs (one of
-    /// QuestStepIdList active, or that quest done); staff and development logins (no stored character) pass.
+    /// QuestStepIdList active, or that quest done); staff and development logins (no stored character) pass. The client's
+    /// placeholder level 99 and the Korea-only dungeons follow Aion:Dungeons (DungeonOptions.MinLevelOf, IsOpen).
     /// </summary>
     bool MeetsEntry(DungeonInfo room, out string why)
     {
         why = "";
         if (!Timed(room) || Store is null) return true;
-        if (room.MinLevel > 0 && level < room.MinLevel) { why = $"level {level} < {room.MinLevel}"; return false; }
+        if (!DungeonRules.IsOpen(room)) { why = "Korea-only content is closed on this server (Aion:Dungeons:KoreaOnly)"; return false; }
+        if (DungeonRules.MinLevelOf(room) is > 0 and var minLevel && level < minLevel) { why = $"level {level} < {minLevel}"; return false; }
         if (room.MaxLevel > 0 && level > room.MaxLevel) { why = $"level {level} > {room.MaxLevel}"; return false; }
         if (room.ItemLevel > 0 && EquipItemLevel() < room.ItemLevel) { why = $"item level {EquipItemLevel()} < {room.ItemLevel}"; return false; }
         if (room.QuestGate is { Length: > 0 } gates && questLog is not null)
@@ -101,6 +105,28 @@ public sealed partial class GameSession
         }
         return true;
     }
+
+    /// <summary>
+    /// A death in an Expedition hard mode (global: 3 revives per player, OURS here since every client DeathLimit is 0): the
+    /// count, and a notice with the revives left. Past the limit the next revive takes the player out (<see cref="OutOfRevives"/>).
+    /// </summary>
+    List<byte[]> HardModeDeath(DungeonCopy c)
+    {
+        if (DungeonRules.HardModeRevives <= 0 || MapEventData.Dungeon(c.DungeonId) is not { } room || !DungeonOptions.IsHardMode(room)) return [];
+        var deaths = c.PlayerDeaths[DeathKey] = c.PlayerDeaths.GetValueOrDefault(DeathKey) + 1;
+        var left = DungeonRules.HardModeRevives - deaths + 1;
+        return [Notice(left > 0 ? $"Revives left in this hard mode: {left}." : "No revives left: you will leave the dungeon when you revive.", color: "FF6060")];
+    }
+
+    /// <summary>The character's key in <see cref="DungeonCopy.PlayerDeaths"/> (the player key changes with every login).</summary>
+    string DeathKey => CharacterId?.ToString() ?? CharacterName ?? playerKey.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>The player used up the hard mode's revives in this copy (staff never do).</summary>
+    bool OutOfRevives() => instanceKey != 0 && copy is { } c && OutOfRevivesIn(c);
+
+    bool OutOfRevivesIn(DungeonCopy c) => !IsAdmin && DungeonRules.HardModeRevives > 0
+        && MapEventData.Dungeon(c.DungeonId) is { } room && DungeonOptions.IsHardMode(room)
+        && c.PlayerDeaths.GetValueOrDefault(DeathKey) > DungeonRules.HardModeRevives;
 
     /// <summary>The copy a party member would join is full (MapEntrance MaxMember).</summary>
     static bool CopyFull(MapInstance inside, DungeonInfo room) => room.MaxMember > 0 && inside.Players.Count >= room.MaxMember;
@@ -156,6 +182,8 @@ public sealed partial class GameSession
         next.removedObjects.UnionWith(removedObjects);
         next.pendingSpawns.AddRange(pendingSpawns);
         foreach (var (target, buffs) in npcBuffs) next.npcBuffs[target] = buffs;
+        foreach (var (name, wave) in waveRuns) next.waveRuns[name] = wave;
+        foreach (var (name, parts) in waveParts) next.waveParts[name] = parts;
         next.pendingExit ??= pendingExit;
         next.mapEventsMap = worldMap;
         next.mapEventNow = Math.Max(next.mapEventNow, mapEventNow);
@@ -166,6 +194,8 @@ public sealed partial class GameSession
         removedObjects.Clear();
         pendingSpawns.Clear();
         npcBuffs.Clear();
+        waveRuns.Clear();
+        waveParts.Clear();
         mapEventOut.Clear();
         pendingExit = null;
         c.Host = next;

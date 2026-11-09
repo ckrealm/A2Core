@@ -180,9 +180,23 @@ item level rules). Going back into the party copy already counted is free. Staff
 entry tickets or energy cost to apply, so there is none. `Aion__Dungeons__UntrackedObjectiveSeconds` (default 30) is how
 long a dungeon objective the server cannot follow yet (waves, puzzles, scores, collected items) waits before it counts as
 done; each one is logged. Some expedition and raid final bosses hit everyone within 5 m with their special attacks
-(tools/data/boss-area-skills.json, our own table until the skills' target shapes are extracted). `tools/server_env.py`
+(tools/data/boss-area-skills.json, our own table until the skills' target shapes are extracted). Boss phases, slams, adds and the hard modes' 4-minute frenzy are on by default
+(`Aion__Bosses__Phases`, `Aion__Bosses__Frenzy`, `Aion__Bosses__FrenzySeconds`, `Aion__Bosses__DamageScale`; see
+docs/friends-server/BOSSES.md). `tools/server_env.py`
 options: `--dungeon-limits on|off`, `--dungeon-entries`, `--dungeon-entry DUNGEON=N` (repeatable), `--dungeon-reset-hour`,
 `--untracked-objective-seconds`.
+
+Entry levels follow global Aion 2 by default (`Aion__Dungeons__LevelGates=global`). The client marks every Expedition hard
+mode, the Transcendence entries, the top Ascension Trial tiers and two daily dungeons with level 99, a placeholder for
+"not open yet"; the server reads that 99 as `Aion__Dungeons__GlobalLevel` (default 45, global's cap), or
+`Aion__Dungeons__GlobalDailyLevel` (default 30) for the daily dungeons. Item levels and quest steps stay as the client has
+them (Krao Cave hard still needs item level 2,400). `LevelGates=client` keeps the 99s. The dungeons global has not opened
+yet (Dramata's Nest, Cradle of Nihility, Hall of Illusion, Azure Breath Isle, Fallen Daeva Citadel, Sunken Temple, Mirror
+Heart, Fafnite Gully, and the raids Corroded Decontamination Facility and Chalice of Muspel) are closed unless
+`Aion__Dungeons__KoreaOnly=true`, which opens them at `Aion__Dungeons__KoreaOnlyLevel` (default 45). Players pick a dungeon
+and difficulty with `/dungeon` (lists them) and `/dungeon <name> [easy|normal|hard|stage]`, from anywhere in the open world;
+their party joins the same copy. `Aion__Dungeons__Command=false` turns the command off. In Expedition hard modes each player
+gets `Aion__Dungeons__HardModeRevives` revives (default 3, as on global; 0 no limit); after that the revive puts them outside.
 
 ## Updating
 
