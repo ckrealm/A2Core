@@ -59,3 +59,17 @@ Still not tested: anything involving the game client.
 - Aion.Native.Checks: all pass, incl. 14 party-loot checks (round robin rotation, kinah split, out-of-range member, free-for-all, killer, fallback items valid, real elite kill) and 18 skill-effect checks (self/ally heal, refusal on enemies and other race, cooldown, HoT, buff/debuff apply+expire, DoT ticks, resurrection).
 - Python: OK (24 skipped).
 - Not verified in-game.
+
+## 2026-11-09 — first real install on Brandon's PC (WSL2 Ubuntu 24.04.5, NAT networking)
+
+| Step | Result |
+|---|---|
+| `deploy/windows/setup-wsl.ps1` (Windows 11 Pro 25H2, build 26200) | **Pass**: Ubuntu-24.04 with systemd; existing distros and Docker Desktop unaffected |
+| Mirrored networking | **Fail on this PC**: internet goes through a Hyper-V external switch, which mirrored mode doesn't carry. Switched to NAT. |
+| Data bundle v0.1.0 (`aion-server-data.tar.gz`, 337,376,756 B, sha256 d262fda4…6167, matches GitHub) | **Pass** |
+| Install run 1 | **Fail**: `class_skills.py install`: catalogue lacks OURS unlock skill 11000001. Fixed in 0459a99. |
+| Install run 2 (`wsl-install.sh --public-address <WSL IP> --self-signed --rates-profile accelerated --max-players 10`) | **Pass**: 9,261 items, 16,279 skills, 44 starter profiles; aion-postgres, aion-host, aion-backup.timer active; no errors in the journal |
+| Startup log | "World rates: profile accelerated: experience x5, quest experience x5, Kinah x3, drops x3 … party loot roundrobin, fallback loot on. Players: at most 10. Dungeons: entry limits off" and "Playerbots on" |
+| Ports | 443, 3700, 8087, 8091, 8780, 13328 listening |
+| Windows → `https://<WSL IP>:8780/api/status` | **Pass**: HTTP 200 |
+| Game client | Not yet |
