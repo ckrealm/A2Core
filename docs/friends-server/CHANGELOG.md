@@ -76,3 +76,7 @@
 - Duels give back the HP and MP they cost (never a free heal).
 - All OURS values, all configurable, all on by default. 28 checks.
 - Player chat commands work with a single slash (/buff, /hub, /report, /help, /bot, /ah, /boost); GM commands keep //.
+
+## 2026-11-09 — monster difficulty past level 30
+- **Monster HP and hits from 31 to 44 follow the observed curve.** The server had observed Grade 3 HP up to level 30 (9,975) and one endgame point at 45 (70,756, from an official level-45 NPC), and drew a straight line between them. Monster HP and the NPC hits that scale with it (7.5% of the level's HP) grew ~5x from 30 to 40 while a player's HP and defense in level gear grow ~1.3x: a level-40 monster killed a level-40 player in ~5 hits instead of the ~15 of levels 16-30, and took ~3x as long to kill. Levels 31-44 now continue the growth seen from 16 to 30 (HP ~ level^1.88): level 35 13.3k (was 30.2k), 40 17.1k (was 50.5k), 44 20.5k (was 66.7k). Observed points, levels 45+ and every rank's multiplier are unchanged. `Combat.HpForLevel`, mirrored in `tools/world_npcs.py`.
+- Level 45 is still the endgame step (about 3.4x level 44): it expects the level-45 gear tier plus enchants, Daevanion and stigmas. No official capture exists between 30 and 45, so the 31-44 curve is a candidate that keeps the 16-30 feel.
