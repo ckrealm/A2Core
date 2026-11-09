@@ -514,6 +514,7 @@ public sealed partial class GameSession
             case DuelState.InCountDown:
                 duel.State = DuelState.InBattle;
                 duel.NextMs = now + Duel.LimitMs;
+                RememberDuelists(duel);
                 var status = SocialPackets.DuelStateUpdate(Status(duel, now));
                 duel.Challenger.Send(status);
                 duel.Accepter.Send(status);

@@ -33,7 +33,9 @@ public sealed record FunOptions
     public int[] BuffSkills { get; init; } = [.. DefaultBuffSkills];
     /// <summary>"//hub": teleports to the race's towns and the Abyss.</summary>
     public bool HubCommand { get; init; } = true;
-    /// <summary>Duels end with both duelists back at full HP and MP.</summary>
+    /// <summary>The level //hub needs for the Abyss (PvP).</summary>
+    public int HubAbyssMinLevel { get; init; } = 45;
+    /// <summary>Duels end with both duelists back at the HP and MP they had when the battle started (or more).</summary>
     public bool DuelRestore { get; init; } = true;
     /// <summary>Lucky drops: a monster's equipment drop may come one grade up and/or already enchanted.</summary>
     public bool LuckyDrops { get; init; } = true;
@@ -162,6 +164,8 @@ public sealed class FunFeatures(FunOptions options)
 
     /// <summary>The side of a base map for notices: 10xx Light, 11xx Dark, the rest the Abyss.</summary>
     public static string Region(int mapId) => (mapId / 100) switch { 10 => "Light lands", 11 => "Dark lands", _ => "the Abyss" };
+
+    public const int AbyssMapId = 20;
 
     /// <summary>//hub destinations of a race: (label, map, map-points name). Light 1, Dark 2.</summary>
     public static IReadOnlyList<(string Label, int MapId, string Point)> Hubs(int race) => race == 2

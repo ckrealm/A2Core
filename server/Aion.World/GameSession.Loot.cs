@@ -29,17 +29,11 @@ public sealed partial class GameSession
     /// <summary>The loot of a killed monster: the drops for the killer (0x561e), or nothing; party members' shares go to them.</summary>
     List<byte[]> DropLoot(Target target, long now)
     {
-        // The base drop rate (Aion:Rates:Drop, OURS) times drop events (SharedWorld.DropRate) rolls the table more often:
-        // x2.5 = two rolls and a third half the time. Kinah in a drop is scaled by Aion:Rates:Kinah.
-        var rolls = options.Rates.LootRolls(options.World?.DropRate ?? 1, rng);
-        var generic = options.Rules.FallbackLoot && !LootTables.Embedded.HasLoot(target.NpcId);
-        var rolled = new List<(int, long)>();
-        for (var i = 0; i < rolls; i++)
-            rolled.AddRange(generic ? MonsterRewards.Embedded.Fallback(target.SubType, target.Level, rng) : LootTables.Embedded.Roll(target.NpcId, profileRace, rng));
-        rolled = LuckyLoot(rolled, target);   // Aion:Fun:LuckyDrops
-        rolled = options.Rates.WithKinah(rolled);
-        var kinah = options.Rates.KinahAmount(MonsterRewards.Embedded.Kinah(target.SubType, target.Level, rng));
-        var mine = ShareLootWithParty(rolled, kinah);
+        var (rolled, kinah) = RollLoot(target, profileRace);
+        // A field boss with Aion:Fun:SharedBossLoot: every fighter rolls their own (FieldBossKilled), so the killer keeps this one.
+        List<(int ItemId, long Count)> mine;
+        if (PersonalBossLoot(target)) { mine = rolled; if (kinah > 0) mine.Add((KinaItemId, kinah)); }
+        else mine = ShareLootWithParty(rolled, kinah);
         if (mine.Count == 0) return [];
         var placed = new List<DropItem>();
         foreach (var (item, count) in mine)
@@ -56,6 +50,23 @@ public sealed partial class GameSession
                 now + DropLifetimeMs, (byte)profileRace));
         }
         return [LootPackets.DropItems(placed)];
+    }
+
+    /// <summary>
+    /// One player's roll of a kill: the base drop rate (Aion:Rates:Drop, OURS) times drop events (SharedWorld.DropRate) rolls
+    /// the table more often (x2.5 = two rolls and a third half the time); Aion:Fun:LuckyDrops; Kinah in a drop is scaled by
+    /// Aion:Rates:Kinah, and the monster's own Kinah comes apart.
+    /// </summary>
+    (List<(int ItemId, long Count)> Items, long Kinah) RollLoot(Target target, int race)
+    {
+        var rolls = options.Rates.LootRolls(options.World?.DropRate ?? 1, rng);
+        var generic = options.Rules.FallbackLoot && !LootTables.Embedded.HasLoot(target.NpcId);
+        var rolled = new List<(int ItemId, long Count)>();
+        for (var i = 0; i < rolls; i++)
+            rolled.AddRange(generic ? MonsterRewards.Embedded.Fallback(target.SubType, target.Level, rng) : LootTables.Embedded.Roll(target.NpcId, race, rng));
+        rolled = options.Rates.WithKinah(LuckyLoot(rolled, target));
+        var kinah = options.Rates.KinahAmount(MonsterRewards.Embedded.Kinah(target.SubType, target.Level, rng));
+        return (rolled, kinah);
     }
 
     /// <summary>

@@ -3444,7 +3444,8 @@ Console.WriteLine($"{checks} progression checks passed (unlocks past 25, fallbac
     }
     var hunter = await FunSession("Hunter", fun);
     var helper = await FunSession("Helper", fun);
-    foreach (var s in new[] { hunter, helper })
+    var faraway = await FunSession("Faraway", fun);
+    foreach (var s in new[] { hunter, helper, faraway })
     {
         s.Teleport(1010, new Vector3d(138089, 71985, 24700), Now);
         await s.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
@@ -3456,6 +3457,9 @@ Console.WriteLine($"{checks} progression checks passed (unlocks past 25, fallbac
           "open-world FieldBoss spawns rank as bosses, other HeroMonsters as named elites, the rest as nothing");
     var funAt = Now + 1_000_000;
     await helper.HandleAsync(Cast(basic, kashapa.Key, kashapa.Position), funAt);
+    await faraway.HandleAsync(Cast(basic, kashapa.Key, kashapa.Position), funAt);
+    faraway.Teleport(1010, new Vector3d(138089 + 30_000, 71985, 24700), funAt + 100);
+    await faraway.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), funAt + 100);
     kashapa.Hp = 1;
     await hunter.HandleAsync(Cast(basic, kashapa.Key, kashapa.Position), funAt + 1_000);
     Check(kashapa.Dead && kashapa.KilledAtMs == funAt + 1_000, "the field boss falls");
@@ -3463,7 +3467,10 @@ Console.WriteLine($"{checks} progression checks passed (unlocks past 25, fallbac
     Check(bossNotices.Count == 1 && bossNotices[0].StartsWith("Hunter and 1 other defeated the field boss Kashapa") && fun.Pending == 1,
           $"its kill is announced server-wide and its next appearance waits ({string.Join(" | ", bossNotices)})");
     await helper.TickAsync(funAt + 2_000);
+    await faraway.TickAsync(funAt + 2_000);
     Check(helper.SharedLootReceived > 0, "a player who fought the boss rolls its loot too (Aion:Fun:SharedBossLoot)");
+    Check(faraway.SharedLootReceived == 0, "a fighter who is far away when the boss dies gets no roll");
+    faraway.ExitSharedWorld();
     await hunter.TickAsync(funAt + 1_000 + GameSession.CorpseMs);
     Check(kashapa.CorpseRemoved, "the corpse still goes after CorpseMs with a long respawn");
     await hunter.TickAsync(funAt + 1_000 + 59 * 60_000);
@@ -3500,6 +3507,7 @@ Console.WriteLine($"{checks} progression checks passed (unlocks past 25, fallbac
           $"//buff applies the food and scroll buffs ({buffed.Reply}, {hunter.ActiveBuffs.Count} active)");
     Check((await FunSay("//hub")).Reply.StartsWith("Teleports: 1. Verteron"), "//hub lists the race's destinations");
     Check((await FunSay("//hub 9")).Reply.StartsWith("Pick a number"), "//hub refuses an unknown number");
+    Check((await FunSay("//hub 3")).Reply == "The Abyss needs level 45.", "//hub keeps low levels out of the Abyss");
     var hubbed = await FunSay("//hub 2");
     Check(hubbed.Reply == "Teleporting to Eltnen: Changarnerk Camp (Light zone 2)." && hubbed.Packets.Any(b => b[0] == 0x21 && b[1] == 0x36 && BitConverter.ToInt32(b, 6) == 1011),
           "//hub <number> teleports to that town (0x3621 to map 1011)");
@@ -3507,6 +3515,8 @@ Console.WriteLine($"{checks} progression checks passed (unlocks past 25, fallbac
     // A duel's end restores both duelists.
     hunter.Teleport(1010, new Vector3d(138089, 71985, 24700), funClock);
     await hunter.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), funClock);
+    helper.SetResource('H', helper.Resource.HpMax / 2);
+    var helperBefore = helper.Resource.Hp;
     await hunter.HandleAsync(SocialRequests.EncodeKey(SocialOpcodes.DuelCallOutRq, helper.PlayerKey), funClock + 10);
     var funDuel = funWorld.Social.Duels.Single().Key;
     await helper.HandleAsync(SocialRequests.EncodeDuelAnswer(SocialOpcodes.DuelCallOutAcceptRq, funDuel, hunter.PlayerKey), funClock + 20);
@@ -3515,8 +3525,8 @@ Console.WriteLine($"{checks} progression checks passed (unlocks past 25, fallbac
     helper.SetResource('H', 20);
     helper.SetResource('M', 0);
     hunter.ExitSharedWorld();
-    Check(funWorld.Social.Duels.Count == 0 && helper.Resource.Hp == helper.Resource.HpMax && helper.Resource.Mp == helper.Resource.MpMax,
-          "a duel's end puts the duelists back at full HP and MP (Aion:Fun:DuelRestore)");
+    Check(funWorld.Social.Duels.Count == 0 && helper.Resource.Hp == helperBefore && helper.Resource.Mp == helper.Resource.MpMax,
+          "a duel's end gives back the HP and MP the duel cost (Aion:Fun:DuelRestore)");
     helper.ExitSharedWorld();
     // Lucky drops: the next grade of the same kind, and enchanted pieces up to the item's max.
     var luckRng = new Random(3);

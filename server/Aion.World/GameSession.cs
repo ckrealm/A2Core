@@ -2199,7 +2199,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         var replies = new List<byte[]>();
         foreach (var (victim, killer) in fights.TakeNpcKills())
         {
-            respawnAt[victim.Key] = now + options.Rules.RespawnMs;
+            respawnAt[victim.Key] = now + KillRespawnMs(victim);
             victim.KilledAtMs = now;
             replies.Add(GamePackets.TargetUpdate(victim.Key));
             replies.Add(GamePackets.Kill(victim.Key, 0, killer.Key, 0, ""));

@@ -3,10 +3,10 @@ namespace Aion.World;
 // Aion:Fun (OURS, docs/friends-server/FUN.md), on a session's loop:
 // - Field bosses: an open-world boss or named elite (FunFeatures.Rank) respawns after a random time in its window instead
 //   of Aion:Rules:RespawnSeconds; a boss's kill and its next appearance are server-wide notices (FunFeatures queues them,
-//   the host shows them to everyone); everyone on its hate table who is still on the map rolls its loot.
+//   the host shows them to everyone); everyone who fought it (its hate table and the killer's party, nearby) rolls its loot.
 // - //buff: the configured item buffs at once, for Aion:Fun:BuffMinutes.
 // - //hub: the race's towns and the Abyss (not from a dungeon, a duel, an arena or a fight).
-// - A duel's end puts both duelists back at full HP and MP.
+// - A duel's end gives the duelists back the HP and MP the duel cost them.
 public sealed partial class GameSession
 {
     long buffReadyAt;
@@ -21,51 +21,50 @@ public sealed partial class GameSession
     /// <summary>The field rank of a target on this session's map (checks).</summary>
     public FieldRank FieldRankOf(Target target) => FunFeatures.Rank(target, instanceKey != 0);
 
+    /// <summary>Whether a kill's loot is personal: a field boss or named elite with Aion:Fun:SharedBossLoot (each fighter rolls their own).</summary>
+    bool PersonalBossLoot(Target target) =>
+        Fun is { Options: { FieldBosses: true, SharedBossLoot: true } } && FunFeatures.Rank(target, instanceKey != 0) != FieldRank.None;
+
     /// <summary>
-    /// A field boss or named elite died to this player: the others who fought it (its hate table, on this map, not already
-    /// sharing as party members nearby) roll its loot on their own loops; a boss's kill and next appearance are announced.
+    /// Who besides the killer fought a field monster: its hate table (damage) and the killer's party (healers and buffers too),
+    /// alive, on this map and within PartyExpRange of it.
+    /// </summary>
+    List<WorldPlayer> FieldFighters(Target target)
+    {
+        if (worldPlayer?.Map is not { } map) return [];
+        var keys = new HashSet<int>(map.Ai.Brains.TryGetValue(target.Key, out var brain) ? brain.Hate.Keys : []);
+        if (Social?.PartyOf(worldPlayer) is { } party) keys.UnionWith(party.Others(worldPlayer).Select(m => m.Key));
+        keys.Remove(playerKey);
+        var at = target.Position;
+        return keys.Select(k => map.Players.GetValueOrDefault(k)).OfType<WorldPlayer>()
+            .Where(p => !p.Session.Dead && (p.Position.X - at.X) * (p.Position.X - at.X) + (p.Position.Y - at.Y) * (p.Position.Y - at.Y) <= PartyExpRange * PartyExpRange)
+            .ToList();
+    }
+
+    /// <summary>
+    /// A field boss or named elite died to this player: with Aion:Fun:SharedBossLoot every other fighter (FieldFighters) rolls
+    /// its full loot on their own loop (the killer's roll is DropLoot's); a boss's kill and next appearance are announced.
     /// </summary>
     void FieldBossKilled(Target target, long now)
     {
         if (Fun is not { Options.FieldBosses: true } fun) return;
         var rank = FunFeatures.Rank(target, instanceKey != 0);
         if (rank == FieldRank.None) return;
-        var helpers = new List<WorldPlayer>();
-        if (worldPlayer?.Map is { } map && map.Ai.Brains.TryGetValue(target.Key, out var brain))
-        {
-            var sharing = options.Rules.LootRule == PartyLootRule.Killer ? [] : NearbyPartyMembers();
-            foreach (var key in brain.Hate.Keys)
-                if (key != playerKey && map.Players.TryGetValue(key, out var helper) && !helper.Session.Dead && !sharing.Contains(helper))
-                    helpers.Add(helper);
-        }
+        var fighters = FieldFighters(target);
         if (fun.Options.SharedBossLoot)
-            foreach (var helper in helpers)
+            foreach (var fighter in fighters)
             {
-                var items = RollKillLoot(target, helper.Session.profileRace);
-                if (items.Count > 0) helper.Session.ShareLoot(items);
+                var (items, kinah) = RollLoot(target, fighter.Session.profileRace);
+                if (kinah > 0) items.Add((KinaItemId, kinah));
+                if (items.Count > 0) fighter.Session.ShareLoot(items);
             }
         if (rank != FieldRank.Boss) return;
         var name = FunFeatures.DisplayName(target.Name);
-        var party = worldPlayer is not null && Social?.PartyOf(worldPlayer) is { } p ? p.Others(worldPlayer).Count() : 0;
-        var who = helpers.Count + party > 0 ? $"{StoredName} and {helpers.Count + party} other{(helpers.Count + party == 1 ? "" : "s")}" : StoredName;
+        var who = fighters.Count > 0 ? $"{StoredName} and {fighters.Count} other{(fighters.Count == 1 ? "" : "s")}" : StoredName;
         var region = FunFeatures.Region(worldMap);
         fun.Announce($"{who} defeated the field boss {name} (level {target.Level}) in the {region}!");
         var due = respawnAt.GetValueOrDefault(target.Key);
         if (due > now) fun.Announce($"The field boss {name} (level {target.Level}) has appeared in the {region}.", due);
-    }
-
-    /// <summary>One player's roll of a kill's loot (as DropLoot: rate rolls, the table or the fallback, Kinah).</summary>
-    List<(int ItemId, long Count)> RollKillLoot(Target target, int race)
-    {
-        var rolls = options.Rates.LootRolls(options.World?.DropRate ?? 1, rng);
-        var generic = options.Rules.FallbackLoot && !LootTables.Embedded.HasLoot(target.NpcId);
-        var items = new List<(int ItemId, long Count)>();
-        for (var i = 0; i < rolls; i++)
-            items.AddRange(generic ? MonsterRewards.Embedded.Fallback(target.SubType, target.Level, rng) : LootTables.Embedded.Roll(target.NpcId, race, rng));
-        items = options.Rates.WithKinah(LuckyLoot(items, target));
-        var kinah = options.Rates.KinahAmount(MonsterRewards.Embedded.Kinah(target.SubType, target.Level, rng));
-        if (kinah > 0) items.Add((KinaItemId, kinah));
-        return items;
     }
 
     /// <summary>"//buff": the configured buffs (Aion:Fun:BuffSkills) for Aion:Fun:BuffMinutes. Call on the game loop.</summary>
@@ -106,22 +105,34 @@ public sealed partial class GameSession
         if (dead) return ("You can't teleport while dead.", []);
         if (instanceKey != 0) return ("Leave the dungeon first.", []);
         if (worldPlayer is not null && (Social?.DuelOf(worldPlayer) is not null || ArenaOf(worldPlayer) is not null)) return ("Finish your duel or arena match first.", []);
-        if (inCombat) return ("You can't teleport during a fight.", []);
+        if (inCombat || HuntedOnMap()) return ("You can't teleport during a fight.", []);
+        if (hubs[pick - 1].MapId == FunFeatures.AbyssMapId && level < Fun!.Options.HubAbyssMinLevel) return ($"The Abyss needs level {Fun.Options.HubAbyssMinLevel}.", []);
         var (label, mapId, point) = hubs[pick - 1];
         if (!data.KnownMap(mapId) || data.Destinations().FirstOrDefault(d => d.MapId == mapId && d.Name == point) is not { Name: not null } spot)
             return ($"{label} is not available on this server.", []);
         return ($"Teleporting to {label}.", Teleport(mapId, spot.Position, now));
     }
 
-    /// <summary>Aion:Fun:DuelRestore: both duelists back at full HP and MP when their duel ends.</summary>
+    /// <summary>Whether a living monster on this map still has this player on its hate table (a fight that outlasts inCombat).</summary>
+    bool HuntedOnMap() =>
+        worldPlayer?.Map is { } map && map.Ai.Brains.Any(b => b.Value.Hate.ContainsKey(playerKey) && map.Targets.TryGetValue(b.Key, out var t) && !t.Dead);
+
+    /// <summary>The duelists' HP and MP when the battle starts (Aion:Fun:DuelRestore puts them back at the end).</summary>
+    static void RememberDuelists(Duel duel)
+    {
+        foreach (var p in new[] { duel.Challenger, duel.Accepter })
+            if (p.Session.resources is { } r) duel.Before[p.Key] = (r.Hp, r.Mp);
+    }
+
+    /// <summary>Aion:Fun:DuelRestore: the duelists get back the HP and MP the duel cost them (never more than they had before it).</summary>
     void RestoreDuelists(Duel duel)
     {
         if (Fun is not { Options.DuelRestore: true }) return;
         foreach (var p in new[] { duel.Challenger, duel.Accepter })
-            if (p.Session.resources is { } r && !p.Session.dead)
+            if (p.Session.resources is { } r && !p.Session.dead && duel.Before.TryGetValue(p.Key, out var before))
             {
-                r.Hp = r.HpMax;
-                r.Mp = r.MpMax;
+                r.Hp = Math.Min(r.HpMax, Math.Max(r.Hp, before.Hp));
+                r.Mp = Math.Min(r.MpMax, Math.Max(r.Mp, before.Mp));
                 p.Send(r.Update());
             }
     }
