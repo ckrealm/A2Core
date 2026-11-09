@@ -2395,7 +2395,7 @@ presence.Enter("Player1", game, null);
 presence.Enter("Visitor", stored, null);
 Check((await gm.HandleAsync(chatter, "player1", "//help", default)).StartsWith("Builder commands"), "configured development GM");
 Check((await gm.HandleAsync(chatter, "[GM] Player1", "//help", default)).StartsWith("Builder commands"), "chat under the displayed name finds the character");
-Check(await gm.HandleAsync(chatter, "Visitor", "//help", default) == "Commands: //report <text> sends a report to the staff.", "players get the report command as help");
+Check(await gm.HandleAsync(chatter, "Visitor", "//help", default) == "Commands: /report <text> sends a report to the staff.", "players get the report command as help");
 Check(await gm.HandleAsync(chatter, "Visitor", "//report the bridge is broken", default) == "Reports are not available on this server.", "no reports without staff tools");
 var reports = new List<string>();
 var reporting = new GmCommands(presence, builder) { Report = (_, name, text, _) => { reports.Add(name + ":" + text); return Task.FromResult("sent"); } };
@@ -2403,7 +2403,10 @@ Check(await reporting.HandleAsync(chatter, "[GM] Visitor", "//report  the bridge
     "//report from any player (no world entry needed) carries the stored name and the text");
 Check((await reporting.HandleAsync(chatter, "Visitor", "//report x", default)).StartsWith("Write what happened") && reports.Count == 1, "a report needs some text");
 Check((await Gm(stored, "Visitor", "//SetInvisible true")).Reply == "GM permission required.", "others are denied commands");
-Check(await gm.HandleAsync(chatter, "Player1", "/dance", default) == "Unknown command. Use //help." && await gm.HandleAsync(chatter, "Player1", "/gm help", default) == "Unknown command. Use //help.", "only // reaches the builder commands");
+Check(await gm.HandleAsync(chatter, "Player1", "/dance", default) == "Unknown command. Use /help." && await gm.HandleAsync(chatter, "Player1", "/gm help", default) == "Unknown command. Use /help."
+      && await gm.HandleAsync(chatter, "Player1", "/SetInvisible true", default) == "Unknown command. Use /help.", "only // reaches the builder commands");
+Check(await gm.HandleAsync(chatter, "Visitor", "/help", default) == "Commands: /report <text> sends a report to the staff."
+      && await gm.HandleAsync(chatter, "Visitor", "/report the bridge is broken", default) == "Reports are not available on this server.", "player commands work with one slash");
 var hidden = await Gm(game, "Player1", "//SetInvisible true");
 Check(hidden.Reply == "Invisible." && hidden.Packets.Any(b => b.SequenceEqual(new byte[] { 0x4d, 0x36, 1 })) && game.Invisible, "SetInvisible true sends 0x364d true; NPCs stop seeing the GM");
 Check((await Gm(game, "Player1", "//setinvisible false")).Packets.Any(b => b.SequenceEqual(new byte[] { 0x4d, 0x36, 0 })), "names are case-insensitive; false sends 0x364d false");
@@ -3501,11 +3504,11 @@ Console.WriteLine($"{checks} progression checks passed (unlocks past 25, fallbac
         var packets = await hunter.TickAsync(funClock += 1_000);
         return (await reply, packets);
     }
-    Check((await FunSay("//help")).Reply.Contains("//buff") && (await FunSay("//help")).Reply.Contains("//hub"), "players see //buff and //hub in //help");
-    var buffed = await FunSay("//buff");
+    Check((await FunSay("/help")).Reply.Contains("/buff") && (await FunSay("/help")).Reply.Contains("/hub"), "players see /buff and /hub in /help");
+    var buffed = await FunSay("/buff");
     Check(buffed.Reply.EndsWith("buffs applied for 30 minutes.") && hunter.ActiveBuffs.Count >= 4 && buffed.Packets.Any(b => Op(b) == 0x382a),
           $"//buff applies the food and scroll buffs ({buffed.Reply}, {hunter.ActiveBuffs.Count} active)");
-    Check((await FunSay("//hub")).Reply.StartsWith("Teleports: 1. Verteron"), "//hub lists the race's destinations");
+    Check((await FunSay("/hub")).Reply.StartsWith("Teleports: 1. Verteron") && (await FunSay("//hub")).Reply.StartsWith("Teleports: 1. Verteron"), "/hub (or //hub) lists the race's destinations");
     Check((await FunSay("//hub 9")).Reply.StartsWith("Pick a number"), "//hub refuses an unknown number");
     Check((await FunSay("//hub 3")).Reply == "The Abyss needs level 45.", "//hub keeps low levels out of the Abyss");
     var hubbed = await FunSay("//hub 2");

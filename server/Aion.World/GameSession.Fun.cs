@@ -70,10 +70,10 @@ public sealed partial class GameSession
     /// <summary>"//buff": the configured buffs (Aion:Fun:BuffSkills) for Aion:Fun:BuffMinutes. Call on the game loop.</summary>
     public (string Message, List<byte[]> Packets) FunBuff(long now)
     {
-        if (Fun is not { Options.BuffCommand: true } fun) return ("//buff is off on this server.", []);
+        if (Fun is not { Options.BuffCommand: true } fun) return ("/buff is off on this server.", []);
         if (resources is null) return ("Enter the world first.", []);
-        if (dead) return ("You can't use //buff while dead.", []);
-        if (now < buffReadyAt) return ($"//buff is ready again in {(buffReadyAt - now + 999) / 1000} s.", []);
+        if (dead) return ("You can't use /buff while dead.", []);
+        if (now < buffReadyAt) return ($"/buff is ready again in {(buffReadyAt - now + 999) / 1000} s.", []);
         var durationMs = (fun.Options.BuffMinutes * 60_000).ToString(System.Globalization.CultureInfo.InvariantCulture);
         var replies = new List<byte[]>();
         var applied = 0;
@@ -95,12 +95,12 @@ public sealed partial class GameSession
     /// <summary>"//hub" lists the destinations; "//hub &lt;number&gt;" teleports there. Call on the game loop.</summary>
     public (string Message, List<byte[]> Packets) FunHub(string args, long now)
     {
-        if (Fun is not { Options.HubCommand: true }) return ("//hub is off on this server.", []);
+        if (Fun is not { Options.HubCommand: true }) return ("/hub is off on this server.", []);
         var hubs = FunFeatures.Hubs(profileRace);
         if (args.Length == 0)
-            return ("Teleports: " + string.Join("; ", hubs.Select((h, i) => $"{i + 1}. {h.Label}")) + ". Use //hub <number>.", []);
+            return ("Teleports: " + string.Join("; ", hubs.Select((h, i) => $"{i + 1}. {h.Label}")) + ". Use /hub <number>.", []);
         if (!int.TryParse(args, System.Globalization.CultureInfo.InvariantCulture, out var pick) || pick < 1 || pick > hubs.Count)
-            return ($"Pick a number from 1 to {hubs.Count} (//hub lists them).", []);
+            return ($"Pick a number from 1 to {hubs.Count} (/hub lists them).", []);
         if (resources is null || position is null) return ("Enter the world first.", []);
         if (dead) return ("You can't teleport while dead.", []);
         if (instanceKey != 0) return ("Leave the dungeon first.", []);

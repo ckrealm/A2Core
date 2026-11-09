@@ -23,8 +23,11 @@ Gear grades in this client, from lowest to highest: Common, Rare, Epic (named "L
 
 ## Chat commands (every player)
 
-- `//buff`: the best drink, food and scroll buffs from the item data (HP regen and resistance, damage +16 and defense +160, +15% move speed, +15% attack speed, the damage up/down scroll, +15% max HP) for `BuffMinutes` (30). `BuffCooldownSeconds` (0) sets the wait between uses. `BuffSkills` lists the item skill IDs used. Not while dead.
-- `//hub` lists the teleports for your race, and `//hub <number>` uses one. Light: Verteron (Dawn Legion Base), Eltnen (Changarnerk Camp), the Abyss. Dark: Altgard (Fugitive Village), the zone 2 home point, the Abyss (level `HubAbyssMinLevel`, 45). It doesn't work in a dungeon, a duel, an arena match, while dead, or during a fight, which includes any living monster on the map still having you on its hate list.
+Player commands work with one slash (`/buff`, `/hub`, `/report`, `/help`, and `/bot`, `/ah`, `/boost` where those are on) or with two. Builder (GM) commands still need `//`. A single slash hasn't been tried with the real client yet: if the client keeps `/buff` to itself, `//buff` still works.
+
+
+- `/buff`: the best drink, food and scroll buffs from the item data (HP regen and resistance, damage +16 and defense +160, +15% move speed, +15% attack speed, the damage up/down scroll, +15% max HP) for `BuffMinutes` (30). `BuffCooldownSeconds` (0) sets the wait between uses. `BuffSkills` lists the item skill IDs used. Not while dead.
+- `/hub` lists the teleports for your race, and `/hub <number>` uses one. Light: Verteron (Dawn Legion Base), Eltnen (Changarnerk Camp), the Abyss. Dark: Altgard (Fugitive Village), the zone 2 home point, the Abyss (level `HubAbyssMinLevel`, 45). It doesn't work in a dungeon, a duel, an arena match, while dead, or during a fight, which includes any living monster on the map still having you on its hate list.
 
 ## Duels
 
