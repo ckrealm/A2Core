@@ -125,6 +125,7 @@ GAMEPLAY = {
     'all_skins': 'Aion__Unlocks__AllSkins',
     'all_pets': 'Aion__Unlocks__AllPets',
     'all_wings': 'Aion__Unlocks__AllWings',
+    'all_feathers': 'Aion__Unlocks__AllTraces',
     'revive_seconds': 'Aion__TimeGates__ReviveSeconds',
     'boost': 'Aion__Boost__Enabled',
     'boost_level': 'Aion__Boost__Level',
@@ -144,7 +145,7 @@ GAMEPLAY = {
 
 
 SWITCHES = ('pvp', 'fallback_loot', 'dungeon_limits', 'shop_limits', 'dungeon_timers', 'collection_rotation',
-            'all_skins', 'all_pets', 'all_wings', 'craft_always_succeeds', 'boost')
+            'all_skins', 'all_pets', 'all_wings', 'all_feathers', 'craft_always_succeeds', 'boost')
 
 
 def gameplay(args):
@@ -227,6 +228,8 @@ def main(argv=None):
     unlocks.add_argument('--all-skins', choices=['on', 'off'], help='every character gets every skin at its next world entry (default on)')
     unlocks.add_argument('--all-pets', choices=['on', 'off'], help='every character gets every pet at its top level, boards maxed (default on)')
     unlocks.add_argument('--all-wings', choices=['on', 'off'], help='every character gets every wing of its race (default on)')
+    unlocks.add_argument('--all-feathers', choices=['on', 'off'],
+                         help='every character has every feather (Empyrean Trace) of its faction collected (default on)')
     gates.add_argument('--revive-seconds', type=int, help='a dead player is revived at the respawn point after this long (1-600, default 5)')
     unlocks.add_argument('--boost', choices=['on', 'off'], help='//boost alt boost (default on)')
     unlocks.add_argument('--boost-level', type=int, help='the level //boost gives (default 45; also the level the account needs)')

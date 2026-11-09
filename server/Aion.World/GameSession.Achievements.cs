@@ -93,6 +93,12 @@ public sealed class AchievementTables
     public IReadOnlyList<long[]> GroupRewards(int groupId) => file.GroupRewards.GetValueOrDefault(groupId.ToString(System.Globalization.CultureInfo.InvariantCulture)) ?? [];
     public IEnumerable<Board> Boards => file.Attendance.Values;
 
+    /// <summary>The achievement groups of the Empyrean Trace pickups ("feathers"): one group per region page of a Monolith.</summary>
+    public const string TraceGroupPrefix = "Group_Unlock_MonolithFragment_";
+    IReadOnlyList<Entry>? traces;
+    /// <summary>Every Empyrean Trace pickup (one UseEnvObjSpawnerName achievement per GodFragment spawner, 1 to complete).</summary>
+    public IReadOnlyList<Entry> Traces => traces ??= byId.Values.Where(e => e.Group.StartsWith(TraceGroupPrefix, StringComparison.OrdinalIgnoreCase)).OrderBy(e => e.Id).ToList();
+
     /// <summary>The attendance boards open now for a race: the dated ones in their window, else the undated ones (OURS fallback).</summary>
     public List<Board> OpenBoards(int race, long nowMs)
     {

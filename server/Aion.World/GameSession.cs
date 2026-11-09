@@ -1640,6 +1640,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
                 var extras = await store.ExtrasAsync(state.Summary.CharacterId, ct);
                 LoadSkillLevels(await store.SkillsAsync(state.Summary.CharacterId, ct));
                 LoadAchievements(await store.AchievementsAsync(state.Summary.CharacterId, ct), await store.GroupRewardsTakenAsync(state.Summary.CharacterId, ct), now);
+                CollectAllTraces(state.Race, now);   // Aion:Unlocks:AllTraces (OURS): every feather collected, written with the next flush
                 LoadCollections(await store.CollectionsAsync(state.Summary.CharacterId, ct));
                 LoadBossChallenges(await store.BossChallengesAsync(state.Summary.CharacterId, ct));
                 LoadDungeonEntries(await store.DungeonEntriesAsync(state.Summary.CharacterId, ct), now);

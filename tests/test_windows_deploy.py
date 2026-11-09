@@ -257,7 +257,7 @@ class WslInstallTests(unittest.TestCase):
                                       '--pet-exp-rate', '5', '--shop-limits', 'on', '--dungeon-timers', 'off',
                                       '--collection-rotation', 'off', '--dungeon-limits', 'off', '--gather-respawn-seconds', '0',
                                       '--all-skins', 'on', '--all-pets', 'on', '--craft-always-succeeds', 'off', '--pet-soul-cost', '0.25',
-                                      '--all-wings', 'off', '--revive-seconds', '3', '--boost', 'on', '--boost-level', '40', '--boost-price', '250000')
+                                      '--all-wings', 'off', '--all-feathers', 'off', '--revive-seconds', '3', '--boost', 'on', '--boost-level', '40', '--boost-price', '250000')
             self.assertEqual(result.returncode, 0, result.stderr)
             lines = sorted((config / 'game.env').read_text(encoding='utf-8').splitlines())
             self.assertEqual(lines, ['Aion__Boost__Enabled=true', 'Aion__Boost__Level=40', 'Aion__Boost__Price=250000',
@@ -267,7 +267,7 @@ class WslInstallTests(unittest.TestCase):
                                      'Aion__TimeGates__DungeonTimeLimits=false', 'Aion__TimeGates__GatherRespawnSeconds=0',
                                      'Aion__TimeGates__ReviveSeconds=3',
                                      'Aion__TimeGates__ShopLimits=true', 'Aion__Unlocks__AllPets=true', 'Aion__Unlocks__AllSkins=true',
-                                     'Aion__Unlocks__AllWings=false',
+                                     'Aion__Unlocks__AllTraces=false', 'Aion__Unlocks__AllWings=false',
                                      'Aion__Unlocks__CraftAlwaysSucceeds=false', 'Aion__Unlocks__PetSoulCost=0.25'])
             self.assertIn('Aion__TimeGates__ShopLimits=true', result.stdout)
             for args in (['--rates-only', '--shop-limits', 'yes'], ['--rates-only', '--gather-respawn-seconds', '3601'],

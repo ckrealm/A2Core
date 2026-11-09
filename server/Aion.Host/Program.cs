@@ -96,7 +96,7 @@ var bots = (builder.Configuration.GetSection("Aion:Bots").Get<Aion.World.BotOpti
 
 builder.Services.AddSingleton(dungeonRules);
 // Aion:TimeGates (OURS, all off by default: ShopLimits, DungeonTimeLimits, CollectionRotation; GatherRespawnSeconds 10) and
-// Aion:Unlocks (OURS: AllSkins, AllPets and AllWings on by default; CraftAlwaysSucceeds on, PetSoulCost 0.5).
+// Aion:Unlocks (OURS: AllSkins, AllPets, AllWings and AllTraces on by default; CraftAlwaysSucceeds on, PetSoulCost 0.5).
 var timeGates = (builder.Configuration.GetSection("Aion:TimeGates").Get<Aion.World.TimeGateOptions>() ?? Aion.World.TimeGateOptions.Default).Validated();
 var unlocks = (builder.Configuration.GetSection("Aion:Unlocks").Get<Aion.World.UnlockOptions>() ?? Aion.World.UnlockOptions.Default).Validated();
 builder.Services.AddSingleton(timeGates);

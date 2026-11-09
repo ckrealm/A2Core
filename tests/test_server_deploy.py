@@ -92,7 +92,7 @@ class ServerEnvTests(unittest.TestCase):
                                                    craft_exp_rate=6, pet_exp_rate=4, shop_limits='on', dungeon_timers='off',
                                                    collection_rotation='off', gather_respawn_seconds=0, all_skins='on',
                                                    all_pets='on', craft_always_succeeds='off', pet_soul_cost=0.25,
-                                                   all_wings='off', revive_seconds=3, boost='on', boost_level=40, boost_price=250000),
+                                                   all_wings='off', all_feathers='off', revive_seconds=3, boost='on', boost_level=40, boost_price=250000),
                                          {'aion_app': 'a', 'aion_auth': 'b'})
         self.assertEqual(env['Aion__Rates__Profile'], 'friends')
         self.assertEqual(env['Aion__Rates__KinahChance'], 2.5)
@@ -108,6 +108,7 @@ class ServerEnvTests(unittest.TestCase):
         self.assertEqual(env['Aion__Unlocks__CraftAlwaysSucceeds'], 'false')
         self.assertEqual(env['Aion__Unlocks__PetSoulCost'], 0.25)
         self.assertEqual(env['Aion__Unlocks__AllWings'], 'false')
+        self.assertEqual(env['Aion__Unlocks__AllTraces'], 'false')
         self.assertEqual(env['Aion__TimeGates__ReviveSeconds'], 3)
         self.assertEqual(env['Aion__Boost__Enabled'], 'true')
         self.assertEqual(env['Aion__Boost__Level'], 40)

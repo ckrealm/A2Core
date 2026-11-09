@@ -30,7 +30,7 @@ Options:
   --max-players N (0: no cap), --respawn-seconds N (5-3600), --pvp on|off
   Time gates (default all off): --shop-limits on|off, --dungeon-timers on|off, --collection-rotation on|off,
   --dungeon-limits on|off, --gather-respawn-seconds N (0-3600, default 10), --revive-seconds N (1-600, default 5)
-  Unlocks: --all-skins on|off, --all-pets on|off, --all-wings on|off (default on),
+  Unlocks: --all-skins on|off, --all-pets on|off, --all-wings on|off, --all-feathers on|off (default on),
   --craft-always-succeeds on|off (default on), --pet-soul-cost N (0-10, default 0.5)
   Alt boost: --boost on|off (default on), --boost-level N (default 45), --boost-price N (Kinah, default 10000000)
   --rates-only                 write game.env and restart aion-host; no install
@@ -73,6 +73,7 @@ while [[ $# -gt 0 ]]; do
     --all-skins) switch "$1" "$2" Aion__Unlocks__AllSkins; shift 2 ;;
     --all-pets) switch "$1" "$2" Aion__Unlocks__AllPets; shift 2 ;;
     --all-wings) switch "$1" "$2" Aion__Unlocks__AllWings; shift 2 ;;
+    --all-feathers) switch "$1" "$2" Aion__Unlocks__AllTraces; shift 2 ;;
     --boost) switch "$1" "$2" Aion__Boost__Enabled; shift 2 ;;
     --revive-seconds)
       if ! [[ "$2" =~ ^[0-9]{1,3}$ ]] || ((10#$2 < 1 || 10#$2 > 600)); then echo "--revive-seconds must be 1-600" >&2; exit 2; fi
