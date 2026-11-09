@@ -191,12 +191,12 @@ public sealed partial class GameSession : IMapEventHost
     List<byte[]> EnterPartyDungeon(IReadOnlyList<int> dungeons, long now)
     {
         if (instanceKey != 0 || dungeons.Count == 0) return [];
-        if (Social is { } s && worldPlayer is not null && s.PartyOf(worldPlayer) is { } party)
-            foreach (var member in party.Members)
-                if (member != worldPlayer && member.Map is { Instance: not 0 } inside
-                    && dungeons.FirstOrDefault(id => MapEventData.Dungeon(id)?.Map == inside.MapId) is not 0 and var joined
-                    && (IsAdmin || !CopyFull(inside, MapEventData.Dungeon(joined)!)))   // a full copy (sealed dungeons: one player) means a copy of one's own
-                    return EnterDungeon(joined, now, inside.Instance, inside.Dungeon);
+        // The party, or the whole raid group (Aion:Groups), shares the copy.
+        foreach (var member in GroupMates())
+            if (member.Map is { Instance: not 0 } inside
+                && dungeons.FirstOrDefault(id => MapEventData.Dungeon(id)?.Map == inside.MapId) is not 0 and var joined
+                && (IsAdmin || !CopyFull(inside, MapEventData.Dungeon(joined)!)))   // a full copy (sealed dungeons: one player) means a copy of one's own
+                return EnterDungeon(joined, now, inside.Instance, inside.Dungeon);
         var wanted = questLog?.OpenMapEventTargets().ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
         var chosen = dungeons.FirstOrDefault(id => MapEventData.Dungeon(id) is { } room && MapEventData.EventsOn(room.Map).Any(e => wanted.Contains(e.Name)));
         return EnterDungeon(chosen != 0 ? chosen : dungeons[0], now);

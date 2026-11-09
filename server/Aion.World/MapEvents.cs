@@ -232,6 +232,10 @@ public sealed class MapEventTables
     /// <summary>The dungeon whose map this is (served or not), or null for a field map.</summary>
     public DungeonInfo? DungeonOfMap(int mapId) => dungeonByMap.TryGetValue(mapId, out var id) ? Dungeon(id) : null;
     public int DungeonIdOfMap(int mapId) => dungeonByMap.GetValueOrDefault(mapId);
+    /// <summary>Every dungeon of a Dungeon.dat type (any case), by id.</summary>
+    public IEnumerable<(int Id, DungeonInfo Room)> DungeonsOfType(string type) =>
+        file.Dungeons.Where(d => string.Equals(d.Value.Type, type, StringComparison.OrdinalIgnoreCase))
+            .Select(d => (int.Parse(d.Key, CultureInfo.InvariantCulture), d.Value)).OrderBy(d => d.Item1);
     public IReadOnlyList<DungeonEntry> EntriesOn(int baseMap) => file.Entries.GetValueOrDefault(K(baseMap)) ?? [];
     public NpcEntry? EntryNpc(int npcId) => file.NpcEntries.GetValueOrDefault(K(npcId));
     public IReadOnlyDictionary<string, double[]> Points(int mapId) => file.Points.GetValueOrDefault(K(mapId)) ?? new Dictionary<string, double[]>();

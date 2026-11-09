@@ -38,6 +38,8 @@ public sealed record GameSessionOptions
     public WorldRules Rules { get; init; } = WorldRules.Default;
     /// <summary>Aion:Dungeons: daily entry limits (off by default) and the untracked-objective fallback delay.</summary>
     public DungeonOptions Dungeons { get; init; } = DungeonOptions.Default;
+    /// <summary>Aion:Groups: party size (5 as on global AION2) and raid groups (parties linked for raids).</summary>
+    public GroupOptions Groups { get; init; } = GroupOptions.Default;
     /// <summary>Heal/buff/debuff effects of class skills; null: the embedded tools/data/skill-effects.json (OURS values).</summary>
     public SkillEffectTable? SkillEffects { get; init; }
 }

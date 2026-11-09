@@ -1,4 +1,5 @@
 using Aion.Protocol.Native;
+using Aion.World;
 
 /// <summary>
 /// Checks of <see cref="SocialPackets"/> / <see cref="SocialRequests"/> (research/social-protocol.md):
@@ -36,6 +37,7 @@ public static class SocialPacketChecks
         OfficialSamples();
         FriendLayouts();
         PartyLayouts();
+        ForceLayouts();
         ExchangeLayouts();
         DuelLayouts();
         RequestRoundTrips();
@@ -70,6 +72,15 @@ public static class SocialPacketChecks
         Op((ushort)(SocialOpcodes.LateBase + 1114), 0x9330, "BookmarkedContentList_NT");
         Op((ushort)(SocialOpcodes.FriendBase + 1413), 0xe28c, "PresetInfo_NT");
         Op((ushort)(SocialOpcodes.E3Base + 1499), 0xe349, "RetrievePushRewardInfo_RS");
+        // Force (raid group): CANDIDATE, the run of the OBSERVED SocialActionStart/End_NT 0x9507/0x9508 (catalogue 1148/1149).
+        Op((ushort)(SocialOpcodes.ForceBase + 1142), 0x9501, "PcSocialActionInfo_NT (anchor)");
+        Op((ushort)(SocialOpcodes.ForceBase + 1148), 0x9507, "SocialActionStart_NT (anchor)");
+        Op(SocialOpcodes.ForceCreateRq, 0x9509, "ForceCreate_RQ");
+        Op(SocialOpcodes.ForceInfoNt, 0x950b, "ForceInfo_NT");
+        Op(SocialOpcodes.ForceInviteResponseRq, 0x9510, "ForceInviteResponse_RQ");
+        Op(SocialOpcodes.ForceDisbandNt, 0x9523, "ForceDisband_NT");
+        Op(SocialOpcodes.ForceLeaveNt, 0x9537, "ForceLeave_NT");
+        Check(SocialOpcodes.ForceRequests.Count == 6 && !SocialOpcodes.ForceRequests.Overlaps(SocialOpcodes.ClientRequests), "force request set apart from the others");
         Check(SocialOpcodes.ClientRequests.Count == 30 && SocialOpcodes.ClientRequests.Contains(SocialOpcodes.DuelCallOutAcceptRq), "client request set");
         Same("WithOpcode", SocialPackets.WithOpcode(SocialPackets.DuelRingIn(1, 2), SocialOpcodes.Alternative(SocialOpcodes.DuelRingInNt)), "6692 01000000 02000000");
     }
@@ -121,7 +132,7 @@ public static class SocialPacketChecks
         var bytes = SocialPackets.PartyInfo(info, PartyUpdateReason.AddMember);
         // Decode it back field by field (usmap order) to pin the layout and the shared bool byte.
         var r = new PacketReader(bytes);
-        Check(r.U16() == 0x9200 && r.I64() == 77 && r.I64() == 11 && r.I32() == 4, "PartyInfo head");
+        Check(r.U16() == 0x9200 && r.I64() == 77 && r.I64() == 11 && r.I32() == 5, "PartyInfo head (party of 5, as global AION2)");
         Check(r.U8() == 3 && r.U8() == 1 && r.U8() == 2 && r.U8() == 1, "PartyInfo options");
         Check(r.I32() == 0 && r.I32() == 0 && r.I32() == 0, "PartyInfo focus target");
         Check(r.Varint() == 0 && r.Varint() == 0 && r.Varint() == 0 && r.Varint() == 2, "PartyInfo lists, member count");
@@ -168,6 +179,43 @@ public static class SocialPacketChecks
         Same("PartyLeave_NT", SocialPackets.PartyLeaveNotice(77, PartyUpdateReason.LeaveMember), "2793 4d00000000000000 03");
         Same("PartyRecentMember_RS", SocialPackets.PartyRecentMembers(0, [new PartyRecentMember(12, 1000, 1204, "Bo", 2, 5, 0, true)]),
             "39e3 0000 01 0c00000000000000 e803000000000000 b404 02426f 02 05000000 00000000 01");
+    }
+
+    static void ForceLayouts()
+    {
+        var a = Member(0, 100001, 11, "Al");
+        var b = Member(0, 100003, 13, "Cy", live: false);
+        var info = new ForceInfo { Key = 90, LeaderDbId = 11, LimitMember = 20, Parties = [new ForcePartyInfo(77, 0, 5, [a]), new ForcePartyInfo(78, 1, 5, [b])] };
+        var bytes = SocialPackets.ForceInfo(info, PartyUpdateReason.ForceJoin);
+        var r = new PacketReader(bytes);
+        Check(r.U16() == SocialOpcodes.ForceInfoNt && r.I64() == 90 && r.I64() == 11 && r.Varint() == 0 && r.I32() == 20, "ForceInfo head (no vice leaders)");
+        Check(r.U8() == 3 && r.U8() == 1 && r.U8() == 2 && r.Varint() == 0 && r.Varint() == 0 && r.Varint() == 2, "ForceInfo options, markers, party count");
+        foreach (var (party, number, m) in new[] { (77L, 0, a), (78L, 1, b) })
+        {
+            Check(r.I64() == party && r.U8() == number && r.I32() == 5 && r.Varint() == 1, "force party " + number);
+            Check(r.U8() == 0 && r.I32() == m.Key && r.U16() == 1204 && r.U16() == 1204 && r.String() == "" && r.I64() == m.DbId && r.String() == m.Nickname, "force member identity " + m.Nickname);
+            Check(r.I32() == 29 && r.Varint() == 1500 && r.Varint() == 1500 && r.I64() == 1000 && r.I32() == 0 && r.Bool() == m.Live, "force member points/map/live " + m.Nickname);
+            Check(r.String() == "" && r.I32() == 0 && r.I32() == 5 && r.I32() == 0 && r.Bool() && r.I32() == 0 && r.Vec3() == new Vector3d(1, 2, 3) && r.I64() == 0 && r.U8() == 1,
+                "force member tail " + m.Nickname);
+        }
+        Check(r.U8() == (byte)PartyUpdateReason.ForceJoin && r.End, "ForceInfo reason");
+        Same("ForceCreate_RS", SocialPackets.ForceCreateReply(0), "0a95 0000");
+        Same("ForceInvite_RS", SocialPackets.ForceInviteReply(0, 1204, "Bo"), "0d95 0000 b404 02426f");
+        Same("ForceInviteResponse_NT", SocialPackets.ForceInviteResponseNotice(12, 1204, "Bo", ForceInviteAnswer.RefusalAlreadyInForce), "1295 0c00000000000000 b404 02426f 04");
+        Same("ForceLeave_NT", SocialPackets.ForceLeaveNotice(90, PartyUpdateReason.LeaveMember), "3795 5a00000000000000 03");
+        Same("ForceDisband_NT", SocialPackets.ForceDisband(), "2395");
+        Check(SocialRequests.ParseForceInviteResponse(SocialRequests.EncodeForceInviteResponse(new ForceInviteReplyRequest(90, ForceInviteAnswer.Accept)))
+            is { ForceKey: 90, Response: ForceInviteAnswer.Accept }, "ForceInviteResponse_RQ round trip");
+        Check(SocialRequests.ParseForceInviteResponse(M("1095 5a 01")) is { ForceKey: 90, Response: ForceInviteAnswer.Refusal }, "ForceInviteResponse_RQ varint key");
+        Check(SocialRequests.ParseForceInviteResponse(M("1095 5a00000000000000")) is null, "ForceInviteResponse_RQ without the answer");
+        // Group sizes: global AION2 (5 a party, raids of two parties and more), validated.
+        Check(GroupOptions.Default.PartySize == 5 && GroupOptions.Default.ForceSize == 20 && !GroupOptions.Default.ForceWindow, "Aion:Groups defaults");
+        Check(new GroupOptions { PartySize = 4, ForceParties = 2 }.Validated().ForceSize == 8, "Korea sizes allowed (4, raids of 8)");
+        foreach (var bad in new[] { new GroupOptions { PartySize = 1 }, new GroupOptions { PartySize = 7 }, new GroupOptions { ForceParties = 1 } })
+        {
+            try { bad.Validated(); Check(false, "bad group sizes refused"); }
+            catch (InvalidOperationException) { passed++; }
+        }
     }
 
     static void ExchangeLayouts()

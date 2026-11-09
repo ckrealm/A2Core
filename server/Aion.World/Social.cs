@@ -3,9 +3,10 @@ using Aion.Protocol.Native;
 namespace Aion.World;
 
 /// <summary>A party on this host (in memory; lost on restart). Members in join order; the leader leads.</summary>
-public sealed class Party(long key, WorldPlayer leader)
+public sealed class Party(long key, WorldPlayer leader, int limit = GroupOptions.DefaultPartySize)
 {
-    public const int Limit = 4;   // _limit_member: our CANDIDATE AION2 party size
+    /// <summary>_limit_member: the party size (Aion:Groups:PartySize; global AION2 uses 5).</summary>
+    public int Limit { get; } = limit;
     public long Key { get; } = key;
     public WorldPlayer Leader { get; set; } = leader;
     public List<WorldPlayer> Members { get; } = [leader];
@@ -68,6 +69,9 @@ public sealed class SocialState
     public Dictionary<long, Party> Parties { get; } = [];
     /// <summary>Pending invitations by invited player key.</summary>
     public Dictionary<int, PartyInvite> Invites { get; } = [];
+    /// <summary>Raid groups by key, and pending raid invitations of party leaders by invited player key.</summary>
+    public Dictionary<long, Force> Forces { get; } = [];
+    public Dictionary<int, ForceInvite> ForceInvites { get; } = [];
     public Dictionary<long, Exchange> Exchanges { get; } = [];
     public Dictionary<int, Duel> Duels { get; } = [];
     /// <summary>Arena matches by room key and the players waiting for one.</summary>
@@ -75,6 +79,8 @@ public sealed class SocialState
     public List<ArenaQueueEntry> ArenaQueue { get; } = [];
 
     public Party? PartyOf(WorldPlayer p) => Parties.Values.FirstOrDefault(x => x.Members.Contains(p));
+    public Force? ForceOf(WorldPlayer p) => Forces.Values.FirstOrDefault(x => x.Has(p));
+    public Force? ForceOf(Party party) => Forces.Values.FirstOrDefault(x => x.Parties.Contains(party));
     public Exchange? ExchangeOf(WorldPlayer p) => Exchanges.Values.FirstOrDefault(x => x.Has(p));
     public Duel? DuelOf(WorldPlayer p) => Duels.Values.FirstOrDefault(x => x.Has(p));
 }

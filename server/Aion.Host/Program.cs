@@ -102,6 +102,10 @@ var marketReferences = market.PriceFile is { Length: > 0 } priceFile ? Aion.Worl
     : ((Dictionary<int, long> ById, Dictionary<string, long> ByName)?)null;
 
 builder.Services.AddSingleton(dungeonRules);
+// Aion:Groups: PartySize (default 5, as global AION2), ForceParties (parties in a raid group, default 4), ForceWindow (the
+// client's raid window; CANDIDATE messages, default off: raid groups are formed with //raid in chat).
+var groups = (builder.Configuration.GetSection("Aion:Groups").Get<Aion.World.GroupOptions>() ?? Aion.World.GroupOptions.Default).Validated();
+builder.Services.AddSingleton(groups);
 if (native.LoginPort is not null || native.GamePort is not null)
 {
     if (!native.Development && !accountsReady)
@@ -279,8 +283,8 @@ builder.WebHost.ConfigureKestrel(options =>
 builder.Services.AddSingleton<WardrobeAccess>();
 var app = builder.Build();
 if (native.LoginPort is not null || native.GamePort is not null)
-    app.Logger.LogInformation("World rates: {Rates} (scheduled events multiply on top, each 0.1-10). Rules: {Rules}. Players: {Players}. Dungeons: {Dungeons}.",
-        rates, rules, native.MaxPlayers is > 0 and var maxPlayers ? $"at most {maxPlayers}" : $"no cap beyond {native.MaxConnections} connections per port", dungeonRules);
+    app.Logger.LogInformation("World rates: {Rates} (scheduled events multiply on top, each 0.1-10). Rules: {Rules}. Players: {Players}. Dungeons: {Dungeons}. Groups: {Groups}.",
+        rates, rules, native.MaxPlayers is > 0 and var maxPlayers ? $"at most {maxPlayers}" : $"no cap beyond {native.MaxConnections} connections per port", dungeonRules, groups);
 // Chat mutes and the chat log go through the staff tools when both exist.
 if (app.Services.GetService<Aion.Host.Authentication.ServerControl>() is { } serverControl && app.Services.GetService<ChatRelay>() is { } chatRelay)
     chatRelay.Moderation = serverControl;

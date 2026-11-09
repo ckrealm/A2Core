@@ -89,8 +89,10 @@ played twice. Characters of other accounts cannot be summoned.
 `GameSession.JoinPartyAsBot(leader)` adds the bot to the leader's party without the invitation round trip. The
 leader asked for the bot by command, so there is no question to answer. It sends the same messages an accepted
 invitation sends: `PartyInfo` (Create) to a leader who had no party, `PartyAddMember` to the members, and
-`PartyInfo` (Join) to the bot. The party limit stays 4, so the leader plus 3 bots. A bot over the limit still
-follows and fights. It just is not in the party. Leaving the world leaves the party through `LeaveSocial`, as a
+`PartyInfo` (Join) to the bot. The party limit is `Aion:Groups:PartySize` (5 as on global AION2), so the leader
+plus 4 bots. A raid leader's bots fill the raid group (`//raid`, see deploy/linux/README.md "Parties and raid
+groups"): the leader's party first, then any party of the group with room, then a new party the bot leads while the
+group may have more parties. A bot over the limit still follows and fights. It just is not in the party. Leaving the world leaves the party through `LeaveSocial`, as a
 disconnect does.
 
 ### The brain: strategies and actions
@@ -196,9 +198,11 @@ Private copies (`InstanceKey != 0`) are entered through the session's own entry 
   `EnterPartyDungeon` puts a party member into the copy a member is already in, and applies the same entry rules as
   for a player (`MapEntrance` level, item level and quest step, a full copy). Inside, the bot follows, fights and
   loots as usual. When the leader leaves the copy, the bot sends the client's leave request (`0x4004`).
-- **Not followed:** solo copies (instance layers entered by a trigger box, sealed one-member dungeons), dungeons that
-  have no portal or entry NPC on the leader's entry map (a staff `EnterDungeon`, raids entered through client windows
-  that are not recorded), and bots that are not in the leader's party. The bot waits where it is, and `//bot list`
+- **Raids** (Dungeon.dat type Raid, such as Ludra) have no portal: players enter with `//raid enter`, and a bot in
+  the group enters its group's copy directly the same way (`EnterDungeonById`), with the same entry rules.
+- **Not followed:** solo copies (instance layers entered by a trigger box, sealed one-member dungeons), other dungeons
+  that have no portal or entry NPC on the leader's entry map (a staff `EnterDungeon`), and bots that are not in the
+  leader's party or raid group. The bot waits where it is, and `//bot list`
   shows why. A bot that gets into a copy other than its leader's (a full copy, entry refused) leaves it and waits
   30 s before it tries again.
 

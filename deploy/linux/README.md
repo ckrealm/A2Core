@@ -123,8 +123,33 @@ Kinah rate applies to Kinah in monster drops, quest rewards, Kinah chests, rewar
 collections; not to selling to merchants, trades, mail or staff grants. `tools/server_env.py` takes the same settings
 as options (`--rates-profile`, `--exp-rate`, `--quest-exp-rate`, `--kinah-rate`, `--drop-rate`, `--max-players`,
 `--respawn-seconds`, `--pvp on|off`, `--party-loot`, `--fallback-loot on|off`) for a hand-made environment file. Comments go on their own lines (systemd reads
-`#` after a value as part of it). The party size is not configurable: it stays 4. The server sends it to the client
-(PartyInfo LimitMember, a CANDIDATE field), and nothing recorded shows how the client's party window copes with another size.
+`#` after a value as part of it).
+
+### Parties and raid groups
+
+Group sizes follow global AION2, which raised them at its launch: parties (and expedition dungeons) take 5 players,
+raids 10. The client's data agrees (MapEntrance MaxMember 5 for the expeditions, 10 for the raids such as Ludra,
+`ReforgedAbyss_Normal`). `Aion__Groups__PartySize` (2-6, default 5) is the party size the server enforces and tells the
+client (PartyInfo LimitMember, a CANDIDATE field); 4 gives Korea's sizes. A dungeon copy still takes only its own
+MaxMember.
+
+A raid group (the client's "Force") links parties: `Aion__Groups__ForceParties` (2-8, default 4) parties of PartySize
+each, so 20 players by default. Each party keeps its own party window, loot, heals and buffs; the group shares raid
+copies. Players run it from chat:
+
+| Command | What it does |
+|---|---|
+| `//raid invite <name>` | Starts a raid group from your party (you must lead it) and invites a player. A player without a party gets the party invitation window and takes a seat in a party of the group with room (or a new one). A party leader brings the whole party and answers with `//raid accept`. |
+| `//raid accept` / `//raid decline` | Answer a raid invitation (60 s). |
+| `//raid list` | The group's parties and members. |
+| `//raid enter` | Lists the raids. `//raid enter <name or id>` (for example `//raid enter ReforgedAbyss_Normal` for Ludra) enters one; the rest of the group runs the same command and joins the same copy while it has room. Level and item level rules apply (Ludra: level 45, item level 2,800). Bots in the group follow on their own. |
+| `//raid leave`, `//raid kick <name>`, `//raid leader <name>`, `//raid disband` | Leave (you also leave your party in it), remove a member, hand over the lead, end the group (the parties stay). |
+
+The official client opens raids and its raid window through messages that were never recorded, so this is the way in.
+`Aion__Groups__ForceWindow=true` also answers the client's own raid-window requests and sends it the Force messages
+(opcodes and layouts are CANDIDATE: from the client's struct list, placed by the observed neighbours 0x9507/0x9508).
+It is off by default because nobody has tried it against the client yet; turn it on to test, and off again if the
+client misbehaves.
 
 Party loot and monster Kinah are our own rules (nothing observed). `Aion__Rules__PartyLoot` shares a party member's kill
 among the members on the same map within 100 m (the members who share its experience): `roundrobin` gives the items to

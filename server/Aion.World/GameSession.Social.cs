@@ -32,6 +32,7 @@ public sealed partial class GameSession
 
     async Task<List<byte[]>?> SocialRequestAsync(byte[] plain, long now, CancellationToken ct)
     {
+        if (ForceRequest(plain, now) is { } force) return force;
         var header = Opcode(plain);
         if (!IsSocialRequest(header) || resources is null) return null;
         // A duel request under the alternative base is handled as the primary one.
@@ -207,7 +208,7 @@ public sealed partial class GameSession
 
     static PartyInfo Info(Party party) => new()
     {
-        Key = party.Key, LeaderDbId = party.Leader.Session.DbId, LimitMember = Party.Limit,
+        Key = party.Key, LeaderDbId = party.Leader.Session.DbId, LimitMember = party.Limit,
         Members = party.Members.Select((m, i) => m.Session.MemberInfo((byte)i)).ToList(),
     };
 
@@ -217,8 +218,7 @@ public sealed partial class GameSession
     {
         if (Social is not { } s || worldPlayer is null) return [SocialPackets.PartyCreateReply(Failed)];
         if (s.PartyOf(worldPlayer) is not null) return [SocialPackets.PartyCreateReply(Failed)];
-        var party = new Party(s.NextId(), worldPlayer);
-        s.Parties[party.Key] = party;
+        var party = NewParty(s, worldPlayer);
         return [SocialPackets.PartyCreateReply(0), SocialPackets.PartyInfo(Info(party), PartyUpdateReason.Create)];
     }
 
@@ -232,11 +232,10 @@ public sealed partial class GameSession
         var party = s.PartyOf(worldPlayer);
         if (party is null)
         {
-            party = new Party(s.NextId(), worldPlayer);
-            s.Parties[party.Key] = party;
+            party = NewParty(s, worldPlayer);
             replies.Add(SocialPackets.PartyInfo(Info(party), PartyUpdateReason.Create));
         }
-        if (party.Leader != worldPlayer || party.Members.Count >= Party.Limit) return [Fail()];
+        if (party.Leader != worldPlayer || party.Members.Count >= party.Limit) return [Fail()];
         var expires = now + 30_000;
         s.Invites[invitee.Key] = new PartyInvite(party.Key, playerKey, expires);
         invitee.Send(SocialPackets.PartyInviteNotice(party.Key, DbId, Invitation(), expires));
@@ -249,27 +248,75 @@ public sealed partial class GameSession
         if (SocialRequests.ParsePartyInviteResponse(plain) is not { Count: > 0 } answers || Social is not { } s || worldPlayer is null)
             return [SocialPackets.PartyInviteResponseReply(Failed)];
         var answer = answers[0];
+        // A raid invitation shown in the party invitation window (Aion:Groups:ForceWindow off) is answered here too.
+        if (!s.Invites.ContainsKey(playerKey) && s.ForceInvites.ContainsKey(playerKey))
+        {
+            if (answer.Response != PartyInviteAnswer.Accept) return [SocialPackets.PartyInviteResponseReply(0), .. ForceDecline(ForceInviteAnswer.Refusal)];
+            var joined = ForceAccept(now, out _);
+            return [SocialPackets.PartyInviteResponseReply(joined is null ? Failed : 0), .. joined ?? []];
+        }
         if (!s.Invites.Remove(playerKey, out var invite) || invite.ExpiresMs < now || !s.Parties.TryGetValue(invite.PartyKey, out var party))
             return [SocialPackets.PartyInviteResponseReply(Failed)];
         var inviter = World!.Online.GetValueOrDefault(invite.InviterKey);
-        var accepted = answer.Response == PartyInviteAnswer.Accept && s.PartyOf(worldPlayer) is null && party.Members.Count < Party.Limit;
+        var accepted = answer.Response == PartyInviteAnswer.Accept && s.PartyOf(worldPlayer) is null && party.Members.Count < party.Limit;
         inviter?.Send(SocialPackets.PartyInviteResponseNotice(DbId, ServerId, StoredName, accepted ? PartyInviteAnswer.Accept : answer.Response));
         if (!accepted)
         {
             // A party of one left by a refusal ends.
-            if (party.Members.Count == 1) DisbandParty(party, PartyUpdateReason.LeaveMember);
+            if (party.Members.Count == 1 && s.ForceOf(party) is null) DisbandParty(party, PartyUpdateReason.LeaveMember);
             return [SocialPackets.PartyInviteResponseReply(0)];
         }
-        party.Members.Add(worldPlayer);
-        var member = MemberInfo((byte)(party.Members.Count - 1));
-        foreach (var other in party.Others(worldPlayer)) other.Send(SocialPackets.PartyAddMember(member));
-        return [SocialPackets.PartyInviteResponseReply(0), SocialPackets.PartyInfo(Info(party), PartyUpdateReason.Join), .. Achieve("JoinParty")];
+        return [SocialPackets.PartyInviteResponseReply(0), .. JoinParty(party)];
     }
 
-    void DisbandParty(Party party, PartyUpdateReason reason)
+    /// <summary>A new party led by <paramref name="leader"/> (Aion:Groups:PartySize members at most).</summary>
+    Party NewParty(SocialState s, WorldPlayer leader)
+    {
+        var party = new Party(s.NextId(), leader, options.Groups.PartySize);
+        s.Parties[party.Key] = party;
+        return party;
+    }
+
+    /// <summary>
+    /// This player joins the party: the others get the new member, this one the party (the replies). In a raid group the
+    /// group's members see the change too.
+    /// </summary>
+    List<byte[]> JoinParty(Party party)
+    {
+        party.Members.Add(worldPlayer!);
+        var member = MemberInfo((byte)(party.Members.Count - 1));
+        foreach (var other in party.Others(worldPlayer!)) other.Send(SocialPackets.PartyAddMember(member));
+        if (Social?.ForceOf(party) is { } force) ForceChanged(force, PartyUpdateReason.ForceJoin);
+        return [SocialPackets.PartyInfo(Info(party), PartyUpdateReason.Join), .. Achieve("JoinParty")];
+    }
+
+    void DisbandParty(Party party, PartyUpdateReason reason, WorldPlayer? alsoGone = null)
     {
         foreach (var m in party.Members) m.Send(SocialPackets.PartyDisband(reason));
-        Social?.Parties.Remove(party.Key);
+        if (Social is not { } s) return;
+        s.Parties.Remove(party.Key);
+        if (s.ForceOf(party) is { } force) ForceRefresh(force, reason, alsoGone is null ? party.Members : [.. party.Members, alsoGone]);
+    }
+
+    /// <summary>
+    /// After <paramref name="gone"/> left or was removed: a party left empty, or alone outside a raid group, ends; otherwise a
+    /// new leader if the leader went and everyone gets the updated party. A raid group of the party follows.
+    /// </summary>
+    void AfterPartyLoss(Party party, WorldPlayer gone, PartyUpdateReason reason)
+    {
+        var force = Social?.ForceOf(party);
+        if (party.Members.Count == 0 || party.Members.Count == 1 && force is null)
+        {
+            DisbandParty(party, reason, gone);
+            return;
+        }
+        if (party.Leader == gone)
+        {
+            party.Leader = party.Members[0];
+            foreach (var m in party.Members) m.Send(SocialPackets.PartyNewLeader(party.Leader.Session.DbId));
+        }
+        foreach (var m in party.Members) m.Send(SocialPackets.PartyInfo(Info(party), reason));
+        if (force is not null) ForceRefresh(force, reason, [gone]);
     }
 
     /// <summary>
@@ -282,17 +329,7 @@ public sealed partial class GameSession
         if (Social is not { } s || worldPlayer is null || s.PartyOf(worldPlayer) is not { } party) return replies.Count > 0 ? [SocialPackets.PartyLeaveReply(Failed)] : [];
         party.Members.Remove(worldPlayer);
         replies.Add(SocialPackets.PartyDisband(reason));
-        if (party.Members.Count <= 1)
-        {
-            DisbandParty(party, reason);
-            return replies;
-        }
-        if (party.Leader == worldPlayer)
-        {
-            party.Leader = party.Members[0];
-            foreach (var m in party.Members) m.Send(SocialPackets.PartyNewLeader(party.Leader.Session.DbId));
-        }
-        foreach (var m in party.Members) m.Send(SocialPackets.PartyInfo(Info(party), reason));
+        AfterPartyLoss(party, worldPlayer, reason);
         return replies;
     }
 
@@ -301,15 +338,16 @@ public sealed partial class GameSession
         if (SocialRequests.ParseDbId(plain) is not { } dbId || Social is not { } s || worldPlayer is null || s.PartyOf(worldPlayer) is not { } party
             || party.Leader != worldPlayer || party.Members.FirstOrDefault(m => m.Session.DbId == dbId && m != worldPlayer) is not { } kicked)
             return [SocialPackets.PartyKickoutReply(Failed)];
+        RemoveFromParty(party, kicked);
+        return [SocialPackets.PartyKickoutReply(0)];
+    }
+
+    /// <summary>The party leader (or the raid leader) removes a member: it is told, the rest of the party gets the update.</summary>
+    void RemoveFromParty(Party party, WorldPlayer kicked)
+    {
         party.Members.Remove(kicked);
         kicked.Send([SocialPackets.PartyKickout(false), SocialPackets.PartyDisband(PartyUpdateReason.KickMember)]);
-        if (party.Members.Count <= 1)
-        {
-            DisbandParty(party, PartyUpdateReason.KickMember);
-            return [SocialPackets.PartyKickoutReply(0)];
-        }
-        foreach (var m in party.Others(worldPlayer)) m.Send(SocialPackets.PartyInfo(Info(party), PartyUpdateReason.KickMember));
-        return [SocialPackets.PartyKickoutReply(0), SocialPackets.PartyInfo(Info(party), PartyUpdateReason.KickMember)];
+        AfterPartyLoss(party, kicked, PartyUpdateReason.KickMember);
     }
 
     List<byte[]> PartySetLeader(byte[] plain)
@@ -328,18 +366,25 @@ public sealed partial class GameSession
             return [SocialPackets.PartyDisbandReply(Failed)];
         foreach (var m in party.Others(worldPlayer)) m.Send(SocialPackets.PartyDisband(PartyUpdateReason.LeaveMember));
         s.Parties.Remove(party.Key);
+        if (s.ForceOf(party) is { } force) ForceRefresh(force, PartyUpdateReason.LeaveMember, party.Members);
         return [SocialPackets.PartyDisbandReply(0), SocialPackets.PartyDisband(PartyUpdateReason.LeaveMember)];
     }
 
     /// <summary>Party members see this one's HP/MP when it changes, and its map and position every 2 s.</summary>
     void PartyTick(long now)
     {
-        if (Social is not { } s || worldPlayer is null || resources is null || s.PartyOf(worldPlayer) is not { } party || party.Members.Count < 2) return;
+        if (Social is not { } s || worldPlayer is null || resources is null || s.PartyOf(worldPlayer) is not { } party
+            || party.Members.Count < 2 && !(options.Groups.ForceWindow && s.ForceOf(party) is not null)) return;
         if ((resources.Hp, resources.Mp) != partyPointsSent)
         {
             partyPointsSent = (resources.Hp, resources.Mp);
             var points = SocialPackets.PartyMemberHpMp(new PartyMemberPoints(playerKey, resources.Hp, resources.HpMax, resources.Mp, resources.MpMax));
             foreach (var m in party.Others(worldPlayer)) m.Send(points);
+            if (options.Groups.ForceWindow && s.ForceOf(party) is { } force)
+            {
+                var forcePoints = SocialPackets.ForceMemberHpMp(new PartyMemberPoints(playerKey, resources.Hp, resources.HpMax, resources.Mp, resources.MpMax));
+                foreach (var m in force.Members.Where(m => !party.Members.Contains(m))) m.Send(forcePoints);
+            }
         }
         if (now < partyStatusAt) return;
         partyStatusAt = now + 2000;
@@ -561,6 +606,7 @@ public sealed partial class GameSession
         if (Social is not { } s || worldPlayer is null) return;
         TellFriends(false);
         PartyLeave(PartyUpdateReason.LeaveMemberBySystem, []);
+        s.ForceInvites.Remove(playerKey);
         if (s.ExchangeOf(worldPlayer) is { } exchange) CancelExchange(exchange, 3);
         if (s.DuelOf(worldPlayer) is { } duel) EndDuel(duel, DuelCompleteReason.MapOut, duel.Other(worldPlayer), now);
         LeaveArena(now);

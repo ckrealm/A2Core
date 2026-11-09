@@ -2242,6 +2242,65 @@ carol.ExitSharedWorld();
 Check(shared.Social.Duels.Count == 0 && (await dave.TickAsync(Now + 11_000)).Any(b => (b[0] | b[1] << 8) == SocialOpcodes.DuelResultNt), "a duelist leaving ends the duel with a result");
 Check((await dave.HandleAsync(SocialRequests.EncodeKey(SocialOpcodes.ExchangeRequestRq, alice.PlayerKey), Now + 12_000)).Single()[0] == (SocialOpcodes.ExchangeRequestRs & 0xff)
       && shared.Social.Exchanges.Count == 0, "trading needs stored characters (development logins are refused)");
+// Groups (Aion:Groups, global AION2 sizes): parties of five, and raid groups of parties that share a raid's copy (Ludra: 10).
+{
+    var raiders = new List<GameSession>();
+    foreach (var name in new[] { "Rhea", "Rolf", "Rina", "Ross", "Ruth", "Sana", "Tove", "Ugo" }) raiders.Add(await WorldSession(name));
+    foreach (var r in raiders) await r.TickAsync(Now + 13_000);
+    var lead = raiders[0];
+    async Task<bool> PartyInvite(GameSession from, GameSession to, long at)
+    {
+        var sent = await from.HandleAsync(SocialRequests.EncodeServerAndName(SocialOpcodes.PartyInviteRq, 1204, to.CharacterName!), at);
+        if (sent.Count == 0 || BitConverter.ToUInt16(sent[0], 2) != 0) return false;
+        var notice = (await to.TickAsync(at + 1)).Single(b => Op(b) == SocialOpcodes.PartyInviteNt);
+        await to.HandleAsync(SocialRequests.EncodePartyInviteResponse([new PartyInviteReply(BitConverter.ToInt64(notice, 2), PartyInviteAnswer.Accept)]), at + 2);
+        return true;
+    }
+    for (var i = 1; i < 5; i++) Check(await PartyInvite(lead, raiders[i], Now + 13_010 + i * 10), $"party member {i + 1} of 5 joins");
+    var five = shared.Social.PartyOf(shared.FindOnline("Rhea")!)!;
+    Check(five.Members.Count == 5 && five.Limit == 5, "a party takes five players (global AION2), not four");
+    Check(!await PartyInvite(lead, raiders[5], Now + 13_100), "a sixth player is refused: the party is full");
+    // Tove leads a party of two (Tove, Ugo); Sana has none.
+    Check(await PartyInvite(raiders[6], raiders[7], Now + 13_200), "a second party forms");
+    var (text, _) = lead.RaidCommand("invite Sana", Now + 13_300);
+    var sanaInvite = (await raiders[5].TickAsync(Now + 13_301)).SingleOrDefault(b => Op(b) == SocialOpcodes.PartyInviteNt);
+    Check(sanaInvite is not null && shared.Social.Forces.Count == 1 && text.Contains("Invited Sana"),
+        "//raid invite starts the raid group and shows a player without a party the invitation window");
+    var sanaJoins = await raiders[5].HandleAsync(SocialRequests.EncodePartyInviteResponse([new PartyInviteReply(BitConverter.ToInt64(sanaInvite!, 2), PartyInviteAnswer.Accept)]), Now + 13_302);
+    var force = shared.Social.Forces.Values.Single();
+    Check(force.Parties.Count == 2 && force.Parties[1].Leader.Name == "Sana" && force.Count == 6 && sanaJoins.Any(b => Op(b) == SocialOpcodes.PartyInfoNt),
+        "accepting in the window seats Sana in a new party of the group (the first party is full)");
+    (text, _) = lead.RaidCommand("invite Ugo", Now + 13_400);
+    Check(text.Contains("Tove") && !shared.Social.ForceInvites.ContainsKey(raiders[7].PlayerKey), "a member of another party is not invited: its leader brings the party");
+    (text, _) = lead.RaidCommand("invite Tove", Now + 13_410);
+    Check((await raiders[6].TickAsync(Now + 13_411)).All(b => Op(b) != SocialOpcodes.PartyInviteNt), "a party leader gets no party window (its client would refuse it)");
+    (text, _) = raiders[6].RaidCommand("accept", Now + 13_420);
+    Check(force.Parties.Count == 3 && force.Count == 8 && text.Contains("Your party joined"), "//raid accept brings Tove's whole party into the group");
+    (text, _) = raiders[1].RaidCommand("invite Ugo", Now + 13_430);
+    Check(text.Contains("Only the raid leader"), "only the raid leader invites");
+    (text, _) = lead.RaidCommand("list", Now + 13_440);
+    Check(text.Contains("8/20") && text.Contains("party 3 (2/5)") && text.Contains("*Tove"), "//raid list shows the parties");
+    (text, _) = lead.RaidCommand("enter", Now + 13_450);
+    Check(text.Contains("ReforgedAbyss_Normal") && text.Contains("Ludra") && text.Contains("10 players"), "//raid enter lists the raids (Ludra, 10 players)");
+    var (enterText, enterMove) = lead.RaidCommand("enter ReforgedAbyss_Normal", Now + 13_460);
+    Check(enterMove.Count > 0, "the raid leader enters Ludra: " + enterText);
+    await lead.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now + 13_461);
+    var (sanaText, sanaMove) = raiders[5].RaidCommand("enter Reforged", Now + 13_470);
+    await raiders[5].HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now + 13_471);
+    Check(lead.MapId == 600082 && raiders[5].MapId == 600082 && raiders[5].InstanceKey == lead.InstanceKey && sanaText.Contains("Joining your group"),
+        "a member of another party of the group joins the same Ludra copy");
+    // Leaving: Sana alone in her party leaves the group; its party ends, the group goes on. Then the raid leader disbands it.
+    (text, _) = raiders[5].RaidCommand("leave", Now + 13_480);
+    Check(force.Parties.Count == 2 && force.Count == 7 && shared.Social.Forces.ContainsKey(force.Key) && shared.Social.PartyOf(shared.FindOnline("Sana")!) is null,
+        "a member leaving the group leaves its party; the group goes on");
+    (text, _) = lead.RaidCommand("kick Ugo", Now + 13_490);
+    Check(force.Count == 6 && force.Parties.Count == 2 && force.Parties[1].Members.Count == 1, "the raid leader removes a member of another party; a party of one stays in the group");
+    (text, _) = lead.RaidCommand("disband", Now + 13_500);
+    Check(shared.Social.Forces.Count == 0 && five.Members.Count == 5 && shared.Social.Parties.ContainsKey(five.Key) && shared.Social.PartyOf(shared.FindOnline("Tove")!) is null,
+        "disbanding ends the group: the parties stay, a party of one ends");
+    foreach (var r in raiders) r.ExitSharedWorld();
+    Check(shared.Social.Parties.Count == 0, "everyone gone: no parties left");
+}
 // Arena (1v1 Single): two queued players match, accept, get the room, move into the arena copy, ready up, fight with PvP
 // damage, and three deaths end the match with a result and the Abyss Point rewards; both leave ten seconds later.
 var erin = await WorldSession("Erin");
@@ -2395,7 +2454,7 @@ presence.Enter("Player1", game, null);
 presence.Enter("Visitor", stored, null);
 Check((await gm.HandleAsync(chatter, "player1", "//help", default)).StartsWith("Builder commands"), "configured development GM");
 Check((await gm.HandleAsync(chatter, "[GM] Player1", "//help", default)).StartsWith("Builder commands"), "chat under the displayed name finds the character");
-Check(await gm.HandleAsync(chatter, "Visitor", "//help", default) == "Commands: //report <text> sends a report to the staff.", "players get the report command as help");
+Check(await gm.HandleAsync(chatter, "Visitor", "//help", default) == "Commands: //report <text> sends a report to the staff. " + GameSession.RaidHelp + ".", "players get the report and raid commands as help");
 Check(await gm.HandleAsync(chatter, "Visitor", "//report the bridge is broken", default) == "Reports are not available on this server.", "no reports without staff tools");
 var reports = new List<string>();
 var reporting = new GmCommands(presence, builder) { Report = (_, name, text, _) => { reports.Add(name + ":" + text); return Task.FromResult("sent"); } };

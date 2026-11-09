@@ -325,6 +325,15 @@ public sealed class PlayerBots(GameData data, BotOptions options, SharedWorld wo
             await Feed(bot, session.Teleport(back.Map, back.At, now), now, ct);
             return true;
         }
+        // Raids have no portal (the client opens them through a window; players use //raid enter): the bot enters the copy
+        // its group is in directly, as //raid enter does.
+        if (room.Type == "Raid")
+        {
+            bot.Note = null;
+            bot.CopyRetryAt = now + CopyRetryMs;
+            await Feed(bot, session.EnterDungeonById(MapEventTables.Embedded.DungeonIdOfMap(inside), now), now, ct);
+            return true;
+        }
         if (DungeonEntry(session, inside, back.At) is not { } entry)
         {
             bot.Note = $"no portal or entry NPC to map {inside} here, waits outside";

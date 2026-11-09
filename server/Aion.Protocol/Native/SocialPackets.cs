@@ -82,6 +82,24 @@ public static class SocialOpcodes
     /// <summary>The same catalogue entry under the alternative late base (0x92 run continued): 0x933c -> 0x9259.</summary>
     public static ushort Alternative(ushort lateOpcode) => (ushort)(lateOpcode - (LateBase - LateAlternativeBase));
 
+    // Force (raid group: an alliance of parties), catalogue 1150..1196. CANDIDATE: no Force message was ever recorded. They
+    // follow SocialActionStart/End_NT (catalogue 1148/1149) whose OBSERVED opcodes 0x9507/0x9508 put the run base at 0x908b,
+    // with PcSocialActionAcquire/Info_NT 0x9500/0x9501 (1141/1142) in the same run; ForceCreate_RQ is then 0x9509.
+    public const int ForceBase = 0x908b;
+    public const ushort ForceCreateRq = ForceBase + 1150, ForceCreateRs = ForceBase + 1151, ForceInfoNt = ForceBase + 1152,
+        ForceInviteRq = ForceBase + 1153, ForceInviteRs = ForceBase + 1154, ForceInviteNt = ForceBase + 1156,
+        ForceInviteResponseRq = ForceBase + 1157, ForceInviteResponseRs = ForceBase + 1158, ForceInviteResponseNt = ForceBase + 1159,
+        ForceLeaveRq = ForceBase + 1161, ForceLeaveRs = ForceBase + 1162, ForceNewLeaderNt = ForceBase + 1163,
+        ForceSetLeaderRq = ForceBase + 1164, ForceSetLeaderRs = ForceBase + 1165, ForceDisbandNt = ForceBase + 1176,
+        ForceKickoutRq = ForceBase + 1181, ForceKickoutRs = ForceBase + 1182, ForceKickoutNt = ForceBase + 1183,
+        ForceUpdateMemberHpMpNt = ForceBase + 1193, ForceLeaveNt = ForceBase + 1196;
+
+    /// <summary>The Force requests the server answers (only with Aion:Groups:ForceWindow).</summary>
+    public static readonly IReadOnlySet<ushort> ForceRequests = new HashSet<ushort>
+    {
+        ForceCreateRq, ForceInviteRq, ForceInviteResponseRq, ForceLeaveRq, ForceSetLeaderRq, ForceKickoutRq,
+    };
+
     /// <summary>Every opcode of these families a client sends (for dispatch and logging).</summary>
     public static readonly IReadOnlySet<ushort> ClientRequests = new HashSet<ushort>
     {
@@ -105,6 +123,9 @@ public enum PartyUpdateReason : byte
 
 /// <summary>EPartyInviteResponse.</summary>
 public enum PartyInviteAnswer : byte { Accept = 0, Refusal = 1, RefusalByOption = 2, RefusalAlreadyInParty = 3, Expired = 4 }
+
+/// <summary>EForceInviteResponse.</summary>
+public enum ForceInviteAnswer : byte { Accept = 0, Refusal = 1, RefusalByOption = 2, RefusalAlreadyInParty = 3, RefusalAlreadyInForce = 4, Expired = 5 }
 
 /// <summary>EPartyDistributionType / EPartyJoinType / ESpecialDistributionType values used as defaults.</summary>
 public static class PartyOptions
@@ -183,8 +204,8 @@ public sealed record PartyInfo
 {
     public long Key { get; init; }
     public long LeaderDbId { get; init; }
-    /// <summary>_limit_member (AION2 party size; 4 is our CANDIDATE default).</summary>
-    public int LimitMember { get; init; } = 4;
+    /// <summary>_limit_member (the party size: 5 on global AION2, Aion:Groups:PartySize).</summary>
+    public int LimitMember { get; init; } = 5;
     public byte Distribution { get; init; } = PartyOptions.DistributionSequence;
     public byte SpecialDistribution { get; init; } = PartyOptions.SpecialNormal;
     /// <summary>EItemGrade threshold for the special distribution (2 Rare).</summary>
@@ -194,6 +215,21 @@ public sealed record PartyInfo
     public int FocusPartsId { get; init; }
     public int FocusTargetType { get; init; }
     public IReadOnlyList<PartyMember> Members { get; init; } = [];
+}
+
+/// <summary>DevPacketData_Common_ForcePartyInfo: one party of a raid group, its number in the group and its members.</summary>
+public sealed record ForcePartyInfo(long Key, byte Number, int LimitMember, IReadOnlyList<PartyMember> Members);
+
+/// <summary>DevPacketData_Common_ForceInfo (markers always empty, no vice leaders).</summary>
+public sealed record ForceInfo
+{
+    public long Key { get; init; }
+    public long LeaderDbId { get; init; }
+    public int LimitMember { get; init; }
+    public byte Distribution { get; init; } = PartyOptions.DistributionSequence;
+    public byte SpecialDistribution { get; init; } = PartyOptions.SpecialNormal;
+    public byte SpecialDistributionGrade { get; init; } = 2;
+    public IReadOnlyList<ForcePartyInfo> Parties { get; init; } = [];
 }
 
 /// <summary>PartyUpdateMemberHPMP_NT fields.</summary>
@@ -453,6 +489,69 @@ public static class SocialPackets
         return w.ToArray();
     }
 
+    // ---------- Force (raid group; opcodes and layouts CANDIDATE, see SocialOpcodes) ----------
+
+    /// <summary>DevPacketData_Common_ForceMemberInfo: the party member fields in the Force order (no MP/AP/DP, no rebirth skills).</summary>
+    static void WriteForceMember(PacketWriter w, PartyMember m) =>
+        w.U8(m.Number).Key(m.Key).ServerId(m.BornServerId).ServerId(m.CurrentServerId).String(m.GameAccountId).I64(m.DbId).String(m.Nickname)
+            .I32(m.PcId).Hp(m.Hp).Hp(m.HpMax).I64(m.MapKey).I32(m.SubzoneId).Bool(m.Live).String(m.GuildName).I32(m.GuildEmblemId)
+            .I32(m.Level).I32(m.ConquerorLevel).Bool(m.Login).I32(m.EquipItemLevel).Vec3(m.Position).I64(m.CombatPower).U8(m.NetworkLatency);
+
+    /// <summary>ForceInfo_NT: the whole raid group and why it is sent.</summary>
+    public static byte[] ForceInfo(ForceInfo f, PartyUpdateReason reason)
+    {
+        var w = Op(SocialOpcodes.ForceInfoNt).I64(f.Key).I64(f.LeaderDbId).Varint(0).I32(f.LimitMember)
+            .U8(f.Distribution).U8(f.SpecialDistribution).U8(f.SpecialDistributionGrade)
+            .Varint(0).Varint(0)                 // target markers, world markers
+            .Varint(f.Parties.Count);
+        foreach (var p in f.Parties)
+        {
+            w.I64(p.Key).U8(p.Number).I32(p.LimitMember).Varint(p.Members.Count);
+            foreach (var m in p.Members) WriteForceMember(w, m);
+        }
+        return w.U8((byte)reason).ToArray();
+    }
+
+    /// <summary>ForceCreate_RS.</summary>
+    public static byte[] ForceCreateReply(int result) => Op(SocialOpcodes.ForceCreateRs).Result(result).ToArray();
+    /// <summary>ForceInvite_RS: to the inviter.</summary>
+    public static byte[] ForceInviteReply(int result, int serverId, string targetName) =>
+        Op(SocialOpcodes.ForceInviteRs).Result(result).ServerId(serverId).String(targetName).ToArray();
+
+    /// <summary>ForceInvite_NT: to the invitee; answered with ForceInviteResponse_RQ naming the force key.</summary>
+    public static byte[] ForceInviteNotice(long forceKey, long inviterDbId, InvitationInfo inviter, long expireTime)
+    {
+        var w = Op(SocialOpcodes.ForceInviteNt).I64(forceKey).I64(inviterDbId);
+        WriteInvitation(w, inviter);
+        return w.I64(expireTime).ToArray();
+    }
+
+    /// <summary>ForceInviteResponse_RS: to the invitee.</summary>
+    public static byte[] ForceInviteResponseReply(int result) => Op(SocialOpcodes.ForceInviteResponseRs).Result(result).ToArray();
+    /// <summary>ForceInviteResponse_NT: to the inviter, the invitee's answer.</summary>
+    public static byte[] ForceInviteResponseNotice(long applicantDbId, int applicantServerId, string name, ForceInviteAnswer response) =>
+        Op(SocialOpcodes.ForceInviteResponseNt).I64(applicantDbId).ServerId(applicantServerId).String(name).U8((byte)response).ToArray();
+
+    /// <summary>ForceLeave_RS.</summary>
+    public static byte[] ForceLeaveReply(int result) => Op(SocialOpcodes.ForceLeaveRs).Result(result).ToArray();
+    /// <summary>ForceLeave_NT: to a member no longer in the group.</summary>
+    public static byte[] ForceLeaveNotice(long forceKey, PartyUpdateReason reason) => Op(SocialOpcodes.ForceLeaveNt).I64(forceKey).U8((byte)reason).ToArray();
+    /// <summary>ForceSetLeader_RS.</summary>
+    public static byte[] ForceSetLeaderReply(int result) => Op(SocialOpcodes.ForceSetLeaderRs).Result(result).ToArray();
+    /// <summary>ForceNewLeader_NT: to every member.</summary>
+    public static byte[] ForceNewLeader(long leaderDbId) => Op(SocialOpcodes.ForceNewLeaderNt).I64(leaderDbId).ToArray();
+    /// <summary>ForceKickout_RS: to the raid leader.</summary>
+    public static byte[] ForceKickoutReply(int result) => Op(SocialOpcodes.ForceKickoutRs).Result(result).ToArray();
+    /// <summary>ForceKickout_NT: to the removed member.</summary>
+    public static byte[] ForceKickout(bool byVote) => Op(SocialOpcodes.ForceKickoutNt).Bool(byVote).ToArray();
+    /// <summary>ForceDisband_NT: the group ended (empty body).</summary>
+    public static byte[] ForceDisband() => Op(SocialOpcodes.ForceDisbandNt).ToArray();
+
+    /// <summary>ForceUpdateMemberHPMP_NT: a member of another party of the group (same fields as the party one).</summary>
+    public static byte[] ForceMemberHpMp(PartyMemberPoints p) =>
+        Op(SocialOpcodes.ForceUpdateMemberHpMpNt).Key(p.Key).Hp(p.Hp).Hp(p.HpMax).I32(p.Mp).I32(p.MpMax).I32(p.Ap).I32(p.ApMax)
+            .I32(p.Dp).I32(p.DpMax).Bool(p.Live).ToArray();
+
     // ---------- Exchange (player-to-player trade) ----------
 
     /// <summary>ExchangeRequest_RS (0x565a): to the requester, with the new exchange id.</summary>
@@ -565,6 +664,9 @@ public sealed record PartySettingsRequest(byte Distribution, byte JoinType, byte
 /// <summary>One entry of PartyInviteResponse_RQ.</summary>
 public sealed record PartyInviteReply(long PartyKey, PartyInviteAnswer Response);
 
+/// <summary>ForceInviteResponse_RQ.</summary>
+public sealed record ForceInviteReplyRequest(long ForceKey, ForceInviteAnswer Response);
+
 /// <summary>ExchangeAccept_RQ / ExchangeRefuse_RQ.</summary>
 public sealed record ExchangeAnswer(long ExchangeId, int InviterKey);
 
@@ -657,6 +759,10 @@ public static class SocialRequests
     public static PartySettingsRequest? ParsePartyCreate(ReadOnlyMemory<byte> message) =>
         Try(message, r => new PartySettingsRequest(r.U8(), r.U8(), r.U8(), r.U8()));
 
+    /// <summary>ForceInviteResponse_RQ {force key, EForceInviteResponse} (a single struct, not an array as for parties).</summary>
+    public static ForceInviteReplyRequest? ParseForceInviteResponse(ReadOnlyMemory<byte> message) =>
+        Each(message, IdWidths.Select(id => (Read<ForceInviteReplyRequest>)(r => new ForceInviteReplyRequest(id(r), (ForceInviteAnswer)r.U8()))));
+
     /// <summary>PartyInfoUpdate_RQ {distribution, special distribution, grade, join type}.</summary>
     public static PartySettingsRequest? ParsePartyInfoUpdate(ReadOnlyMemory<byte> message) =>
         Try(message, r =>
@@ -739,6 +845,7 @@ public static class SocialRequests
     public static byte[] EncodeSetPartyFocusTarget(FocusTargetRequest f) =>
         PacketWriter.Opcode(SocialOpcodes.SetPartyFocusTargetRq).I32(f.TargetKey).I32(f.PartsId).I32(f.TargetType).I32(f.InnerTargetKey).I32(f.InnerPartsId).I32(f.InnerTargetType).ToArray();
     public static byte[] EncodeKey(ushort opcode, int key) => PacketWriter.Opcode(opcode).I32(key).ToArray();
+    public static byte[] EncodeForceInviteResponse(ForceInviteReplyRequest r) => PacketWriter.Opcode(SocialOpcodes.ForceInviteResponseRq).I64(r.ForceKey).U8((byte)r.Response).ToArray();
     public static byte[] EncodeExchangeAnswer(ushort opcode, long exchangeId, int inviterKey) => PacketWriter.Opcode(opcode).I64(exchangeId).I32(inviterKey).ToArray();
     public static byte[] EncodeExchangeItemModify(ExchangeModifyRequest m) =>
         PacketWriter.Opcode(SocialOpcodes.ExchangeItemListModifyRq).I64(m.ExchangeId).U8((byte)m.Type).I64(m.Item.ItemKey).I64(m.Item.Count).I32(m.GameCash).ToArray();
