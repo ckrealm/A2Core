@@ -311,6 +311,91 @@ var levelReset = await pointed.HandleAsync(new PacketWriter().U16(GameSession.Sk
 Check(levelReset[0][0] == 0x44 && levelReset[0][1] == 0x38 && BitConverter.ToUInt16(levelReset[0], 2) == 0 && pointed.SkillLevel(11010000) == 1 && pointed.SkillPointsLeft == 16
       && levelReset.Any(b => Op(b) == 0x3813 && b[^1] == 5), "SkillLevelReset_RQ with skill 0: every bought level back to 1 (0x3844), all points back");
 Check((await pointed.HandleAsync(new PacketWriter().U16(GameSession.SkillLevelDownRq).I32(11010000).ToArray(), Now))[0][2] == 1, "a level-1 skill cannot go down (result 1)");
+// Stigmas (docs/STIGMAS.md, tools/data/stigmas.json): global's 4 slots at 22/27/32/37, shards from levelling, 1/2/4/8 per level.
+{
+    var stigmaData = data.Stigmas;
+    var gladStigmas = stigmaData.ClassStigmas("Gladiator");
+    Check(gladStigmas.Count >= 11 && stigmaData.ClassStigmas("Fighter").Count > 0 && stigmaData.SlotsAt(21, 4) == 0 && stigmaData.SlotsAt(22, 4) == 1
+          && stigmaData.SlotsAt(37, 4) == 4 && stigmaData.SlotsAt(50, 4) == 4 && stigmaData.SlotsAt(50, 6) == 6
+          && stigmaData.ShardsAt(22) == 1 && stigmaData.ShardsAt(45) == 30 && stigmaData.Spent(20) == 75 && stigmaData.Cost(21) is null,
+          "stigma table: Gladiator and Brawler stigmas, slots open at 22..37 (6 with Korea's count), 30 shards by 45, 75 to reach level 20");
+    var low = new GameSession(data, new GameSessionOptions { CharacterLevel = 10 }, new Random(12));
+    await low.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+    await low.HandleAsync(create, Now);
+    await low.HandleAsync(select, Now);
+    await low.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    Check((await low.HandleAsync(new PacketWriter().U16(0x383f).I32(gladStigmas[0]).ToArray(), Now))[0][2] == 2 && low.Stigmas.Count == 0,
+          "below level 22 a stigma cannot be learned (result 2)");
+    var stigmaStore = new FakeStore();
+    var stigmaSession = new GameSession(data, new GameSessionOptions(), new Random(13)) { Store = stigmaStore };
+    await stigmaSession.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+    await stigmaSession.HandleAsync(create, Now);
+    stigmaStore.States[0] = stigmaStore.States[0] with { Summary = stigmaStore.States[0].Summary with { Level = 37 }, Progress = stigmaStore.States[0].Progress with { Level = 37 } };
+    await stigmaSession.HandleAsync(new PacketWriter().U16(0x361f).Varint(stigmaStore.States[0].WireId << 16).I32(0).Vec3(Vector3d.Zero).ToArray(), Now);
+    var stigmaEntry = await stigmaSession.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    var entryList = stigmaEntry.First(b => Op(b) == 0x5100);
+    Check(stigmaSession.Level == 37 && stigmaSession.StigmaShardsTotal == 16 && stigmaSession.StigmaSlotsOpen == 4
+          && !gladStigmas.Any(id => entryList.AsSpan().IndexOf(BitConverter.GetBytes(id)) >= 0)
+          && !stigmaEntry.Any(b => Op(b) == 0x5105),
+          "a level-37 Gladiator has 16 shards and 4 slots; its stigmas are not in the level kit; world entry sends no shard count (as for skill points)");
+    Check(new StigmaOptions().ShardRateOr(ServerRates.Official) == 1 && new StigmaOptions().ShardRateOr(ServerRates.Accelerated) == 3
+          && new StigmaOptions { ShardRate = 2 }.ShardRateOr(ServerRates.Accelerated) == 2,
+          "ShardRate unset follows the rates profile (official 1, accelerated 3); a setting wins");
+    var learnStigma = await stigmaSession.HandleAsync(new PacketWriter().U16(0x383f).I32(gladStigmas[0]).ToArray(), Now);
+    Check(learnStigma.Count == 3 && learnStigma[0].SequenceEqual(new PacketWriter().U16(0x3840).U16(0).I32(gladStigmas[0]).ToArray())
+          && Op(learnStigma[1]) == 0x5101 && learnStigma[1][^1] == 3 && learnStigma[2].SequenceEqual(Convert.FromHexString("0551" + "0101" + "02" + "0F"))
+          && stigmaSession.Stigmas[gladStigmas[0]] == 1 && stigmaStore.StigmaRows[gladStigmas[0]] == 1,
+          "SkillLevelUp_RQ on a stigma learns it for 1 shard: 0x3840, AddSkillList (reason SkillPointLevelUp), 15 shards left; stored");
+    for (var i = 0; i < 5; i++) await stigmaSession.HandleAsync(new PacketWriter().U16(0x383f).I32(gladStigmas[0]).ToArray(), Now);
+    Check(stigmaSession.Stigmas[gladStigmas[0]] == 6 && stigmaSession.StigmaShardsLeft == 16 - 7,
+          "levels 2-5 cost 1 shard and level 6 costs 2 (7 spent at level 6)");
+    Check(stigmaSession.SkillLevel(gladStigmas[0]) == 1 + (int)Math.Round(5 * 0.05 / 0.1), "a stigma's level scales damage at its own step (+5% a level)");
+    // Slots: a learned stigma takes a stigma slot (EQuickSlotType 4); an unlearned one, or a fifth stigma, is refused.
+    byte[] StigmaSlot(int slot, int skill) => new PacketWriter().U16(0x5601).U8(0).U8((byte)slot).U8(4).I64(0).I32(0).I32(skill).U8(0).I32(0).U8(0).ToArray();
+    Check(!stigmaSession.Knows(gladStigmas[0]) && (await stigmaSession.HandleAsync(StigmaSlot(40, gladStigmas[1]), Now)).Single()[2] == 1,
+          "an unslotted stigma cannot be cast; an unlearned stigma cannot take a slot");
+    Check((await stigmaSession.HandleAsync(StigmaSlot(40, gladStigmas[0]), Now)).Single()[2] == 0 && stigmaSession.Knows(gladStigmas[0])
+          && stigmaSession.EquippedStigmas.SequenceEqual([gladStigmas[0]]), "a learned stigma on a stigma slot casts");
+    for (var i = 1; i <= 4; i++) await stigmaSession.HandleAsync(new PacketWriter().U16(0x383f).I32(gladStigmas[i]).ToArray(), Now);
+    for (var i = 1; i <= 3; i++) await stigmaSession.HandleAsync(StigmaSlot(40 + i, gladStigmas[i]), Now);
+    Check(stigmaSession.Stigmas.Count == 5 && stigmaSession.EquippedStigmas.Count == 4 && (await stigmaSession.HandleAsync(StigmaSlot(44, gladStigmas[4]), Now)).Single()[2] == 1
+          && (await stigmaSession.HandleAsync(StigmaSlot(43, gladStigmas[4]), Now)).Single()[2] == 0,
+          "a fifth stigma is refused with 4 slots open; it may replace one on its slot");
+    Check((await stigmaSession.HandleAsync(new PacketWriter().U16(GameSession.SkillLevelDownRq).I32(gladStigmas[0]).ToArray(), Now))[0][2] == 0
+          && stigmaSession.Stigmas[gladStigmas[0]] == 5, "SkillLevelDown_RQ takes one stigma level back");
+    var stigmaReset = await stigmaSession.HandleAsync(new PacketWriter().U16(GameSession.SkillLevelResetRq).U8(2).I32(0).ToArray(), Now);
+    Check(Op(stigmaReset[0]) == 0x3844 && BitConverter.ToUInt16(stigmaReset[0], 2) == 0 && stigmaReset.Any(b => Op(b) == GameSession.RemoveSkillListNt)
+          && stigmaSession.Stigmas.Count == 0 && stigmaSession.StigmaShardsLeft == 16 && stigmaStore.StigmaRows.Count == 0
+          && !stigmaStore.QuickSlotRows.Values.Any(s => gladStigmas.Contains(s.SkillId)),
+          "SkillLevelReset_RQ type Stigma, skill 0: every stigma forgotten, all 16 shards back, the stigma slots cleared");
+    // A GM level-down (applied at the next entry) leaves stigmas worth more than the level's shards: they are refunded at load.
+    for (var i = 0; i < 8; i++) await stigmaSession.HandleAsync(new PacketWriter().U16(0x383f).I32(gladStigmas[0]).ToArray(), Now);
+    Check(stigmaStore.StigmaRows[gladStigmas[0]] == 8, "stigma at level 8 before the level-down");
+    stigmaStore.States[0] = stigmaStore.States[0] with { Progress = stigmaStore.States[0].Progress with { Level = 25 } };
+    var relog = new GameSession(data, new GameSessionOptions(), new Random(16)) { Store = stigmaStore };
+    await relog.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+    await relog.HandleAsync(new PacketWriter().U16(0x361f).Varint(stigmaStore.States[0].WireId << 16).I32(0).Vec3(Vector3d.Zero).ToArray(), Now);
+    await relog.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    Check(relog.Level == 25 && relog.Stigmas.Count == 0 && stigmaStore.StigmaRows.Count == 0 && relog.StigmaShardsLeft == 4,
+          "after a level-down to 25 the stigmas over its 4 shards are forgotten and refunded");
+    var stigmaBot = new GameSession(data, new GameSessionOptions { CharacterLevel = 45 }, new Random(15)) { Bot = true };
+    await stigmaBot.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+    await stigmaBot.HandleAsync(create, Now);
+    await stigmaBot.HandleAsync(select, Now);
+    await stigmaBot.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    Check(stigmaBot.EquippedStigmas.Count == 4 && stigmaBot.EquippedStigmas.All(stigmaBot.Knows) && stigmaBot.StigmaShardsLeft < 8
+          && stigmaBot.Stigmas.Values.Max() - stigmaBot.Stigmas.Values.Min() <= 1,
+          "a level-45 playerbot buys 4 stigmas with its 30 shards, raised evenly, and may cast them");
+    var stigmasOff = new GameSession(data, new GameSessionOptions { CharacterLevel = 45, Stigmas = new StigmaOptions { Enabled = false } }, new Random(14));
+    await stigmasOff.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+    await stigmasOff.HandleAsync(create, Now);
+    await stigmasOff.HandleAsync(select, Now);
+    await stigmasOff.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    Check(stigmasOff.Knows(gladStigmas[0]) && !stigmasOff.StigmasOn, "Aion:Stigmas:Enabled false: the old level unlocks give the stigma skills");
+    static bool StigmaRefused(StigmaOptions o) { try { o.Validated(); return false; } catch (InvalidOperationException) { return true; } }
+    Check(StigmaOptions.Default.Validated() == StigmaOptions.Default && StigmaRefused(new StigmaOptions { Slots = 7 })
+          && StigmaRefused(new StigmaOptions { MaxLevel = 25 }), "Aion:Stigmas settings are checked (Slots 0..6, MaxLevel 1..20)");
+}
 // Sprint (Shift): 0x3704 → 0x8d03 + 0x3741; SP drains 500 per 100 ms on 0x8d00; 0x3705 → 0x3722 + 0x3742.
 var sprintOn = new PacketWriter().U16(0x3704).I64(1).ToArray();
 var sprintOff = new PacketWriter().U16(0x3705).I64(1).ToArray();
@@ -2423,7 +2508,7 @@ presence.Enter("Player1", game, null);
 presence.Enter("Visitor", stored, null);
 Check((await gm.HandleAsync(chatter, "player1", "//help", default)).StartsWith("Builder commands"), "configured development GM");
 Check((await gm.HandleAsync(chatter, "[GM] Player1", "//help", default)).StartsWith("Builder commands"), "chat under the displayed name finds the character");
-Check(await gm.HandleAsync(chatter, "Visitor", "//help", default) == "Commands: /report <text> sends a report to the staff. " + GameSession.DungeonHelp, "players get the report and dungeon commands as help");
+Check(await gm.HandleAsync(chatter, "Visitor", "//help", default) == "Commands: /report <text> sends a report to the staff. /stigma shows your Stigma Shards and slots. " + GameSession.DungeonHelp, "players get the report, stigma and dungeon commands as help");
 async Task<string> ChatOnLoop(GameSession loop, string name, string line)
 {
     var pending = gm.HandleAsync(chatter, name, line, default);
@@ -2432,6 +2517,8 @@ async Task<string> ChatOnLoop(GameSession loop, string name, string line)
 }
 Check((await ChatOnLoop(stored, "Visitor", "/dungeon")).StartsWith("Dungeons (/dungeon") && await ChatOnLoop(stored, "Visitor", "//dungeon help") == GameSession.DungeonHelp,
       "/dungeon (and //dungeon) reach the player's dungeon command on its game loop");
+Check((await gm.HandleAsync(chatter, "Visitor", "/stigma", default)).StartsWith("Stigma Shards: 0 of 0. Slots: 0/0."), "/stigma (one slash, a player command) shows a player its shards and slots");
+Check((await gm.HandleAsync(chatter, "Visitor", "//stigma", default)).StartsWith("Stigma Shards: 0 of 0."), "//stigma answers too");
 Check(await gm.HandleAsync(chatter, "Visitor", "//report the bridge is broken", default) == "Reports are not available on this server.", "no reports without staff tools");
 var reports = new List<string>();
 var reporting = new GmCommands(presence, builder) { Report = (_, name, text, _) => { reports.Add(name + ":" + text); return Task.FromResult("sent"); } };
@@ -2441,7 +2528,7 @@ Check((await reporting.HandleAsync(chatter, "Visitor", "//report x", default)).S
 Check((await Gm(stored, "Visitor", "//SetInvisible true")).Reply == "GM permission required.", "others are denied commands");
 Check(await gm.HandleAsync(chatter, "Player1", "/dance", default) == "Unknown command. Use /help." && await gm.HandleAsync(chatter, "Player1", "/gm help", default) == "Unknown command. Use /help."
       && await gm.HandleAsync(chatter, "Player1", "/SetInvisible true", default) == "Unknown command. Use /help.", "only // reaches the builder commands");
-Check(await gm.HandleAsync(chatter, "Visitor", "/help", default) == "Commands: /report <text> sends a report to the staff. " + GameSession.DungeonHelp
+Check(await gm.HandleAsync(chatter, "Visitor", "/help", default) == "Commands: /report <text> sends a report to the staff. /stigma shows your Stigma Shards and slots. " + GameSession.DungeonHelp
       && await gm.HandleAsync(chatter, "Visitor", "/report the bridge is broken", default) == "Reports are not available on this server.", "player commands work with one slash");
 var hidden = await Gm(game, "Player1", "//SetInvisible true");
 Check(hidden.Reply == "Invisible." && hidden.Packets.Any(b => b.SequenceEqual(new byte[] { 0x4d, 0x36, 1 })) && game.Invisible, "SetInvisible true sends 0x364d true; NPCs stop seeing the GM");
@@ -3768,7 +3855,8 @@ checks = 0;
     Check(GameSession.IsDodge(19000100) && GameSession.IsDodge(11000100) && !GameSession.IsDodge(19010000) && rots.For("Fighter") is { Range: 250 },
           "the Brawler's own Dodge counts as a dodge; its rotation loads");
     var rotWorld = new SharedWorld(data, seed: 41);
-    var rotOptions = new GameSessionOptions { World = rotWorld, TrainingDummy = true, CharacterLevel = 20 };
+    // Stigmas off: these checks follow the class rotations cast for cast (bot stigmas have their own check, docs/STIGMAS.md).
+    var rotOptions = new GameSessionOptions { World = rotWorld, TrainingDummy = true, CharacterLevel = 20, Stigmas = new StigmaOptions { Enabled = false } };
     long t = Now + 5_000_000;
     var lead = new GameSession(data, rotOptions, new Random(41));
     await lead.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), t);
@@ -4019,9 +4107,11 @@ Console.WriteLine($"{checks} playerbot checks passed (Aion:Bots).");
 checks = 0;
 {
     var progressionWorld = new SharedWorld(data);
-    async Task<GameSession> LevelSession(uint creation, int level, string name)
+    // Stigmas off where a check casts an OURS unlock that is a stigma (docs/STIGMAS.md): with them on it needs shards and a slot.
+    async Task<GameSession> LevelSession(uint creation, int level, string name, bool stigmas = true)
     {
-        var session = new GameSession(data, new GameSessionOptions { World = progressionWorld, TrainingDummy = true, CharacterLevel = level }, new Random(5));
+        var session = new GameSession(data, new GameSessionOptions { World = progressionWorld, TrainingDummy = true, CharacterLevel = level,
+            Stigmas = new StigmaOptions { Enabled = stigmas } }, new Random(5));
         await session.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
         await session.HandleAsync(new PacketWriter().U16(0x361b).String(name).U8(1).U32(creation).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
         await session.HandleAsync(select, Now);
@@ -4042,12 +4132,16 @@ checks = 0;
     var fallbackActive = progression.Unlocks("Gladiator").Select(u => u[0]).First(id => data.Skill(id) is { Type: "Active", Damage.Length: > 0 });
     Check(data.FallbackDamage(fallbackActive) && data.FallbackDamage(17150000) && data.Skill(17150000)!.Name == "Divine Aura"
           && data.Skill(17150000)!.Damage.Length > 0 && !data.FallbackDamage(11010000), "fallback damage rows: OURS definitions and Divine Aura; recovered rows stay");
-    var gladiator30 = await LevelSession(1, 30, "Glad");
+    var gladiator30 = await LevelSession(1, 30, "Glad", stigmas: false);
     var progressionDummy = gladiator30.Targets[Combat.TrainingDummyKey];
     var progressionHpBefore = progressionDummy.Hp;
     var fallbackCast = await gladiator30.HandleAsync(Cast(fallbackActive, Combat.TrainingDummyKey, progressionDummy.Position), Now + 1_000);
     Check(fallbackCast[0][3] == 0 && progressionDummy.Hp < progressionHpBefore && fallbackCast.Any(b => Op(b) == 0x3804 && b.AsSpan().IndexOf(BitConverter.GetBytes(fallbackActive * 100 + 11)) > 0),
           "a level-30 Gladiator casts an OURS unlock: its fallback row hits the progressionDummy (0x3804, effect skill x 100 + 11)");
+    var stigmaGladiator = await LevelSession(1, 30, "Stig");
+    Check(data.Stigmas.IsStigmaOf("Gladiator", fallbackActive) && !stigmaGladiator.Knows(fallbackActive)
+          && (await stigmaGladiator.HandleAsync(Cast(fallbackActive, Combat.TrainingDummyKey, progressionDummy.Position), Now + 2_000))[0][3] != 0,
+          "with stigmas on (the default) that skill is a stigma: not cast until it is bought and slotted");
     // Skill levels raise damage (same rolls) and heals use the same scale.
     var weapon = data.StarterWeapon(data.Profile(1, 1)!);
     var level1 = Combat.SkillHits(data, 11010000, "Gladiator", 30, weapon, 0, new Random(9)).Sum(h => h.Amount);
@@ -4382,6 +4476,14 @@ sealed class FakeStore : INativeCharacterStore
     {
         Skills.RemoveAll(s => s.SkillId == skillId);
         Skills.Add(new SkillState(skillId, level, null));
+        return Task.FromResult(true);
+    }
+    public Dictionary<int, int> StigmaRows { get; } = [];
+    public Task<IReadOnlyList<StigmaState>> StigmasAsync(Guid character, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<StigmaState>>(StigmaRows.Select(p => new StigmaState(p.Key, p.Value)).ToList());
+    public Task<bool> SetStigmaAsync(Guid character, int skillId, int level, CancellationToken ct)
+    {
+        if (level == 0) StigmaRows.Remove(skillId); else StigmaRows[skillId] = level;
         return Task.FromResult(true);
     }
     // Titles, skins and masteries (migration 029) in memory.

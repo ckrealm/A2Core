@@ -94,7 +94,7 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
     public FunFeatures? Fun { get; init; }
 
     /// <summary>Commands every player may type with a single slash (the client's own slash commands never reach the server).</summary>
-    static readonly HashSet<string> PlayerWords = new(StringComparer.OrdinalIgnoreCase) { "help", "report", "buff", "hub", "bot", "ah", "boost", "mail", "pmail", "sendkinah", "senditem", "dungeon" };
+    static readonly HashSet<string> PlayerWords = new(StringComparer.OrdinalIgnoreCase) { "help", "report", "buff", "hub", "bot", "ah", "boost", "mail", "pmail", "sendkinah", "senditem", "dungeon", "stigma", "stigmas" };
 
     static bool Is(string line, string word) =>
         line.StartsWith(word, StringComparison.OrdinalIgnoreCase) && (line.Length == word.Length || char.IsWhiteSpace(line[word.Length]));
@@ -105,11 +105,15 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
         string line;
         if (text.StartsWith("//", StringComparison.Ordinal)) line = text[2..].Trim();
         // One slash works for the player commands (/buff, /hub, /report, /help, /bot, /ah, /boost, /mail, /pmail, /sendkinah, /senditem,
-        // /dungeon);
+        // /dungeon, /stigma);
         // "//" works for them too, and builder (GM) commands keep "//".
         else if (text.StartsWith('/') && text[1..].Split(' ', 2)[0] is var word && PlayerWords.Contains(word)) line = text[1..].Trim();
         else return "Unknown command. Use /help.";
         if (Is(line, "dungeon")) return await DungeonAsync(userName, line[7..].Trim(), ct);
+        // /stigma (docs/STIGMAS.md): the player's Stigma Shards, slots and stigmas (read-only, like //ah's reads).
+        if (line.Equals("stigma", StringComparison.OrdinalIgnoreCase) || line.Equals("stigmas", StringComparison.OrdinalIgnoreCase))
+            return (presence.Find(userName) ?? presence.Find(Aion.Core.Characters.CharacterNames.Stored(userName))) is { } player
+                ? player.Session.StigmaSummary() : "Enter the world first.";
         if (line.StartsWith("report", StringComparison.OrdinalIgnoreCase) && (line.Length == 6 || char.IsWhiteSpace(line[6])))
         {
             var report = line[6..].Trim();
@@ -135,7 +139,7 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
                 return await builder.AllowedAsync(actor.Session, ct)
                     ? "Builder commands (in chat: //<command>; console: s <command>): " + string.Join(", ", BuilderCommands.Supported)
                         + (Bots is { Options.Enabled: true } ? "; //bot add <character> for playerbots" : "")
-                    : "Commands: /report <text> sends a report to the staff. " + GameSession.DungeonHelp
+                    : "Commands: /report <text> sends a report to the staff. /stigma shows your Stigma Shards and slots. " + GameSession.DungeonHelp
                         + (Fun is { Options.BuffCommand: true } ? " /buff gives you the food and scroll buffs." : "")
                         + (Fun is { Options.HubCommand: true } ? " /hub teleports to a town or the Abyss." : "")
                         + (Market is not null ? " /ah help shows the auction house commands." : "")

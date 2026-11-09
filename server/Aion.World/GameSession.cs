@@ -38,6 +38,8 @@ public sealed record GameSessionOptions
     public WorldRules Rules { get; init; } = WorldRules.Default;
     /// <summary>Aion:Dungeons: daily entry limits (off by default) and the untracked-objective fallback delay.</summary>
     public DungeonOptions Dungeons { get; init; } = DungeonOptions.Default;
+    /// <summary>Aion:Stigmas: stigma slots, shard rate and level cap (docs/STIGMAS.md); on by default, as on global (Brandon's choice).</summary>
+    public StigmaOptions Stigmas { get; init; } = StigmaOptions.Default;
     /// <summary>Aion:Bosses: boss phases, slams, adds and the hard modes' frenzy (all on by default).</summary>
     public BossOptions Bosses { get; init; } = BossOptions.Default;
     /// <summary>Heal/buff/debuff effects of class skills; null: the embedded tools/data/skill-effects.json (OURS values).</summary>
@@ -1642,6 +1644,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
                 registeredWings.UnionWith(await store.WingsAsync(state.Summary.CharacterId, ct));
                 var extras = await store.ExtrasAsync(state.Summary.CharacterId, ct);
                 LoadSkillLevels(await store.SkillsAsync(state.Summary.CharacterId, ct));
+                LoadStigmas(await store.StigmasAsync(state.Summary.CharacterId, ct));
                 LoadAchievements(await store.AchievementsAsync(state.Summary.CharacterId, ct), await store.GroupRewardsTakenAsync(state.Summary.CharacterId, ct), now);
                 LoadCollections(await store.CollectionsAsync(state.Summary.CharacterId, ct));
                 LoadBossChallenges(await store.BossChallengesAsync(state.Summary.CharacterId, ct));
@@ -1662,6 +1665,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
                 await LoadSocialAsync(ct);
                 character = new Choice(state.Summary.Name, state.Gender, state.CreationId, state.Appearance, state.VoiceType);
                 level = data.ClampLevel(state.Progress.Level);
+                await TrimStigmasAsync(store, state.Summary.CharacterId, ct);   // a GM level-down can leave stigmas without the shards
                 var savedMap = state.Progress.MapId.Value;
                 // Logged out inside an instance layer: back at its exit on the field map (the copy is gone).
                 if (Instances.Of(savedMap) is { } left)
@@ -1713,9 +1717,10 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         var gender = character?.Gender ?? 1;
         var profile = data.Profile(character?.CreationId ?? 1, gender);
         // Skills follow the character level (tools/class_skills.py), not a grant list.
-        var kit = profile is null ? [] : data.LearnedSkills(profile.Class, level);
-        learned = kit.Select(k => k.SkillId).ToHashSet();
         className = profile?.Class;
+        var kit = profile is null ? [] : LevelKit(profile.Class, level);
+        learned = kit.Select(k => k.SkillId).ToHashSet();
+        ChooseBotStigmas();
         OpenFixedNodes();   // before the pools, the stat sheet and the passives are worked out
         var (mapId, at) = spawn ?? (GamePackets.SpawnMapId, GamePackets.SpawnPosition);
         worldMap = mapId;
@@ -1862,7 +1867,9 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
             if (profile is not null)
             {
                 // Owned skills before the hotbar (0x5100 then 0x5600; not the usmap ordinals).
-                replies.Add(GamePackets.SkillList(WithLevels(kit)));
+                // Learned stigmas follow the level kit with their stigma levels (docs/STIGMAS.md). No shard count is sent: as for skill
+                // points, the official entry sends no SkillPointUpdate (the client reads its Exp.dat); it goes out after a purchase.
+                replies.Add(GamePackets.SkillList([.. WithLevels(kit), .. StigmaEntries()]));
                 replies.Add(GamePackets.SkillOptionSlots(learned.Where(id => id >= 11_000_000 && id != CombatDodge && data.Skill(id)?.Type == "Active").Order().ToList()));
                 replies.AddRange(GamePackets.EmptyEntryLists());
                 replies.AddRange(SettingsAtEntry(now));
@@ -1972,7 +1979,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         var weapons = (definition?.Weapons ?? []).Where(w => w != "None").ToList();
         var accepted = definition is not null && resources is not null && !dead
             && resources.Mp >= cost.Mp && resources.Sp >= cost.Sp && resources.Hp > cost.Hp
-            && (learned.Contains(skill) || normalDodge)
+            && (learned.Contains(skill) || normalDodge || StigmaCastable(skill))
             && (weapons.Count == 0 || weapons.Contains(data.WeaponType(equippedWeapon) ?? ""))
             && (noCool || now >= cooldowns.GetValueOrDefault(cooldownKey))
             && (dodging || SkillTargetAllowed(skill, request.TargetKey));

@@ -437,6 +437,15 @@ public sealed class BotBrain(GameData data, GameSession bot, GameSession leader,
             if (target is null || !HpHolds(when, target.HpMax > 0 ? target.Hp * 100.0 / target.HpMax : 0) || !EnemyHolds(step, when, target, now, me, threats)) continue;
             return new BotChoice(step, null, target);
         }
+        // The bot's stigmas (GameSession.ChooseBotStigmas, docs/STIGMAS.md): its damage stigmas at the fight's target when no
+        // rotation entry fits. The rotations are built from the level kit, which has no stigmas.
+        if (target is null) return null;
+        foreach (var stigma in bot.EquippedStigmas)
+        {
+            if (now < refused.GetValueOrDefault(stigma) || now < bot.CooldownUntil(stigma)) continue;
+            if (data.Skill(stigma) is not { Damage.Length: > 0 } skill || mp < skill.Cost.Mp || sp < skill.Cost.Sp || hp <= skill.Cost.Hp) continue;
+            return new BotChoice(new BotRotationStep(stigma, null, 1), null, target);
+        }
         return null;
     }
 

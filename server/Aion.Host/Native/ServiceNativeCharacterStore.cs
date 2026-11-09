@@ -554,6 +554,18 @@ public sealed class ServiceNativeCharacterStore(string token, WorldIdentity iden
         return await game.SetSkillLevelAsync(identity.Account, character, skillId, level, ct);
     }
 
+    public async Task<IReadOnlyList<StigmaState>> StigmasAsync(Guid character, CancellationToken ct)
+    {
+        await ValidateAsync(ct);
+        return await game.StigmasAsync(identity.Account, character, ct) ?? [];
+    }
+
+    public async Task<bool> SetStigmaAsync(Guid character, int skillId, int level, CancellationToken ct)
+    {
+        await ValidateAsync(ct);
+        return await game.SetStigmaAsync(identity.Account, character, skillId, level, ct);
+    }
+
     public async Task<CharacterExtras> ExtrasAsync(Guid character, CancellationToken ct)
     {
         await ValidateAsync(ct);
