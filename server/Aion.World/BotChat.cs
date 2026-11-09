@@ -38,8 +38,21 @@ public sealed record BotChatOptions
     /// <summary>Seconds a bot "types" before its answer appears (a random time between the two).</summary>
     public int TypingMinSeconds { get; init; } = 2;
     public int TypingMaxSeconds { get; init; } = 7;
-    /// <summary>No bot says anything more often than this overall, except answers to whispers and to a bot's name (seconds).</summary>
+    /// <summary>
+    /// No bot says anything more often than this overall (seconds). Answers to whispers and to a bot's name skip it, but one player
+    /// gets at most one such answer per this many seconds.
+    /// </summary>
     public int MinGapSeconds { get; init; } = 4;
+    /// <summary>Model calls per minute for the whole server; past it bots use canned lines (cost cap for hosted models). 0: no model calls.</summary>
+    public int MaxCallsPerMinute { get; init; } = 20;
+    /// <summary>Model calls per minute caused by one player (whispers, naming a bot, answers to their lines); past it, canned lines.</summary>
+    public int MaxCallsPerPlayerPerMinute { get; init; } = 4;
+    /// <summary>
+    /// Send players' channel lines that do not address a bot to the model (as recent chat, or to answer them by chance). Unset: only
+    /// when the endpoint is on this machine or the local network (Ollama, LM Studio). With a hosted endpoint (Groq, OpenRouter,
+    /// Gemini) the default sends only lines that name a bot or whisper to one, plus the bots' own lines.
+    /// </summary>
+    public bool? ShareChat { get; init; }
     /// <summary>Extra rules for every bot's prompt (server flavour: "We are a friends-only server called ...").</summary>
     public string ExtraPrompt { get; init; } = "";
 
@@ -47,8 +60,35 @@ public sealed record BotChatOptions
         Room is not ("WORLD" or "REGION") ? throw new InvalidOperationException("Aion:BotChat:Room must be WORLD or REGION.")
         : AmbientMinSeconds < 10 || AmbientMaxSeconds < AmbientMinSeconds ? throw new InvalidOperationException("Aion:BotChat:AmbientMinSeconds must be 10 or more and at most AmbientMaxSeconds.")
         : ReplyChance is < 0 or > 1 || BotReplyChance is < 0 or > 1 ? throw new InvalidOperationException("Aion:BotChat: chances are from 0 to 1.")
+        : MaxCallsPerMinute < 0 || MaxCallsPerPlayerPerMinute < 0 || MinGapSeconds < 0 ? throw new InvalidOperationException("Aion:BotChat: MaxCallsPerMinute, MaxCallsPerPlayerPerMinute and MinGapSeconds must be 0 or more.")
         : TypingMinSeconds < 0 || TypingMaxSeconds < TypingMinSeconds || TimeoutSeconds < 1 || MaxTokens < 8 ? throw new InvalidOperationException("Aion:BotChat: timings and MaxTokens are out of range.")
         : this;
+
+    /// <summary>Whether players' lines that do not address a bot may go to the model (<see cref="ShareChat"/>).</summary>
+    public bool SharesChat => ShareChat ?? IsLocal(Endpoint);
+
+    /// <summary>An endpoint on this machine or a private network (loopback, localhost, 10/8, 172.16/12, 192.168/16, fc00::/7, *.local).</summary>
+    public static bool IsLocal(string endpoint)
+    {
+        if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri)) return false;
+        var host = uri.IdnHost;
+        if (uri.IsLoopback || host.Equals("localhost", StringComparison.OrdinalIgnoreCase) || host.EndsWith(".local", StringComparison.OrdinalIgnoreCase)) return true;
+        if (!System.Net.IPAddress.TryParse(host, out var ip)) return false;
+        if (ip.IsIPv4MappedToIPv6) ip = ip.MapToIPv4();
+        var b = ip.GetAddressBytes();
+        return ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
+            ? b[0] == 10 || b[0] == 172 && b[1] is >= 16 and <= 31 || b[0] == 192 && b[1] == 168
+            : (b[0] & 0xFE) == 0xFC || ip.IsIPv6LinkLocal;
+    }
+
+    /// <summary>The API key never appears in logs: the record's printed form redacts it.</summary>
+    bool PrintMembers(StringBuilder builder)
+    {
+        builder.Append($"Enabled = {Enabled}, Endpoint = {Endpoint}, Model = {Model}, ApiKey = {(ApiKey.Length > 0 ? "(set)" : "(none)")}, ")
+            .Append($"Room = {Room}, FactionOnly = {FactionOnly}, ShareChat = {SharesChat}, MaxCallsPerMinute = {MaxCallsPerMinute}, ")
+            .Append($"MaxCallsPerPlayerPerMinute = {MaxCallsPerPlayerPerMinute}");
+        return true;
+    }
 }
 
 /// <summary>A chat model: messages (system, user, assistant) in, one reply out (null on any failure).</summary>
@@ -109,8 +149,13 @@ public sealed class BotChatter(BotChatOptions options, Func<IReadOnlyList<BotSpe
     readonly Func<long> now = clock ?? (() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
     readonly Lock gate = new();
     readonly List<Pending> pending = [];
-    /// <summary>Recent lines per race channel (0 when not faction chat): "name: text".</summary>
-    readonly Dictionary<int, List<string>> history = [];
+    /// <summary>Recent lines per race channel (0 when not faction chat): "name: text", and whether the line addresses a bot.</summary>
+    readonly Dictionary<int, List<(string Line, bool Addressed)>> history = [];
+    /// <summary>Model calls in the last minute: all, and by the player who caused them.</summary>
+    readonly Queue<long> calls = new();
+    readonly Dictionary<string, Queue<long>> playerCalls = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>When each player last got a direct answer (whisper, naming a bot).</summary>
+    readonly Dictionary<string, long> answeredAt = new(StringComparer.OrdinalIgnoreCase);
     long nextAmbientAt, lastSaidAt;
 
     public const int HistoryLines = 12;
@@ -123,10 +168,10 @@ public sealed class BotChatter(BotChatOptions options, Func<IReadOnlyList<BotSpe
 
     int Channel(int race) => options.FactionOnly ? race : 0;
 
-    void Remember(int race, string line)
+    void Remember(int race, string line, bool addressed)
     {
         var list = history.TryGetValue(Channel(race), out var l) ? l : history[Channel(race)] = [];
-        list.Add(line);
+        list.Add((line, addressed));
         if (list.Count > HistoryLines) list.RemoveAt(0);
     }
 
@@ -134,6 +179,8 @@ public sealed class BotChatter(BotChatOptions options, Func<IReadOnlyList<BotSpe
     public void Hear(ChatHeard heard)
     {
         if (!options.Enabled) return;
+        // A player whose race is unknown (development identities) would hear both factions' bots: no bot chat for them.
+        if (options.FactionOnly && heard.Race == 0) return;
         var bots = speakers();
         lock (gate)
         {
@@ -144,10 +191,10 @@ public sealed class BotChatter(BotChatOptions options, Func<IReadOnlyList<BotSpe
                 return;
             }
             if (heard.RoomType != options.Room) return;
-            Remember(heard.Race, $"{heard.Speaker}: {heard.Content}");
-            var mine = bots.Where(b => !options.FactionOnly || heard.Race == 0 || b.Race == heard.Race).ToList();
-            if (mine.Count == 0) return;
+            var mine = bots.Where(b => !options.FactionOnly || b.Race == heard.Race).ToList();
             var named = mine.Where(b => Mentions(heard.Content, b.Name)).Take(2).ToList();
+            Remember(heard.Race, $"{heard.Speaker}: {heard.Content}", named.Count > 0);
+            if (mine.Count == 0) return;
             if (named.Count > 0)
             {
                 foreach (var bot in named) Queue(bot, "reply", heard, 0, direct: true);
@@ -183,7 +230,18 @@ public sealed class BotChatter(BotChatOptions options, Func<IReadOnlyList<BotSpe
             next = pending.Where(p => p.DueAt <= at).OrderBy(p => p.DueAt).FirstOrDefault();
             var direct = next?.Kind.EndsWith('!') == true;
             if (next is not null && !direct && at - lastSaidAt < options.MinGapSeconds * 1000L) next = null;
-            if (next is not null) pending.Remove(next);
+            if (next is not null && direct && next.Heard is { } asked && answeredAt.TryGetValue(asked.Speaker, out var last)
+                && at - last < options.MinGapSeconds * 1000L)
+            {
+                // One player gets one direct answer per MinGapSeconds: spamming a bot's name does not make it answer every second.
+                pending.Remove(next);
+                next = null;
+            }
+            if (next is not null)
+            {
+                pending.Remove(next);
+                if (direct) answeredAt[next.Heard!.Speaker] = at;
+            }
             else if (nextAmbientAt == 0) nextAmbientAt = at + rng.Next(options.AmbientMinSeconds, options.AmbientMaxSeconds + 1) * 1000L / 2;
             else if (at >= nextAmbientAt && at - lastSaidAt >= options.MinGapSeconds * 1000L)
             {
@@ -207,7 +265,7 @@ public sealed class BotChatter(BotChatOptions options, Func<IReadOnlyList<BotSpe
             if (said.Count > 50) said.RemoveAt(0);
             if (line.WhisperTo is null)
             {
-                Remember(bot.Race, $"{bot.Name}: {text}");
+                Remember(bot.Race, $"{bot.Name}: {text}", addressed: true);
                 // Another bot of the same race may answer once.
                 if (next.Depth == 0 && rng.NextDouble() < options.BotReplyChance)
                 {
@@ -222,12 +280,42 @@ public sealed class BotChatter(BotChatOptions options, Func<IReadOnlyList<BotSpe
     /// <summary>The model's line for this bot (cleaned up), or a canned one when there is no model or it failed.</summary>
     async Task<string> WriteAsync(BotSpeaker bot, Pending what, CancellationToken ct)
     {
-        if (model is not null && options.Endpoint.Length > 0)
+        if (model is not null && options.Endpoint.Length > 0 && MayCall(what))
         {
             var reply = await model.CompleteAsync(Prompt(bot, what), ct);
             if (Clean(reply, bot.Name) is { Length: > 0 } clean) return clean;
         }
         return Canned(bot, what);
+    }
+
+    /// <summary>
+    /// Whether this line may use a model call: within MaxCallsPerMinute overall and MaxCallsPerPlayerPerMinute for the player who
+    /// caused it, and (when chat is not shared) not a chance answer to a line that did not address a bot. Counts the call.
+    /// </summary>
+    bool MayCall(Pending what)
+    {
+        var player = what.Depth == 0 ? what.Heard?.Speaker : null;
+        if (player is not null && !what.Kind.EndsWith('!') && !options.SharesChat) return false;
+        lock (gate)
+        {
+            var at = now();
+            while (calls.Count > 0 && at - calls.Peek() >= 60_000) calls.Dequeue();
+            if (calls.Count >= options.MaxCallsPerMinute) return false;
+            Queue<long>? mine = null;
+            if (player is not null)
+            {
+                mine = playerCalls.TryGetValue(player, out var q) ? q : playerCalls[player] = new Queue<long>();
+                while (mine.Count > 0 && at - mine.Peek() >= 60_000) mine.Dequeue();
+                if (mine.Count >= options.MaxCallsPerPlayerPerMinute) return false;
+            }
+            calls.Enqueue(at);
+            mine?.Enqueue(at);
+            if (playerCalls.Count > 500)
+                foreach (var idle in playerCalls.Where(p => p.Value.Count == 0 || at - p.Value.Last() >= 60_000).Select(p => p.Key).ToList()) playerCalls.Remove(idle);
+            if (answeredAt.Count > 500)
+                foreach (var idle in answeredAt.Where(p => at - p.Value >= 60_000).Select(p => p.Key).ToList()) answeredAt.Remove(idle);
+            return true;
+        }
     }
 
     /// <summary>The system prompt (who the bot is, the rules) and the request (recent chat, what to answer).</summary>
@@ -246,7 +334,7 @@ public sealed class BotChatter(BotChatOptions options, Func<IReadOnlyList<BotSpe
             .Append("Keep it friendly and PG-13. If you do not know something about the game, say so casually instead of making things up.");
         if (options.ExtraPrompt.Length > 0) system.Append(' ').Append(options.ExtraPrompt);
         string[] recent;
-        lock (gate) recent = [.. history.GetValueOrDefault(Channel(bot.Race)) ?? []];
+        lock (gate) recent = [.. (history.GetValueOrDefault(Channel(bot.Race)) ?? []).Where(l => l.Addressed || options.SharesChat).Select(l => l.Line)];
         var user = new StringBuilder();
         if (recent.Length > 0) user.Append("Recent chat:\n").AppendJoin('\n', recent).Append("\n\n");
         var kind = what.Kind.TrimEnd('!');

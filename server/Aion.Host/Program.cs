@@ -168,7 +168,13 @@ if (native.LoginPort is not null || native.GamePort is not null)
                 Rates = provider.GetService<Aion.World.ServerRates>() ?? Aion.World.ServerRates.Official,
                 Rules = provider.GetService<Aion.World.WorldRules>() ?? Aion.World.WorldRules.Default,
                 Dungeons = provider.GetService<Aion.World.DungeonOptions>() ?? Aion.World.DungeonOptions.Default,
-            }, presence: provider.GetRequiredService<Aion.World.WorldPresence>()));
+            }, presence: provider.GetRequiredService<Aion.World.WorldPresence>())
+        {
+            // Bots never take a stored character's name (the account argument is not used by the name check).
+            NameTaken = provider.GetService<IGameplayStore>() is { } names
+                ? (name, ct) => names.NameTakenAsync(new Aion.Core.Accounts.VerifiedAccount(WorldBotsService.SystemAccount), name, ct)
+                : null,
+        });
         builder.Services.AddHostedService<WorldBotsService>();
         if (worldBots.Enabled && botChat.Enabled && chatPort is not null)
         {

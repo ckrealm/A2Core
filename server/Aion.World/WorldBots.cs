@@ -39,8 +39,11 @@ public sealed record WorldBotOptions
     /// <summary>...to its level plus this.</summary>
     public int LevelsAbove { get; init; } = 0;
 
+    /// <summary>The most world bots a server may configure.</summary>
+    public const int MaxCount = 1000;
+
     public WorldBotOptions Validated() =>
-        Count < 0 ? throw new InvalidOperationException("Aion:WorldBots:Count must be 0 or more.")
+        Count is < 0 or > MaxCount ? throw new InvalidOperationException($"Aion:WorldBots:Count must be from 0 to {MaxCount} (one loop runs about 400 bots well; docs/WORLDBOTS.md).")
         : MinLevel < 1 || MaxLevel < 0 || MaxLevel != 0 && MaxLevel < MinLevel ? throw new InvalidOperationException("Aion:WorldBots:MinLevel/MaxLevel are out of range.")
         : Race.ToLowerInvariant() is not ("light" or "dark" or "both") ? throw new InvalidOperationException("Aion:WorldBots:Race must be light, dark or both.")
         : GroundMinutes <= 0 || LoginsPerSecond < 1 || LevelsBelow < 0 || LevelsAbove < 0 || Toughness < 1 ? throw new InvalidOperationException("Aion:WorldBots: GroundMinutes, LoginsPerSecond and the level band must be positive.")
@@ -63,7 +66,8 @@ public sealed class WorldBot
         Personality = personality;
     }
 
-    public string Name { get; }
+    /// <summary>Generated; changed at login when a stored character already has it (<see cref="WorldBots.NameTaken"/>).</summary>
+    public string Name { get; internal set; }
     public string ClassName { get; }
     internal int CreationId { get; }
     internal int Gender { get; }
@@ -86,6 +90,7 @@ public sealed class WorldBot
     internal WorldTurn? Turn { get; set; }
     internal Queue<int> Loads { get; } = new();
     internal int GearedAt { get; set; }
+    internal bool NameChecked { get; set; }
 
     public int Level => Session?.Level ?? StartLevel;
     public string RaceName => Race == 2 ? "Asmodian" : "Elyos";
@@ -149,6 +154,11 @@ public sealed class WorldBots
 
     public WorldBotOptions Options => options;
     public BotRotations Rotations { get; }
+    /// <summary>
+    /// Whether a stored (real) character has this name; a bot with it takes another name before it logs in, so it never answers
+    /// that player's whispers or mail. Null (no database): only online players are checked.
+    /// </summary>
+    public Func<string, CancellationToken, Task<bool>>? NameTaken { get; init; }
     public IReadOnlyList<HuntingGround> Grounds => grounds;
 
     /// <summary>The whole roster, in the world or not.</summary>
@@ -276,9 +286,35 @@ public sealed class WorldBots
             if (bot.State == WorldBot.Phase.InWorld) await LeaveAsync(bot);
     }
 
+    /// <summary>Renames the bot while a stored character has its name (up to 20 tries); false when the store failed or no name was free.</summary>
+    async Task<bool> NameFreeAsync(WorldBot bot, Func<string, CancellationToken, Task<bool>> taken, CancellationToken ct)
+    {
+        try
+        {
+            for (var tries = 0; tries < 20; tries++)
+            {
+                if (!await taken(bot.Name, ct)) return bot.NameChecked = true;
+                lock (gate)
+                {
+                    var maker = new NameMaker(new Random(options.Seed ^ bot.Name.GetHashCode(StringComparison.Ordinal) ^ tries), []);
+                    foreach (var b in roster) maker.Reserve(b.Name);
+                    bot.Name = maker.Next();
+                }
+            }
+        }
+        catch (Exception error) when (error is not OperationCanceledException) { }
+        return false;
+    }
+
     /// <summary>The client's login steps (game login, create, select, load complete), then straight to a hunting ground.</summary>
     async Task EnterAsync(WorldBot bot, long now, CancellationToken ct)
     {
+        if (!bot.NameChecked && NameTaken is { } taken && await NameFreeAsync(bot, taken, ct) is false)
+        {
+            bot.LastError = "could not find a free name";
+            bot.RetryAt = now + 60_000;
+            return;
+        }
         if (world.FindOnline(bot.Name) is not null)
         {
             bot.LastError = "a player of that name is in the world";

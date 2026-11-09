@@ -113,7 +113,7 @@ public static partial class StaffToolsEndpoints
             {
                 var views = new List<GameSession.LiveView>();
                 await world.Lock.EnterExclusiveAsync(ct);
-                try { foreach (var e in presence.All) views.Add(e.Session.Live()); }
+                try { foreach (var e in presence.Players) views.Add(e.Session.Live()); }
                 finally { world.Lock.ExitExclusive(); }
                 suspects.AddRange(views.Where(v => v.SpeedRejects > 0).OrderByDescending(v => v.SpeedRejects).Take(20)
                     .Select(v => new { v.Name, v.CharacterId, v.Level, v.MapId, v.SpeedRejects }));

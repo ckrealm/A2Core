@@ -62,7 +62,8 @@
 - **Content bots**: `WorldBots.Spawn(class, race, level, map, at, wander)` for PvP fillers and events; `IBotWander` steers any leaderless bot.
 - **Capacity**: `tests/Aion.Bots.Bench`. About 0.07 ms of one core per bot per tick; 400 bots used about half a core in the cloud container. Bot threat lookups now use the map's NPC grid (about 15x cheaper per bot).
 - Found: past level 30 monsters out-hit unenchanted gear (monster HP grows ~7x from 30 to 45); bots above 30 die every few minutes.
-- Checks: 42 new native checks (world bots, content bots, bot chat, the model call, chat relay); all native, chat and server checks pass.
+- Review fixes: model call caps (`MaxCallsPerMinute` 20, `MaxCallsPerPlayerPerMinute` 4, canned lines past them) and one direct answer per player per `MinGapSeconds`; with a hosted model only lines that address a bot leave the server (`ShareChat`); players of unknown race get no bot chat; the options' printed form hides the API key; `Count` capped at 1000; bots marked in presence (dashboard, maintenance kicks) and never take a stored character's name.
+- Checks: 51 new native checks (world bots, content bots, bot chat, the model call, chat relay); all native, chat and server checks pass.
 
 ## 2026-11-09 — Daevanion boards
 - **Daevanion boards** (`GameSession.Daevanion.cs`, `docs/DAEVANION.md`): each class's boards from the client's own tables (Brawler/Fighter included), nodes opened next to opened ones for Daevanion points, closed for Kinah, board reset, open all and open route; stats, skill levels and passives applied; per-character state in `character_settings`; point items (`GetDaevanionPoint`, `Fix_DaevanionPoint`). Config `Aion:Daevanion:*` (PointRate, ExtraPoints, FreeReset, MaxBoardLevel, DisabledBoards, LevelPoints). 20 checks + 3 Python tests.

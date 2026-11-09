@@ -132,7 +132,7 @@ public sealed class ChatRelay(TimeProvider clock, IChatDirectory? directory = nu
     /// <summary>
     /// A bot (a server-played character with no chat session) says <paramref name="text"/> in the shared room of this type
     /// (WORLD, or REGION for the common region room) to every session that joined it. With <paramref name="race"/> 1 or 2 only
-    /// players of that race (and those whose race is unknown) get it: faction chat. The text is cut to the chat limit.
+    /// players of that race get it (faction chat; not those whose race is unknown). The text is cut to the chat limit.
     /// </summary>
     public IReadOnlyList<ChatDelivery> Speak(string name, string roomType, string text, int race = 0)
     {
@@ -143,7 +143,7 @@ public sealed class ChatRelay(TimeProvider clock, IChatDirectory? directory = nu
         {
             ChatRoomKey? room;
             lock (session) room = session.Rooms.FirstOrDefault(r => r.Type == roomType && (roomType != "REGION" || r.RoomKey == "RG"));
-            if (room is null || race != 0 && RaceOf(session) is var theirs && theirs != 0 && theirs != race) continue;
+            if (room is null || race != 0 && RaceOf(session) != race) continue;
             deliveries.Add(new ChatDelivery(token, Notify(BotIdentity(name, session.Identity), new Speaker(name, name), room,
                 new ChatMessage(name, "PUBLISH", "NORMAL", text, ""))));
         }

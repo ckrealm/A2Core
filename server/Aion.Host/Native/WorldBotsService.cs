@@ -7,6 +7,9 @@ namespace Aion.Host.Native;
 /// <summary>Runs the world bot loop (Aion:WorldBots, docs/WORLDBOTS.md): every bot every 50 ms; they leave the world at shutdown.</summary>
 public sealed class WorldBotsService(WorldBots bots, ILogger<WorldBotsService> logger) : BackgroundService
 {
+    /// <summary>The account id the server uses for its own store lookups (bot name checks); no real account has it.</summary>
+    public static readonly Guid SystemAccount = new("00000000-0000-0000-0000-00000000b075");
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (!bots.Options.Enabled) logger.LogInformation("World bots: content bots only (Abyss PvP fillers)");

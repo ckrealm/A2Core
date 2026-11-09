@@ -89,11 +89,15 @@ Bot chat lets world bots talk like players, after AzerothCore's mod-ollama-chat:
   may get one answer from another bot (`BotReplyChance`), never a chain.
 - **Whispers.** A whisper to a bot is answered by whisper, always. The player sees their own whisper echoed as usual.
 - **Faction chat.** With `FactionOnly` (default) a bot's lines reach players of its own race only, and bots answer only
-  players of their own race. Off: everyone hears every bot.
+  players of their own race. A player whose race the chat server does not know (development identities) gets no bot chat.
+  Off: everyone hears every bot.
 - **Timing.** Answers wait 2 to 7 seconds (typing). No bot line comes sooner than `MinGapSeconds` after the last one, except
-  answers to whispers and to a bot's name. Answers older than a minute are dropped. One model call runs at a time.
+  answers to whispers and to a bot's name; even those reach one player at most once per `MinGapSeconds`, so spamming a bot's
+  name does not make it answer every second. Answers older than a minute are dropped. One model call runs at a time.
+- **Cost cap.** At most `MaxCallsPerMinute` model calls a minute for the whole server (20) and `MaxCallsPerPlayerPerMinute`
+  caused by one player (4); past either, the bot answers with a canned line instead.
 - **The prompt.** The bot's name, level, race, class, personality, what it is doing and where (its subzone), the recent
-  channel lines (12), and rules: one short casual line, no emojis, never say it is an AI, PG-13. `ExtraPrompt` adds server
+  channel lines (12; see "Privacy" below), and rules: one short casual line, no emojis, never say it is an AI, PG-13. `ExtraPrompt` adds server
   flavour. The reply is cleaned (first line only, no name prefix, quotes, `*actions*` or `<think>` blocks; AI disclaimers are
   refused) and cut to the chat limit of 100 characters.
 - **No model.** With `Endpoint` empty, or when the model fails or times out, the bot uses a short canned line instead.
@@ -110,7 +114,14 @@ Any server that speaks the OpenAI chat completions API works (`POST {Endpoint}/c
 | **Ollama on the server** (default) | Free, no key, nothing leaves the server | `curl -fsSL https://ollama.com/install.sh \| sh` then `ollama pull llama3.2:3b` | `Endpoint=http://127.0.0.1:11434/v1`. On CPU a 3B model needs about 3 GB of RAM and answers in a few seconds; `llama3.2:1b` (about 1.5 GB) for small machines; anything bigger wants a GPU. |
 | Ollama on another PC (a gaming PC with a GPU) | Free | Install Ollama there, set `OLLAMA_HOST=0.0.0.0`, open port 11434 to the server only | `Endpoint=http://<that PC>:11434/v1`. Bots fall back to canned lines while it is off. |
 | LM Studio or llama.cpp server | Free | Start its OpenAI-compatible server | Same settings, their port. |
-| Groq, OpenRouter (`:free` models), Google Gemini | Free tiers with an account | Create an API key on their site | Put the key in the environment only. Bot chat sends about 1 to 3 requests a minute, well inside free tiers. |
+| Groq, OpenRouter (`:free` models), Google Gemini | Free tiers with an account | Create an API key on their site | Put the key in the environment only. Bot chat sends about 1 to 3 requests a minute (capped at `MaxCallsPerMinute`), well inside free tiers. **Players' chat leaves the server** (see Privacy). |
+
+**Privacy.** With a hosted model (Groq, OpenRouter, Gemini or any endpoint not on this machine or the local network) the text
+of every line sent to a bot goes to that company: whispers to bots (sender name and text), channel lines that name a bot, and
+the bots' own lines. By default (`ShareChat` unset) nothing else goes: other players' channel lines are not in the prompt and a
+bot answers them by chance with a canned line. `ShareChat=true` sends the recent channel lines (names and text, last 12) too,
+as Ollama on the server does by default. Tell your friends if you use a hosted model; Ollama on the server or a PC at home keeps
+everything on your machines.
 
 Hosted examples (`/etc/aion/game.env`, which is not in the repository):
 
@@ -139,7 +150,7 @@ Bot chat needs the chat port (`Aion:ChatPort`, set by `tools/server_env.py`) and
 | Key | Default | Meaning |
 |---|---|---|
 | `Enabled` | `false` | World bots on. |
-| `Count` | `20` | Bots in the world at once. |
+| `Count` | `20` | Bots in the world at once (at most 1000; about 400 run well on one loop, see below). Bots are marked as bots in presence: the staff dashboard counts them apart and maintenance kicks skip them. A bot never takes a stored character's name (it picks another at login). |
 | `MinLevel` / `MaxLevel` | `10` / `0` | Starting levels (0: the level cap). |
 | `Race` | `both` | `light`, `dark` or `both` (half each). |
 | `Abyss` | `false` | Also hunt on the shared Abyss maps (players of the other race can attack them there). |
@@ -165,7 +176,10 @@ Bot chat needs the chat port (`Aion:ChatPort`, set by `tools/server_env.py`) and
 | `AmbientMinSeconds` / `AmbientMaxSeconds` | `90` / `300` | Time between unprompted lines. |
 | `ReplyChance` / `BotReplyChance` | `0.35` / `0.2` | Chance of an answer to a player's message (naming no bot), and to a bot's line. |
 | `TypingMinSeconds` / `TypingMaxSeconds` | `2` / `7` | The wait before an answer. |
-| `MinGapSeconds` | `4` | The least time between two bot lines (answers to whispers and names excepted). |
+| `MinGapSeconds` | `4` | The least time between two bot lines (answers to whispers and names excepted, but one player gets one such answer per gap). |
+| `MaxCallsPerMinute` | `20` | Model calls a minute, whole server; past it, canned lines. 0: canned only. |
+| `MaxCallsPerPlayerPerMinute` | `4` | Model calls a minute caused by one player. |
+| `ShareChat` | (unset) | Send players' channel lines that do not address a bot to the model. Unset: only when `Endpoint` is on this machine or a private network address. |
 | `ExtraPrompt` | (empty) | Added to every bot's instructions. |
 
 ## How many bots
