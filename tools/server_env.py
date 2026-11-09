@@ -108,7 +108,8 @@ def environment(args, credentials):
 # Rates and host switches (OURS: the server owner's choice). Each is written only when given, so the host's defaults
 # (official rates, PvP on, 30 s respawn, round-robin party loot, fallback loot on, no player cap, no dungeon entry limits,
 # untracked objectives done after 30 s, enchanting at the friends-server odds: chance x2, correction x2, no level lost,
-# materials spent) apply otherwise.
+# materials spent, small-group dungeon scaling on: -10% HP / -7% damage per member short of 4, at least 70% / 80%) apply
+# otherwise.
 GAMEPLAY = {
     'rates_profile': 'Aion__Rates__Profile',
     'exp_rate': 'Aion__Rates__Experience',
@@ -128,8 +129,13 @@ GAMEPLAY = {
     'enchant_pity': 'Aion__Enchant__PityMultiplier',
     'enchant_no_downgrade': 'Aion__Enchant__NoDowngrade',
     'enchant_keep_materials': 'Aion__Enchant__KeepMaterialsOnFail',
+    'dungeon_scaling': 'Aion__DungeonScaling__Enabled',
+    'scaling_hp_percent': 'Aion__DungeonScaling__HpPercentPerMissing',
+    'scaling_damage_percent': 'Aion__DungeonScaling__DamagePercentPerMissing',
+    'scaling_min_hp': 'Aion__DungeonScaling__MinHpPercent',
+    'scaling_min_damage': 'Aion__DungeonScaling__MinDamagePercent',
 }
-ON_OFF = ('pvp', 'fallback_loot', 'dungeon_limits', 'enchant_no_downgrade', 'enchant_keep_materials')
+ON_OFF = ('pvp', 'fallback_loot', 'dungeon_limits', 'dungeon_scaling', 'enchant_no_downgrade', 'enchant_keep_materials')
 
 
 def gameplay(args):
@@ -214,6 +220,12 @@ def main(argv=None):
                          help='a failure never lowers the level (Rune accessories; default on)')
     enchant.add_argument('--enchant-keep-materials', choices=['on', 'off'],
                          help='a failure spends no Kina or materials (default off)')
+    dungeons.add_argument('--dungeon-scaling', choices=['on', 'off'],
+                          help='weaker monsters in party dungeons and raids entered with fewer than 4 (players and bots; default on)')
+    dungeons.add_argument('--scaling-hp-percent', type=int, help='monster HP lost per missing member (0-50, default 10)')
+    dungeons.add_argument('--scaling-damage-percent', type=int, help='monster damage lost per missing member (0-50, default 7)')
+    dungeons.add_argument('--scaling-min-hp', type=int, help='lowest monster HP percent (10-100, default 70)')
+    dungeons.add_argument('--scaling-min-damage', type=int, help='lowest monster damage percent (10-100, default 80)')
     parser.add_argument('--geolocation', default='59.9139,10.7522,NO', metavar='LAT,LON,CC',
                         help="server location for the region screen ('off' to omit)")
     args = parser.parse_args(argv)
@@ -237,6 +249,10 @@ def main(argv=None):
         parser.error('--untracked-objective-seconds must be between 1 and 3600')
     if args.enchant_success is not None and args.enchant_success <= 0:
         parser.error('--enchant-success must be above 0')
+    for name, low, high in (('scaling_hp_percent', 0, 50), ('scaling_damage_percent', 0, 50), ('scaling_min_hp', 10, 100), ('scaling_min_damage', 10, 100)):
+        value = getattr(args, name)
+        if value is not None and not low <= value <= high:
+            parser.error(f"--{name.replace('_', '-')} must be between {low} and {high}")
     if args.staff_path is not None and (len(args.staff_path) < 9 or not args.staff_path.startswith('/')
                                         or not all(c.isalnum() or c in '-_' for c in args.staff_path[1:])):
         parser.error('--staff-path must be / followed by at least 8 letters, digits, - or _')

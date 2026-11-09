@@ -8,7 +8,7 @@ public sealed class Target
     public required int Key { get; init; }
     public required string Name { get; init; }
     public int Hp { get; set; }
-    public required int HpMax { get; init; }
+    public required int HpMax { get; set; }   // set: Aion:DungeonScaling (DungeonScaling.cs)
     public int Defense { get; init; }
     public Vector3d Position { get; set; }
     public int NpcId { get; init; }
@@ -29,8 +29,8 @@ public sealed class Target
     public AggroShape? Aggro { get; init; }      // NpcAggroData by AggroDetectRange
     public IReadOnlyList<int> Skills { get; init; } = [];   // ActiveSkillList
     public bool NoRotation { get; init; }
-    /// <summary>Combat.DamageScale of its NpcSubType and Grade.</summary>
-    public double DamageScale { get; init; } = 1.0;
+    /// <summary>Combat.DamageScale of its NpcSubType and Grade (times the Aion:DungeonScaling damage in a short-handed copy).</summary>
+    public double DamageScale { get; set; } = 1.0;
     /// <summary>NpcData ObjectTerrainType Air: appears flying (move state 7 FlyingOnAirStop, substate 2; every official air NPC).</summary>
     public bool Air { get; init; }
     /// <summary>A flying monster: appears with the passive abnormal 10000001 (immunities; every official flying monster, 17 of 17).</summary>

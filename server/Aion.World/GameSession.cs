@@ -42,6 +42,8 @@ public sealed record GameSessionOptions
     public FriendsOptions Friends { get; init; } = FriendsOptions.Official;   // the host binds Aion:Friends (default on)
     /// <summary>Aion:Enchant: enchanting odds (the friends-server default; <see cref="EnchantRules.Official"/> for the table as it is).</summary>
     public EnchantRules Enchant { get; init; } = EnchantRules.Default;
+    /// <summary>Aion:DungeonScaling: weaker monsters in group-dungeon copies entered short-handed (on by default).</summary>
+    public DungeonScaling DungeonScaling { get; init; } = DungeonScaling.Default;
     /// <summary>Heal/buff/debuff effects of class skills; null: the embedded tools/data/skill-effects.json (OURS values).</summary>
     public SkillEffectTable? SkillEffects { get; init; }
 }
@@ -1744,6 +1746,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
             if (options.TrainingDummy) targets[Combat.TrainingDummyKey] = Combat.TrainingDummy(at);
             foreach (var (key, target) in Combat.MapTargets(data, mapId)) targets[key] = target;
         }
+        ApplyDungeonScaling();   // Aion:DungeonScaling: a fresh group-dungeon copy entered short-handed
         MapEventsPrepare();   // spawn entries a map event starts itself stay dormant
         PlaceChallengeBoss();
         equippedWeapon = inventory.Count > 0 ? WeaponFromInventory() : data.StarterWeapon(profile);

@@ -70,7 +70,8 @@ class ServerEnvTests(unittest.TestCase):
             root = Path(temp)
             server_data(root / 'data')
             env = server_env.environment(self.args(root, dungeon_limits='on', dungeon_entries=2, dungeon_reset_hour=6,
-                                                   untracked_objective_seconds=90,
+                                                   untracked_objective_seconds=90, dungeon_scaling='off', scaling_hp_percent=15,
+                                                   scaling_damage_percent=5, scaling_min_hp=60, scaling_min_damage=85,
                                                    dungeon_entry=[('KraoCave_Hard', 1), ('600071', 0)]),
                                          {'aion_app': 'a', 'aion_auth': 'b'})
         self.assertEqual(env['Aion__Dungeons__EntryLimits'], 'true')
@@ -79,8 +80,14 @@ class ServerEnvTests(unittest.TestCase):
         self.assertEqual(env['Aion__Dungeons__UntrackedObjectiveSeconds'], 90)
         self.assertEqual(env['Aion__Dungeons__Entries__KraoCave_Hard'], 1)
         self.assertEqual(env['Aion__Dungeons__Entries__600071'], 0)
+        self.assertEqual(env['Aion__DungeonScaling__Enabled'], 'false')
+        self.assertEqual(env['Aion__DungeonScaling__HpPercentPerMissing'], 15)
+        self.assertEqual(env['Aion__DungeonScaling__DamagePercentPerMissing'], 5)
+        self.assertEqual(env['Aion__DungeonScaling__MinHpPercent'], 60)
+        self.assertEqual(env['Aion__DungeonScaling__MinDamagePercent'], 85)
         for argv in (['--dungeon-limits', 'yes'], ['--dungeon-entries', '-1'], ['--dungeon-reset-hour', '24'],
-                     ['--untracked-objective-seconds', '0'], ['--dungeon-entry', 'KraoCave'], ['--dungeon-entry', 'a b=1']):
+                     ['--untracked-objective-seconds', '0'], ['--dungeon-entry', 'KraoCave'], ['--dungeon-entry', 'a b=1'],
+                     ['--dungeon-scaling', 'yes'], ['--scaling-hp-percent', '51'], ['--scaling-min-damage', '5']):
             with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
                 server_env.main(['--public-address', '203.0.113.5', '--data', '.', '--state', '.', '--proxy', *argv])
 

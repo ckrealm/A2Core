@@ -32,6 +32,10 @@ public sealed class DungeonCopy(GameSession host, int dungeonId, long now)
     public int Deaths { get; set; }
     /// <summary>The final boss's cube reward each player took (player key → items), once per run.</summary>
     public Dictionary<int, List<(int ItemId, long Count)>> CubeTaken { get; } = [];
+    /// <summary>Aion:DungeonScaling: the group counted at the copy's creation and its monsters' HP and damage multipliers.</summary>
+    public (int Members, double Hp, double Damage)? Scale { get; set; }
+    /// <summary>The target set the scale was applied to (a private copy reloaded gets fresh targets).</summary>
+    internal object? ScaledTargets { get; set; }
 }
 
 public sealed partial class GameSession

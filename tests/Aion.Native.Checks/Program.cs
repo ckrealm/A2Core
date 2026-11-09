@@ -3021,6 +3021,74 @@ checks = 0;
     Check(await Run(follower, 600002, noon + 50) && follower.DungeonEntriesToday(noon + 60)[600002] == 1, "back into the same copy: free, not counted again");
     leader.ExitSharedWorld(); follower.ExitSharedWorld();
 
+    // Small-group scaling (Aion:DungeonScaling, OURS): -10% HP / -7% damage per member short of 4, at least 70% / 80%.
+    var scaling = DungeonScaling.Default;
+    Check(scaling.Enabled && scaling.For(1) == (0.7, 0.8) && scaling.For(2) == (0.8, 0.86) && scaling.For(3) == (0.9, 0.93) && scaling.For(4) == (1, 1) && scaling.For(6) == (1, 1)
+          && (scaling with { Enabled = false }).For(1) == (1, 1), "scaling: per missing member -10% HP / -7% damage, floored at 70% / 80%; a full group and off are unscaled");
+    Check(scaling.Scales(kraoEasy) && !scaling.Scales(storyLayer) && !scaling.Scales(MapEventTables.Embedded.Dungeon(7)!) && (scaling with { Types = "party, InstanceLayer" }).Scales(storyLayer),
+          "scaled types: Party and Raid by default (not story layers or arenas), configurable");
+    foreach (var bad in new[] { scaling with { GroupSize = 0 }, scaling with { HpPercentPerMissing = 60 }, scaling with { MinHpPercent = 5 }, scaling with { MinDamagePercent = 101 }, scaling with { Types = "Party;Raid" } })
+    {
+        var badRefused = false;
+        try { bad.Validated(); } catch (InvalidOperationException) { badRefused = true; }
+        Check(badRefused, "an invalid Aion:DungeonScaling value stops the host at startup");
+    }
+    Check(scaling.Validated() == scaling, "the default scaling settings pass");
+    var kraoMap = kraoEasy.Map;
+    var unscaled = Combat.MapTargets(data, kraoMap).Values.Where(t => t.SubType.EndsWith("Monster", StringComparison.Ordinal)).ToDictionary(t => t.Key);
+    async Task<GameSession> Delver(DungeonScaling settings, string name, SharedWorld? world = null)
+    {
+        var session = new GameSession(data, new GameSessionOptions { World = world, DungeonScaling = settings }, new Random(23));
+        await session.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+        await session.HandleAsync(new PacketWriter().U16(0x361b).String(name).U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
+        await session.HandleAsync(select, Now);
+        await session.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+        return session;
+    }
+    // The copy's monsters against the unscaled spawns: every one at the expected HP and damage scale (friendly NPCs untouched).
+    bool ScaledAs(GameSession inside, double hp, double damage) => unscaled.Count > 0 && inside.MapId == kraoMap && inside.InstanceKey != 0
+        && unscaled.Values.All(u => inside.Targets.GetValueOrDefault(u.Key) is { } t && t.HpMax == Math.Max(1, (int)Math.Round(u.HpMax * hp))
+            && (t.Dead || t.Hp == t.HpMax) && Math.Abs(t.DamageScale - u.DamageScale * damage) < 1e-9)
+        && inside.Targets.Values.Where(t => !t.SubType.EndsWith("Monster", StringComparison.Ordinal) && t.Key != Combat.TrainingDummyKey)
+            .All(t => Combat.MapTargets(data, kraoMap).GetValueOrDefault(t.Key)?.HpMax == t.HpMax);
+    var soloDelver = await Delver(scaling, "Solo");
+    soloDelver.EnterDungeonById(600002, noon);
+    await soloDelver.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), noon + 10);
+    Check(ScaledAs(soloDelver, 0.7, 0.8) && soloDelver.MapEventNotes.Any(n => n.Contains("1 member(s), monsters at 70% HP and 80% damage")),
+          "solo in an expedition: its monsters at 70% HP and 80% damage, noted");
+    var plainDelver = await Delver(scaling with { Enabled = false }, "Plain");
+    plainDelver.EnterDungeonById(600002, noon);
+    await plainDelver.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), noon + 10);
+    Check(ScaledAs(plainDelver, 1, 1) && !plainDelver.MapEventNotes.Any(n => n.Contains("DungeonScaling")), "scaling off: the copy's monsters exactly as before");
+    var soloTypeDelver = await Delver(scaling, "Story");
+    soloTypeDelver.EnterDungeonById(503001, noon);   // an Abyss artifact dungeon (solo)
+    await soloTypeDelver.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), noon + 10);
+    Check(soloTypeDelver.InstanceKey != 0 && soloTypeDelver.Copy?.Scale is null && !soloTypeDelver.MapEventNotes.Any(n => n.Contains("DungeonScaling")), "a solo dungeon type (AbyssArtifact) is not scaled");
+    // A party in a shared world: counted at the copy's creation (members not yet inside count); a later member does not rescale it.
+    async Task<List<GameSession>> Group(SharedWorld world, int size)
+    {
+        var members = new List<GameSession>();
+        for (var i = 0; i < size; i++) members.Add(await Delver(scaling, $"Delver{size}{i}", world));
+        for (var i = 1; i < size; i++)
+        {
+            await members[0].HandleAsync(SocialRequests.EncodeServerAndName(SocialOpcodes.PartyInviteRq, 1204, members[i].CharacterName!), noon);
+            var invite = (await members[i].TickAsync(noon + 1)).Single(b => (b[0] | b[1] << 8) == SocialOpcodes.PartyInviteNt);
+            await members[i].HandleAsync(SocialRequests.EncodePartyInviteResponse([new PartyInviteReply(BitConverter.ToInt64(invite, 2), PartyInviteAnswer.Accept)]), noon + 2);
+            await members[0].TickAsync(noon + 3);
+        }
+        members[0].EnterDungeonById(600002, noon + 10);
+        await members[0].HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), noon + 20);
+        return members;
+    }
+    var pair = await Group(new SharedWorld(data), 2);
+    Check(ScaledAs(pair[0], 0.8, 0.86) && pair[0].Copy?.Scale?.Members == 2, "two in the party: 80% HP, 86% damage (the second member counted before entering)");
+    pair[1].EnterDungeonById(600002, noon + 30);
+    await pair[1].HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), noon + 40);
+    Check(ScaledAs(pair[1], 0.8, 0.86) && ReferenceEquals(pair[0].Copy, pair[1].Copy), "the second member joins the same copy: scaled once, not again");
+    var full = await Group(new SharedWorld(data), 4);
+    Check(ScaledAs(full[0], 1, 1) && full[0].Copy?.Scale?.Members == 4, "a full party of four (bots count as members): no scaling");
+    foreach (var s in pair.Concat(full)) s.ExitSharedWorld();
+
     // Boss area attacks (tools/data/boss-area-skills.json, OURS): the expeditions' final bosses; their basic attack stays single-target.
     var areas = BossAreaSkills.Embedded;
     var finalBossSkills = data.NpcFromTemplate(2320171, "boss", [0, 0, 0], 0)!.Skills!.Where(id => data.NpcSkill(id) is not null).ToList();
@@ -3055,7 +3123,7 @@ checks = 0;
     var (capHits, _) = Fight(new BossAreaSkills(new Dictionary<int, BossAreaSkill> { [999] = new(5000, 2, [1220560]) }), 999);
     Check(capHits.Select(h => h.Key).OrderBy(k => k).SequenceEqual([100_001, 100_002]), "max_targets caps the players one hit reaches (2: the victim and the nearest)");
 }
-Console.WriteLine($"{checks} dungeon checks passed (entry limits, untracked objectives, boss area attacks).");
+Console.WriteLine($"{checks} dungeon checks passed (entry limits, untracked objectives, small-group scaling, boss area attacks).");
 
 // ---------- Enchanting odds (Aion:Enchant, OURS): chance and failure correction multipliers, no level loss, kept materials ----------
 checks = 0;
