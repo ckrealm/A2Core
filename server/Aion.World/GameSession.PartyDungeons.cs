@@ -10,8 +10,8 @@ namespace Aion.World;
 // OpenSubzoneGroupIDs 0x56ac and AddSubzoneGroupID 0x56ad in the official recording): OdEnergyCubeRewardStart_NT 0x56cc,
 // OdEnergyCubeReward_RQ/RS 0x56cd/0x56ce. The dungeon state family is OBSERVED at 0x6100-0x610b (catalogue 573-584 at
 // 0x5ec3 + index): DungeonState_NT 0x6100, DungeonCompleteResult_NT 0x6101, DungeonClearKillNpc_NT 0x6108, DungeonDeathLimit_NT 0x6109.
-// Their bodies are the usmap fields (CANDIDATE: none observed). Not modelled: entry tickets, the weekly currency
-// limit, the cube's ceiling, DungeonCoolTimes (every party dungeon's Cooltime is 0), DeathLimit (0 everywhere).
+// Their bodies are the usmap fields (CANDIDATE: none observed). Not modelled: entry tickets (none in the data; the
+// OURS daily limits are GameSession.DungeonEntries.cs), the weekly currency limit, the cube's ceiling, DungeonCoolTimes (every party dungeon's Cooltime is 0), DeathLimit (0 everywhere).
 
 /// <summary>The shared state of one dungeon copy.</summary>
 public sealed class DungeonCopy(GameSession host, int dungeonId, long now)
@@ -62,6 +62,7 @@ public sealed partial class GameSession
         }
         if (sharedMap is not null) copy = sharedMap.Dungeon ??= Fresh();
         else if (copy is null || copy.DungeonId != id) copy = Fresh();
+        CountDungeonEntry(id, now);
     }
 
     /// <summary>The dungeon types with a run timer and the dungeon state messages (Dungeon.dat ProcessStateHoldingTime).</summary>
@@ -69,6 +70,7 @@ public sealed partial class GameSession
     public const byte DungeonStatePrepare = 1;
 
     string IMapEventHost.DungeonStateName => copy?.Phase ?? "Process";
+    long IMapEventHost.UntrackedObjectiveMs => options.Dungeons.UntrackedObjectiveMs;
 
     /// <summary>The host's tick: a field event's ready time ends, the event phase begins and its scripts start.</summary>
     List<byte[]> DungeonPhaseTick(long now)

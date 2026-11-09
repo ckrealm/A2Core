@@ -57,9 +57,17 @@ public sealed record MapEventObjective(
     };
     /// <summary>Objectives only the client can finish (a cutscene, a note, a talk, a guide); it reports them with 0x9230.</summary>
     public bool ClientSide => Type is "CompleteCutscene" or "CloseNote" or "CompleteNpcTalk" or "CloseGuide";
-    /// <summary>Objectives the server does not track yet (waves, puzzles, scores, items): finished after a grace period so the event goes on.</summary>
+    /// <summary>
+    /// Objectives the server cannot follow (finished after Aion:Dungeons:UntrackedObjectiveSeconds so the event goes on; each
+    /// fallback is logged). Counts in map-events.json (all maps / served maps): AchieveUnifiedObjectivesScore 405/351 (the
+    /// score each kill or object gives is not in the extracted data), ClearWave 42/42 (the wave tables naming a wave's
+    /// spawns are not extracted; StartWave/EndWave are not run), ClearBoardPuzzle 25/25, UpdateEnvObjState 18/18 (counted
+    /// when a directive changes the state; a player-broken object is not), CollectItem 13/13 (item names without ids),
+    /// GetAbnormal 2/2, PCSocial 2/0, UseUsableItemType 1/0. KillNpcCreatureType (3/2) is tracked from server-side kills
+    /// (any hostile kill: NpcData has no creature type here, CANDIDATE) and has no timer.
+    /// </summary>
     public bool Unsupported => Type is "AchieveUnifiedObjectivesScore" or "ClearWave" or "ClearBoardPuzzle" or "GetAbnormal" or "PCSocial"
-        or "UseUsableItemType" or "CollectItem" or "KillNpcCreatureType" or "UpdateEnvObjState";
+        or "UseUsableItemType" or "CollectItem" or "UpdateEnvObjState";
 }
 
 public sealed record MapEventStep(
@@ -219,6 +227,8 @@ public sealed class MapEventTables
     public static int? Relationship(string name) => relationships.TryGetValue(name.Trim(), out var value) ? value : null;
     public const int FriendlyToAll = 23;
     public DungeonInfo? Dungeon(int id) => file.Dungeons.GetValueOrDefault(K(id));
+    /// <summary>A dungeon by its Dungeon.dat name (any case), or null.</summary>
+    public DungeonInfo? DungeonNamed(string name) => file.Dungeons.Values.FirstOrDefault(d => string.Equals(d.Name, name, StringComparison.OrdinalIgnoreCase));
     /// <summary>The dungeon whose map this is (served or not), or null for a field map.</summary>
     public DungeonInfo? DungeonOfMap(int mapId) => dungeonByMap.TryGetValue(mapId, out var id) ? Dungeon(id) : null;
     public int DungeonIdOfMap(int mapId) => dungeonByMap.GetValueOrDefault(mapId);
@@ -239,6 +249,8 @@ public interface IMapEventHost
 {
     /// <summary>The dungeon phase the DungeonState condition compares with (Prepare before a field event starts, else Process).</summary>
     string DungeonStateName => "Process";
+    /// <summary>After this long an objective the server cannot follow counts as done (Aion:Dungeons:UntrackedObjectiveSeconds).</summary>
+    long UntrackedObjectiveMs => MapEventRun.FallbackMs;
     void Spawn(string spawner, int delayMs);
     /// <summary>EndSpawner (despawn, flag 7) or KillSpawner (dies) after a delay; DespawnAll with "all".</summary>
     void Despawn(string spawner, int delayMs, bool kill);
@@ -338,6 +350,8 @@ public sealed class MapEventRun
     public int[] Goals { get; private set; }
     public int[] Variables { get; }
     public bool Finished => Status is Complete or Expired;
+    /// <summary>Objectives of this run finished by their fallback timer (logged through the host).</summary>
+    public int FellBack { get; private set; }
     public MapEventStage? Stage => StageIndex < Definition.Stages.Length ? Definition.Stages[StageIndex] : null;
     public MapEventStep? Step => Stage is { } stage && StepIndex < stage.Steps.Length ? stage.Steps[StepIndex] : null;
     public int StageOrder => Stage?.Id ?? 0;
@@ -363,7 +377,7 @@ public sealed class MapEventRun
         for (var i = 0; i < step.Objectives.Length; i++)
         {
             var o = step.Objectives[i];
-            if ((o.ClientSide || o.Unsupported) && i < fallbackAt.Length) fallbackAt[i] = now + FallbackMs;
+            if ((o.ClientSide || o.Unsupported) && i < fallbackAt.Length) fallbackAt[i] = now + (o.Unsupported ? Host.UntrackedObjectiveMs : FallbackMs);
             // A CloseGuide objective shows its guide (the forced popup) when the step begins: OBSERVED 2026-10-19, ShowGuide (46) for
             // Tutorial_ForcedPopup_Fly_01 at the Subspace's first step and Tutorial_ForcedPopup_L1_ExitDungeon_01 with the Dream
             // Crossroad's join; the client reports CloseGuide (0x9230 kind 2) when the player closes it. Without it the player waited
@@ -546,7 +560,10 @@ public sealed class MapEventRun
                 if (fallbackAt[i] != 0 && now >= fallbackAt[i] && Goals[i] < step.Objectives[i].Count)
                 {
                     fallbackAt[i] = 0;
-                    Host.Unsupported(this, $"objective {step.Objectives[i].Type} {step.Objectives[i].Value(0)} finished by timeout");
+                    var late = step.Objectives[i];
+                    FellBack++;
+                    Host.Unsupported(this, $"objective {late.Type} {late.Value(0)} of {Name} stage {StageOrder} step {StepOrder} finished by timeout"
+                        + (late.Unsupported ? " (untracked: Aion:Dungeons:UntrackedObjectiveSeconds)" : " (the client did not report it)"));
                     Apply(o => ReferenceEquals(o, step.Objectives[i]), now, whole: true);
                 }
         if (Definition.Rules is { } rules)

@@ -118,6 +118,18 @@ await using(var source=NpgsqlDataSource.Create(connectionString))
     catch(PostgresException e) when(e.SqlState==PostgresErrorCodes.ForeignKeyViolation) { Check(true,"missing skill rolls back creation"); }
     var chars=await new PostgresCharacterRepository(source).ListOwnedAsync(first.AccountId,default);
     Check(!chars.Any(x=>x.Name=="Rollback"),"failed starter leaves no character");
+    // Daily dungeon entry counts (migration 039): set per day, other days dropped on save, owner only, reset by the character's store.
+    Check((await game.DungeonEntriesAsync(first,id)).Count==0,"no dungeon entries yet");
+    Check(await game.SaveDungeonEntryAsync(first,id,new DungeonEntryRecord(600002,"2026-11-08",1)) && await game.SaveDungeonEntryAsync(first,id,new DungeonEntryRecord(503001,"2026-11-08",2))
+          && await game.SaveDungeonEntryAsync(first,id,new DungeonEntryRecord(600002,"2026-11-08",2)),"dungeon entry counts saved and updated");
+    var entries=await game.DungeonEntriesAsync(first,id);
+    Check(entries.SequenceEqual([new DungeonEntryRecord(503001,"2026-11-08",2),new DungeonEntryRecord(600002,"2026-11-08",2)]),"dungeon entry counts read back by dungeon");
+    Check(!await game.SaveDungeonEntryAsync(second,id,new DungeonEntryRecord(600002,"2026-11-08",9)) && (await game.DungeonEntriesAsync(second,id)).Count==0
+          && await game.ResetDungeonEntriesAsync(second,id)==0,"dungeon entry counts belong to the character's account");
+    Check(await game.SaveDungeonEntryAsync(first,id,new DungeonEntryRecord(600002,"2026-11-09",1))
+          && (await game.DungeonEntriesAsync(first,id)).SequenceEqual([new DungeonEntryRecord(600002,"2026-11-09",1)]),"a save on a new day drops the older days' rows");
+    Check(!await game.SaveDungeonEntryAsync(first,id,new DungeonEntryRecord(600002,"2026-11-09",0)),"a count of 0 is not stored");
+    Check(await game.ResetDungeonEntriesAsync(first,id)==1 && (await game.DungeonEntriesAsync(first,id)).Count==0,"the reset removes the character's rows");
     var bag=(await game.InventoryAsync(first,id))!;
     Check(bag.Items.Count==1 && bag.Items[0].Location=="equipment" && bag.Items[0].Slot==1,"starter equipment persisted");
     Check(bag.Skills.Count==1 && bag.Skills[0].SkillId==201 && bag.Skills[0].Slot==0,"starter skills and bar persisted");

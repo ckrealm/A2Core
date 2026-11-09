@@ -106,7 +106,8 @@ def environment(args, credentials):
 
 
 # Rates and host switches (OURS: the server owner's choice). Each is written only when given, so the host's defaults
-# (official rates, PvP on, 30 s respawn, round-robin party loot, fallback loot on, no player cap) apply otherwise.
+# (official rates, PvP on, 30 s respawn, round-robin party loot, fallback loot on, no player cap, no dungeon entry limits,
+# untracked objectives done after 30 s) apply otherwise.
 GAMEPLAY = {
     'rates_profile': 'Aion__Rates__Profile',
     'exp_rate': 'Aion__Rates__Experience',
@@ -118,6 +119,10 @@ GAMEPLAY = {
     'pvp': 'Aion__Rules__Pvp',
     'party_loot': 'Aion__Rules__PartyLoot',
     'fallback_loot': 'Aion__Rules__FallbackLoot',
+    'dungeon_limits': 'Aion__Dungeons__EntryLimits',
+    'dungeon_entries': 'Aion__Dungeons__DailyEntries',
+    'dungeon_reset_hour': 'Aion__Dungeons__ResetHour',
+    'untracked_objective_seconds': 'Aion__Dungeons__UntrackedObjectiveSeconds',
 }
 
 
@@ -127,10 +132,20 @@ def gameplay(args):
         value = getattr(args, name, None)
         if value is None:
             continue
-        if name in ('pvp', 'fallback_loot'):
+        if name in ('pvp', 'fallback_loot', 'dungeon_limits'):
             value = 'true' if value == 'on' else 'false'
         env[key] = value
+    # Per-dungeon daily entries (Dungeon.dat id or name = count, 0 no limit): Aion:Dungeons:Entries:<dungeon>.
+    for dungeon, count in getattr(args, 'dungeon_entry', None) or []:
+        env[f'Aion__Dungeons__Entries__{dungeon}'] = count
     return env
+
+
+def dungeon_entry(text):
+    name, _, count = text.partition('=')
+    if not name or not all(c.isalnum() or c in '_-' for c in name) or not count.isdigit() or int(count) > 1000:
+        raise argparse.ArgumentTypeError('a dungeon entry override is <Dungeon.dat id or name>=<0-1000>')
+    return name, int(count)
 
 
 def rate(text):
@@ -168,6 +183,15 @@ def main(argv=None):
                        help="a party member's kill: items to a random member nearby, to members in turn (default), or all to the killer")
     rates.add_argument('--fallback-loot', choices=['on', 'off'],
                        help='monsters without a reward table drop generic items of their level (default on)')
+    dungeons = parser.add_argument_group('dungeons (unset: the host defaults, entry limits off)')
+    dungeons.add_argument('--dungeon-limits', choices=['on', 'off'],
+                          help='daily entry limits for expeditions, awakening, daily dungeons and raids (default off)')
+    dungeons.add_argument('--dungeon-entries', type=int, help='entries a day per limited dungeon (default 3; 0 no limit)')
+    dungeons.add_argument('--dungeon-entry', type=dungeon_entry, action='append', metavar='DUNGEON=N',
+                          help='entries a day for one dungeon (Dungeon.dat id or name; 0 no limit); repeatable')
+    dungeons.add_argument('--dungeon-reset-hour', type=int, help='server local hour the daily counts reset (0-23, default 9)')
+    dungeons.add_argument('--untracked-objective-seconds', type=int,
+                          help='map-event objectives the server cannot follow count as done after this long (1-3600, default 30)')
     parser.add_argument('--geolocation', default='59.9139,10.7522,NO', metavar='LAT,LON,CC',
                         help="server location for the region screen ('off' to omit)")
     args = parser.parse_args(argv)
@@ -183,6 +207,12 @@ def main(argv=None):
         parser.error('--max-players must be 0 or more')
     if args.respawn_seconds is not None and not 5 <= args.respawn_seconds <= 3600:
         parser.error('--respawn-seconds must be between 5 and 3600')
+    if args.dungeon_entries is not None and not 0 <= args.dungeon_entries <= 1000:
+        parser.error('--dungeon-entries must be between 0 and 1000')
+    if args.dungeon_reset_hour is not None and not 0 <= args.dungeon_reset_hour <= 23:
+        parser.error('--dungeon-reset-hour must be between 0 and 23')
+    if args.untracked_objective_seconds is not None and not 1 <= args.untracked_objective_seconds <= 3600:
+        parser.error('--untracked-objective-seconds must be between 1 and 3600')
     if args.staff_path is not None and (len(args.staff_path) < 9 or not args.staff_path.startswith('/')
                                         or not all(c.isalnum() or c in '-_' for c in args.staff_path[1:])):
         parser.error('--staff-path must be / followed by at least 8 letters, digits, - or _')
