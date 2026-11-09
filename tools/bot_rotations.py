@@ -39,20 +39,21 @@ PROGRESSION = ROOT / 'tools/data/progression.json'
 OUT = ROOT / 'tools/data/bot-rotations.json'
 
 # Bot playable classes (Novice/Test/Tutorial are not player classes).
-CLASSES = ('Gladiator', 'Templar', 'Assassin', 'Cleric', 'Ranger', 'Elementalist', 'Sorcerer', 'Chanter')
+CLASSES = ('Gladiator', 'Templar', 'Assassin', 'Cleric', 'Ranger', 'Elementalist', 'Sorcerer', 'Chanter', 'Fighter')
 # OURS: how close the bot stands to its target before it casts (cm). Melee weapons close in (4 m
 # skills), ranged ones keep their distance (20 m skills, the bot stands at 18 m).
-RANGE = {'Greatsword': 300, 'Sword': 300, 'Dagger': 250, 'Mace': 300, 'Staff': 300,
+RANGE = {'Greatsword': 300, 'Sword': 300, 'Dagger': 250, 'Mace': 300, 'Staff': 300, 'Gauntlet': 250,
          'Bow': 1800, 'Orb': 1800, 'Magicbook': 1800}
 # The Cleric fights with 20 m spells although it holds a mace; a heal Cleric stands a little closer to its group.
 CLASS_RANGE = {'Cleric': 1800}
 ROLE_RANGES = {'Cleric': {'heal': 1500}}
 # Where a melee bot stands: "behind" works from the monster's back while it attacks someone else.
 POSITION = {'Gladiator': 'behind', 'Templar': 'front', 'Assassin': 'behind', 'Chanter': 'behind',
-            'Cleric': 'ranged', 'Ranger': 'ranged', 'Elementalist': 'ranged', 'Sorcerer': 'ranged'}
+            'Cleric': 'ranged', 'Ranger': 'ranged', 'Elementalist': 'ranged', 'Sorcerer': 'ranged', 'Fighter': 'behind'}
 # OURS: roles each class may take (mod-playerbots style); the first is a new bot's role.
 ROLES = {'Gladiator': ['dps', 'tank'], 'Templar': ['tank', 'dps'], 'Assassin': ['dps'], 'Ranger': ['dps'],
-         'Elementalist': ['dps'], 'Sorcerer': ['dps'], 'Cleric': ['heal', 'dps'], 'Chanter': ['heal', 'dps']}
+         'Elementalist': ['dps'], 'Sorcerer': ['dps'], 'Cleric': ['heal', 'dps'], 'Chanter': ['heal', 'dps'],
+         'Fighter': ['dps', 'tank']}   # Fighter = Brawler (docs/friends-server/BRAWLER.md); its PLAN comes later
 # OURS: the support entries made from a skill-effects.json entry, by (its target, its effect type).
 # Each is (when, roles): roles 'heal' keeps the entry to heal bots, 'other' to the class's other
 # roles, None to every role. Percentages are of the chosen target's HP. A buff whose duration is

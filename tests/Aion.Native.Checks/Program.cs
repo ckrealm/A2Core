@@ -1232,6 +1232,16 @@ await staffSession.InventoryChangesAsync(default);
 await staffSession.HandleAsync(new PacketWriter().U16(0xe247).I64(14).U8(1).ToArray(), Now);
 Check(staffSession.EquippedWeapon == 110120003 && data.WeaponType(110120003) == "Greatsword" && data.WeaponStatsOf(110120003).Max == 604,
       "equipping another greatsword changes the combat weapon (type and stats from Item.dat)");
+// Brawler (docs/friends-server/BRAWLER.md, OURS): the client's only gauntlets are level 1, so a gauntlet hits like the
+// Greatsword of the wielder's gear level; other weapons keep their own stats.
+Check(data.WeaponType(150960002) == "Gauntlet" && data.StatWeapon(150960002, 0) == 150960002 && data.ItemLevel(data.StatWeapon(150960002, 1)!.Value) == 1
+      && data.StatWeapon(150960002, 45) is { } proxy45 && data.WeaponType(proxy45) == "Greatsword" && data.ItemLevel(proxy45) == 45
+      && data.WeaponStatsOf(data.StatWeapon(150960002, 100)).Max > data.WeaponStatsOf(proxy45).Max && data.StatWeapon(110120003, 100) == 110120003,
+      "a gauntlet hits like the Greatsword of its gear level; other weapons are themselves");
+Check(data.LearnedSkills("Fighter", 1).Any(k => k.SkillId == 19010000) && !data.LearnedSkills("Fighter", 2).Any(k => k.SkillId == 19070000)
+      && data.LearnedSkills("Fighter", 100).Any(k => k.SkillId == 19440000) && data.Profile(45, 1) is { Class: "Fighter", Race: 1 }
+      && data.Profile(46, 2) is { Class: "Fighter", Race: 2 } && data.StarterWeapon(data.Profile(45, 1)) == 150960002,
+      "the Brawler (Fighter) has its kit to the cap, Light and Dark profiles and a gauntlet");
 var torso = await staffSession.HandleAsync(new PacketWriter().U16(0xe247).I64(15).U8(5).ToArray(), Now);
 Check(staffSession.Resource.HpMax == hpUnarmoured + 144 && torso.Any(b => b[0] == 0x4a && b[1] == 0x36), "armour HPMax raises the pool; 0x364a carries the new stats");
 var powerArmed = staffSession.CombatPower();
@@ -3094,7 +3104,8 @@ checks = 0;
     var botPresence = new WorldPresence();
     var bots = new PlayerBots(data, botOptions, botWorld, presence: botPresence);
     Check(BotRotations.Embedded.For("Gladiator") is { Range: > 0, Rotation.Length: > 2 } glad && glad.Rotation[^1].Skill == 11020000
-          && BotRotations.Embedded.Classes.Count == 8, "bot-rotations.json is embedded: every playable class, the filler last");
+          && BotRotations.Embedded.Classes.Count == 9 && BotRotations.Embedded.For("Fighter") is { WeaponType: "Gauntlet" },
+          "bot-rotations.json is embedded: every playable class (the Brawler too), the filler last");
     Check((await bots.CommandAsync(leader, "add Leader", t, default)).Contains("yourself") && (await bots.CommandAsync(leader, "add Nobody", t, default)).Contains("not one of your characters"),
           "a bot is one of the summoner's other characters");
     Check(await bots.CommandAsync(leader, "add Alt", t, default) == "Summoning Alt." && bots.All.Single().State == PlayerBot.Phase.Pending, "//bot add queues the character");
