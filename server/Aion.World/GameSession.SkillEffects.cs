@@ -132,7 +132,7 @@ public sealed partial class GameSession
                     break;
             }
         // A skill with no damage of its own still turns the monster on its caster.
-        if (data.Skill(skill)?.Damage is not { Length: > 0 }) replies.AddRange(ai.Engage(targets, npc, now, playerKey, 1));
+        if (data.Skill(skill)?.Damage is not { Length: > 0 }) replies.AddRange(ai.Engage(targets, npc, now, playerKey, Threat(1)));
         return replies;
     }
 

@@ -29,6 +29,28 @@ public sealed partial class GameSession
 
     public bool InCombat => inCombat;
 
+    /// <summary>A playerbot's role (tank, dps, heal; null for players), set by its brain: a tank bot looks after the others first.</summary>
+    public string? BotRole { get; set; }
+
+    /// <summary>
+    /// OURS: this player's hits count this many times in a monster's hate table (NpcAi.Engage). 1 for players; a tank bot's brain
+    /// sets bot-rotations.json tank_hate_multiplier so monsters turn to it. Server-side only: nothing new is sent.
+    /// </summary>
+    public double HateMultiplier { get; set; } = 1;
+
+    /// <summary>The hate a hit of this much damage adds (at least 1, as NpcAi.Engage counts it).</summary>
+    int Threat(int damage) => HateMultiplier == 1 ? damage : (int)Math.Clamp(Math.Round(damage * HateMultiplier), 1, int.MaxValue);
+
+    /// <summary>Whether this player carries the class skill's buff (or heal over time) now.</summary>
+    public bool HasSkillBuff(int skillId, long now) => buffs.Any(b => b.SkillId == skillId && b.ExpireAt > now);
+
+    /// <summary>This player's own drops on the ground that it may still pick up (0x5620), with where they lie.</summary>
+    public IReadOnlyList<(long Uid, Vector3d At)> LootableDrops(long now) =>
+        drops.Values.Where(d => now < d.ExpiresAt).Select(d => (d.Uid, d.At)).ToList();
+
+    /// <summary>Where this player entered its instance copy from (field map, position); null outside a copy.</summary>
+    public (int Map, Vector3d At)? InstanceReturn => instanceKey != 0 ? instanceReturn : null;
+
     /// <summary>Where the character stands: its last accepted position report, else where it entered (a fresh entry has sent none yet).</summary>
     public Vector3d? WorldPosition => position ?? (worldPlayer?.Map is not null ? worldPlayer.Position : spawn?.Position);
 
