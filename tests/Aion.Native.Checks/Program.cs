@@ -3057,6 +3057,94 @@ checks = 0;
 }
 Console.WriteLine($"{checks} dungeon checks passed (entry limits, untracked objectives, boss area attacks).");
 
+// ---------- Enchanting odds (Aion:Enchant, OURS): chance and failure correction multipliers, no level loss, kept materials ----------
+checks = 0;
+{
+    var official = EnchantRules.Official;
+    var friends = EnchantRules.Default;
+    Check(friends.SuccessMultiplier == 2 && friends.PityMultiplier == 2 && friends.NoDowngrade && !friends.KeepMaterialsOnFail,
+          "Aion:Enchant default (friends server): chance x2, correction x2, no level lost, materials spent");
+    Check(official.Chance(6500, 0) == 6500 && official.Chance(2000, 1500) == 3500 && official.BonusAfterFail(1000, 500) == 1500
+          && official.LevelAfterFail(3, -1) == 2 && official.LevelAfterFail(0, -1) == 0 && official.LevelAfterFail(4, 0) == 4,
+          "official (1/1/false/false): the table's chance plus the correction, FailCorrection added, FailPenalty -1 loses one level");
+    Check(friends.Chance(6500, 0) == 10_000 && friends.Chance(2000, 0) == 4000 && friends.Chance(2000, 1000) == 5000 && friends.Chance(5000, 9000) == 10_000
+          && friends.BonusAfterFail(1000, 500) == 2000 && friends.LevelAfterFail(3, -1) == 3,
+          "friends: +11 (65%) certain, +15 (20%) 40%, the correction builds twice as fast, capped at 100%; no level lost");
+    foreach (var bad in new[] { official with { SuccessMultiplier = 0 }, official with { SuccessMultiplier = 101 }, official with { SuccessMultiplier = double.NaN },
+                 official with { PityMultiplier = -1 }, official with { PityMultiplier = 101 } })
+    {
+        var enchantRefused = false;
+        try { bad.Validated(); } catch (InvalidOperationException) { enchantRefused = true; }
+        Check(enchantRefused, "an invalid Aion:Enchant value stops the host at startup");
+    }
+    Check(friends.Validated() == friends && official.Validated() == official && (official with { PityMultiplier = 0 }).Validated().BonusAfterFail(700, 500) == 700,
+          "valid settings pass (a pity multiplier of 0 turns the correction off)");
+
+    // In a session: a Unique weapon at +10 (Enchant_Unique_102: 65% then 50/35/25/20, +5% a failure) and a Rune accessory
+    // at +5 (Rune_PvE_Unique: 25% next, one level lost on a failure). The roll is forced.
+    const int weapon = 110120003, rune = 310900001, coin = 930100023;
+    var weaponStep = EnchantTables.Embedded.Next(weapon, 10)!;
+    var runeStep = EnchantTables.Embedded.Next(rune, 5)!;
+    Check(weaponStep is { Success: 6500, FailCorrection: 500, FailPenalty: 0 } && EnchantTables.Embedded.Next(weapon, 12) is { Success: 3500 }
+          && runeStep is { Success: 2500, FailPenalty: -1 },
+          "the table: Unique +10 -> +11 is 65% (+12 -> +13 35%) with +5% a failure; Rune +5 -> +6 is 25% and loses a level");
+    async Task<(GameSession Session, FakeStore Store)> Enchanter(EnchantRules rules, string name)
+    {
+        var enchantStore = new FakeStore();
+        var session = new GameSession(data, new GameSessionOptions { Enchant = rules }, new Random(23)) { Store = enchantStore };
+        await session.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+        await session.HandleAsync(new PacketWriter().U16(0x361b).String(name).U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
+        await session.HandleAsync(new PacketWriter().U16(0x361f).Varint(enchantStore.States[0].WireId << 16).I32(0).Vec3(Vector3d.Zero).ToArray(), Now);
+        await session.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+        ItemState Row(int template, long count, long wire, object? upgrades = null) =>
+            new(Guid.NewGuid(), "b", template, count, "bag", null, 1, JsonSerializer.SerializeToElement(new { }), JsonSerializer.SerializeToElement(upgrades ?? new { }), wire);
+        enchantStore.Items.AddRange([Row(weapon, 1, 70, new { enchant = 10, enchant_bonus = 0 }), Row(rune, 1, 71, new { enchant = 5, enchant_bonus = 0 }),
+            Row(GameSession.KinaItemId, 10_000_000, 72), Row(coin, 100_000, 73), Row(531110003, 100, 74)]);
+        await session.InventoryChangesAsync(default);
+        return (session, enchantStore);
+    }
+    async Task<(int Result, int Level, int Bonus, long Kina, long Coins)> Attempt(GameSession session, FakeStore store, long wire, int roll)
+    {
+        session.EnchantRoll = () => roll;
+        var reply = await session.HandleAsync(new PacketWriter().U16(0x5622).I64(wire).Varint(0).ToArray(), Now);
+        var row = store.Items.Single(i => i.WireId == wire);
+        return (reply[0][2], row.Upgrades.GetProperty("enchant").GetInt32(), row.Upgrades.GetProperty("enchant_bonus").GetInt32(),
+            store.Items.Where(i => i.TemplateId == GameSession.KinaItemId).Sum(i => i.Quantity), store.Items.Where(i => i.TemplateId == coin).Sum(i => i.Quantity));
+    }
+    long weaponCoins = weaponStep.Costs.Single(c => c.ItemId == coin).Count;
+
+    // Official: a roll of 6500 fails the 65% (level kept, +5% built up, costs paid); the retry is 70%; the Rune drops to +4.
+    var (off, offStore) = await Enchanter(official, "Official");
+    var offFail = await Attempt(off, offStore, 70, 6500);
+    Check(offFail == (4, 10, 500, 10_000_000 - weaponStep.Kina, 100_000 - weaponCoins),
+          "official: roll 6500 against 65% fails (result 4), +10 kept, the correction 500 stored, Kina and coins spent");
+    var offRetry = await Attempt(off, offStore, 70, 6999);
+    Check(offRetry.Result == 0 && offRetry.Level == 11 && offRetry.Bonus == 0, "official: the next attempt is 70% (65 + 5), roll 6999 succeeds and the correction resets");
+    var offRune = await Attempt(off, offStore, 71, 2500);
+    Check(offRune.Result == 4 && offRune.Level == 4 && offRune.Bonus == 0, "official: the Rune fails at 25% and loses one level (FailPenalty -1)");
+
+    // Friends default: +11 and +12 certain (130%, 100%), +13 is 70% with the correction building 10% a failure; the Rune keeps its level.
+    var (fr, frStore) = await Enchanter(friends, "Friends");
+    var frWins = new[] { await Attempt(fr, frStore, 70, 9999), await Attempt(fr, frStore, 70, 9999) };
+    Check(frWins.All(w => w.Result == 0) && frWins[1].Level == 12, "friends: +10 -> +11 (65% x2) and +11 -> +12 (50% x2) are certain");
+    var frFail = await Attempt(fr, frStore, 70, 7000);
+    Check(frFail.Result == 4 && frFail.Level == 12 && frFail.Bonus == 1000 && frFail.Kina < frWins[1].Kina && frFail.Coins < frWins[1].Coins,
+          "friends: roll 7000 against 70% (35% x2) fails, +12 kept, correction 1000 (500 x2), materials spent");
+    var frRetry = await Attempt(fr, frStore, 70, 7999);
+    Check(frRetry.Result == 0 && frRetry.Level == 13 && frRetry.Bonus == 0, "friends: the retry is 80% (70 + 10), roll 7999 succeeds");
+    var frRune = await Attempt(fr, frStore, 71, 5000);
+    Check(frRune.Result == 4 && frRune.Level == 5, "friends: the Rune fails at 50% (25% x2) and keeps +5 (NoDowngrade)");
+
+    // KeepMaterialsOnFail: a failure costs nothing; a success pays.
+    var (keep, keepStore) = await Enchanter(friends with { KeepMaterialsOnFail = true }, "Keeper");
+    var keepFail = await Attempt(keep, keepStore, 71, 9999);
+    Check(keepFail == (4, 5, 0, 10_000_000, 100_000) && keepStore.Items.Single(i => i.WireId == 74).Quantity == 100,
+          "KeepMaterialsOnFail: a failed attempt spends no Kina, coins or other materials");
+    var keepWin = await Attempt(keep, keepStore, 71, 0);
+    Check(keepWin.Result == 0 && keepWin.Level == 6 && keepWin.Kina == 10_000_000 - runeStep.Kina, "KeepMaterialsOnFail: a success pays the table's cost");
+}
+Console.WriteLine($"{checks} enchant odds checks passed (Aion:Enchant multipliers, no level loss, kept materials).");
+
 // ---------- Playerbots (docs/PLAYERBOTS.md): sessions without a connection, driven by BotBrain ----------
 checks = 0;
 {

@@ -107,7 +107,8 @@ def environment(args, credentials):
 
 # Rates and host switches (OURS: the server owner's choice). Each is written only when given, so the host's defaults
 # (official rates, PvP on, 30 s respawn, round-robin party loot, fallback loot on, no player cap, no dungeon entry limits,
-# untracked objectives done after 30 s) apply otherwise.
+# untracked objectives done after 30 s, enchanting at the friends-server odds: chance x2, correction x2, no level lost,
+# materials spent) apply otherwise.
 GAMEPLAY = {
     'rates_profile': 'Aion__Rates__Profile',
     'exp_rate': 'Aion__Rates__Experience',
@@ -123,7 +124,12 @@ GAMEPLAY = {
     'dungeon_entries': 'Aion__Dungeons__DailyEntries',
     'dungeon_reset_hour': 'Aion__Dungeons__ResetHour',
     'untracked_objective_seconds': 'Aion__Dungeons__UntrackedObjectiveSeconds',
+    'enchant_success': 'Aion__Enchant__SuccessMultiplier',
+    'enchant_pity': 'Aion__Enchant__PityMultiplier',
+    'enchant_no_downgrade': 'Aion__Enchant__NoDowngrade',
+    'enchant_keep_materials': 'Aion__Enchant__KeepMaterialsOnFail',
 }
+ON_OFF = ('pvp', 'fallback_loot', 'dungeon_limits', 'enchant_no_downgrade', 'enchant_keep_materials')
 
 
 def gameplay(args):
@@ -132,7 +138,7 @@ def gameplay(args):
         value = getattr(args, name, None)
         if value is None:
             continue
-        if name in ('pvp', 'fallback_loot', 'dungeon_limits'):
+        if name in ON_OFF:
             value = 'true' if value == 'on' else 'false'
         env[key] = value
     # Per-dungeon daily entries (Dungeon.dat id or name = count, 0 no limit): Aion:Dungeons:Entries:<dungeon>.
@@ -146,6 +152,13 @@ def dungeon_entry(text):
     if not name or not all(c.isalnum() or c in '_-' for c in name) or not count.isdigit() or int(count) > 1000:
         raise argparse.ArgumentTypeError('a dungeon entry override is <Dungeon.dat id or name>=<0-1000>')
     return name, int(count)
+
+
+def enchant_multiplier(text):
+    value = float(text)
+    if not 0 <= value <= 100:
+        raise argparse.ArgumentTypeError('an enchant multiplier must be between 0 and 100')
+    return value
 
 
 def rate(text):
@@ -192,6 +205,15 @@ def main(argv=None):
     dungeons.add_argument('--dungeon-reset-hour', type=int, help='server local hour the daily counts reset (0-23, default 9)')
     dungeons.add_argument('--untracked-objective-seconds', type=int,
                           help='map-event objectives the server cannot follow count as done after this long (1-3600, default 30)')
+    enchant = parser.add_argument_group('enchanting (unset: the friends-server odds; 1, 1, off, off is official)')
+    enchant.add_argument('--enchant-success', type=enchant_multiplier,
+                         help="the table's success chance times this, capped at 100%% (above 0; default 2)")
+    enchant.add_argument('--enchant-pity', type=enchant_multiplier,
+                         help='the chance each failure adds to the next attempt, times this (default 2; 0 none)')
+    enchant.add_argument('--enchant-no-downgrade', choices=['on', 'off'],
+                         help='a failure never lowers the level (Rune accessories; default on)')
+    enchant.add_argument('--enchant-keep-materials', choices=['on', 'off'],
+                         help='a failure spends no Kina or materials (default off)')
     parser.add_argument('--geolocation', default='59.9139,10.7522,NO', metavar='LAT,LON,CC',
                         help="server location for the region screen ('off' to omit)")
     args = parser.parse_args(argv)
@@ -213,6 +235,8 @@ def main(argv=None):
         parser.error('--dungeon-reset-hour must be between 0 and 23')
     if args.untracked_objective_seconds is not None and not 1 <= args.untracked_objective_seconds <= 3600:
         parser.error('--untracked-objective-seconds must be between 1 and 3600')
+    if args.enchant_success is not None and args.enchant_success <= 0:
+        parser.error('--enchant-success must be above 0')
     if args.staff_path is not None and (len(args.staff_path) < 9 or not args.staff_path.startswith('/')
                                         or not all(c.isalnum() or c in '-_' for c in args.staff_path[1:])):
         parser.error('--staff-path must be / followed by at least 8 letters, digits, - or _')

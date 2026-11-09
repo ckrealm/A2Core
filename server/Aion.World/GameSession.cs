@@ -40,6 +40,8 @@ public sealed record GameSessionOptions
     public DungeonOptions Dungeons { get; init; } = DungeonOptions.Default;
     /// <summary>The friends server's switches (Aion:Friends): free premium pass, both races per account, longer flight.</summary>
     public FriendsOptions Friends { get; init; } = FriendsOptions.Official;   // the host binds Aion:Friends (default on)
+    /// <summary>Aion:Enchant: enchanting odds (the friends-server default; <see cref="EnchantRules.Official"/> for the table as it is).</summary>
+    public EnchantRules Enchant { get; init; } = EnchantRules.Default;
     /// <summary>Heal/buff/debuff effects of class skills; null: the embedded tools/data/skill-effects.json (OURS values).</summary>
     public SkillEffectTable? SkillEffects { get; init; }
 }

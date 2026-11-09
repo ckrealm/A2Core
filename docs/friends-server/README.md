@@ -19,6 +19,7 @@ Builds and starts; accounts work. **Not playable yet**: no client has connected.
 | TEST_RESULTS.md | What actually ran and passed |
 | KNOWN_ISSUES.md | Blockers and bugs |
 | CHANGELOG.md | Changes made |
+| ENCHANT.md | Enchanting odds (`Aion:Enchant`): faster than official by default |
 
 ## Run locally (Linux / WSL2, verified 2026-11-08 without the data bundle)
 ```bash

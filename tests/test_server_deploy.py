@@ -46,7 +46,7 @@ class ServerEnvTests(unittest.TestCase):
         self.assertNotIn('Aion__ChatDevelopmentLogins', env)
         self.assertNotIn('Aion__NcGuard__RewriteHosts', env)
         # Rates and rules are written only when given: the host's defaults apply.
-        self.assertFalse([key for key in env if key.startswith(('Aion__Rates__', 'Aion__Rules__', 'Aion__Dungeons__')) or key == 'Aion__Native__MaxPlayers'])
+        self.assertFalse([key for key in env if key.startswith(('Aion__Rates__', 'Aion__Rules__', 'Aion__Dungeons__', 'Aion__Enchant__')) or key == 'Aion__Native__MaxPlayers'])
 
     def test_rates_and_rules(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -81,6 +81,21 @@ class ServerEnvTests(unittest.TestCase):
         self.assertEqual(env['Aion__Dungeons__Entries__600071'], 0)
         for argv in (['--dungeon-limits', 'yes'], ['--dungeon-entries', '-1'], ['--dungeon-reset-hour', '24'],
                      ['--untracked-objective-seconds', '0'], ['--dungeon-entry', 'KraoCave'], ['--dungeon-entry', 'a b=1']):
+            with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+                server_env.main(['--public-address', '203.0.113.5', '--data', '.', '--state', '.', '--proxy', *argv])
+
+    def test_enchant_settings(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            server_data(root / 'data')
+            env = server_env.environment(self.args(root, enchant_success=1.0, enchant_pity=1.0, enchant_no_downgrade='off',
+                                                   enchant_keep_materials='off'),
+                                         {'aion_app': 'a', 'aion_auth': 'b'})
+        self.assertEqual(env['Aion__Enchant__SuccessMultiplier'], 1.0)
+        self.assertEqual(env['Aion__Enchant__PityMultiplier'], 1.0)
+        self.assertEqual(env['Aion__Enchant__NoDowngrade'], 'false')
+        self.assertEqual(env['Aion__Enchant__KeepMaterialsOnFail'], 'false')
+        for argv in (['--enchant-success', '0'], ['--enchant-success', '101'], ['--enchant-pity', '-1'], ['--enchant-no-downgrade', 'yes']):
             with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
                 server_env.main(['--public-address', '203.0.113.5', '--data', '.', '--state', '.', '--proxy', *argv])
 

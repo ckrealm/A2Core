@@ -52,7 +52,8 @@ public sealed class EnchantTables
 // 0x561c of the equipped item). The request is read as _equip_uid i64 then the client's cost list, which is not trusted:
 // the costs come from Enchant.dat (Kina and CoinEnchant 930100023 for weapons and armour). The level is upgrades.enchant.
 // Chance: SuccessProb + the failure correction built up (upgrades.enchant_bonus), out of 10000; a failure adds
-// FailCorrectionProb and loses FailPenalty levels (Rune accessories), materials are spent either way.
+// FailCorrectionProb and loses FailPenalty levels (Rune accessories; stored as -1), materials are spent either way.
+// Aion:Enchant (EnchantRules) changes these for the host; EnchantRules.Official is the table as it is.
 public sealed partial class GameSession
 {
     public const ushort ItemEnchantRq = 0x5622, ItemEnchantRs = 0x5623, ItemEnchantNt = 0x5626;
@@ -92,10 +93,13 @@ public sealed partial class GameSession
             return count <= 0;
         }
         if (!Take(KinaItemId, step.Kina) || step.Costs.Any(c => !Take(c.ItemId, c.Count))) return [Reply(3, level, row.TemplateId)];
+        // Aion:Enchant (OURS) scales the chance and the correction, may keep the level and the materials on a failure.
+        var rules = options.Enchant;
         var bonus = EnchantOf(row, "enchant_bonus");
-        var success = EnchantRoll() < step.Success + bonus;
-        var after = success ? level + 1 : Math.Max(0, level - step.FailPenalty);
-        var nextBonus = success ? 0 : bonus + step.FailCorrection;
+        var success = EnchantRoll() < rules.Chance(step.Success, bonus);
+        var after = success ? level + 1 : rules.LevelAfterFail(level, step.FailPenalty);
+        var nextBonus = success ? 0 : rules.BonusAfterFail(bonus, step.FailCorrection);
+        if (!success && rules.KeepMaterialsOnFail) costs.Clear();
         var done = await Stored(async () => await store.EnchantItemAsync(character, row.InstanceId, row.Revision, costs, after, nextBonus, ct) ? [[]] : []);
         if (done.Count == 0) return [Reply(1, level, row.TemplateId)];
         var replies = new List<byte[]> { Reply(success ? 0 : 4, after, row.TemplateId) };
