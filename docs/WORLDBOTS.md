@@ -233,5 +233,5 @@ it runs one call at a time and bots fall back to canned lines when it is busy or
 | `server/Aion.Application/Chat/ChatRelay.cs` | `Heard`, `IsBot`, `Speak`, `WhisperFromBot`, `Clip` |
 | `server/Aion.Host/Native/WorldBotsService.cs` | The world bot loop and the bot chat service; `Program.cs` binds `Aion:WorldBots` and `Aion:BotChat` |
 | `server/Aion.World/GmCommands.cs` | `//bot world [name]` |
-| `tests/Aion.Native.Checks/WorldBotChecks.cs` | The checks (40) |
+| `tests/Aion.Native.Checks/WorldBotChecks.cs` | The checks (42) |
 | `tests/Aion.Bots.Bench` | The capacity benchmark |

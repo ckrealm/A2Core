@@ -55,4 +55,4 @@
 - **Content bots**: `WorldBots.Spawn(class, race, level, map, at, wander)` for PvP fillers and events; `IBotWander` steers any leaderless bot.
 - **Capacity**: `tests/Aion.Bots.Bench`. About 0.07 ms of one core per bot per tick; 400 bots used about half a core in the cloud container. Bot threat lookups now use the map's NPC grid (about 15x cheaper per bot).
 - Found: past level 30 monsters out-hit unenchanted gear (monster HP grows ~7x from 30 to 45); bots above 30 die every few minutes.
-- Checks: 40 new native checks (world bots, content bots, bot chat, chat relay); all native, chat and server checks pass.
+- Checks: 42 new native checks (world bots, content bots, bot chat, the model call, chat relay); all native, chat and server checks pass.

@@ -15,6 +15,12 @@ static class WorldBotChecks
         }
     }
 
+    sealed class FakeHttp(Func<HttpRequestMessage, string, HttpResponseMessage> answer) : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            answer(request, request.Content is null ? "" : await request.Content.ReadAsStringAsync(ct));
+    }
+
     sealed class GoTo(Vector3d goal) : IBotWander
     {
         public Vector3d Goal => goal;
@@ -124,7 +130,8 @@ static class WorldBotChecks
         Check(BotChatter.Clean("Kael: \"hey guys *waves* anyone up for a run?\"\nsecond line", "Kael") == "hey guys anyone up for a run?", "model text: name prefix, quotes, actions and extra lines removed");
         Check(BotChatter.Clean("<think>plan</think>sure thing", "X") == "sure thing" && BotChatter.Clean("As an AI language model I cannot", "X") is null
               && BotChatter.Clean(new string('a', 300), "X")!.Length == 100, "thinking tags dropped, AI disclaimers refused, cut to 100 characters");
-        Check(BotChatter.PlaceName("AltamiaHighland_Eastern_Subzone") == "Altamia Highland Eastern" && BotChatter.PlaceName("L2_EironPlains_Subzone") == "Eiron Plains",
+        Check(BotChatter.PlaceName("AltamiaHighland_Eastern_Subzone") == "Altamia Highland Eastern" && BotChatter.PlaceName("L2_EironPlains_Subzone") == "Eiron Plains"
+              && BotChatter.PlaceName("IslandofImmortality_Subzone4") == "Island of Immortality",
             "subzone names read like places");
         var clock = 0L;
         var speakers = new List<BotSpeaker>
@@ -157,6 +164,22 @@ static class WorldBotChecks
         canned.Hear(new ChatHeard("WORLD", "Brandon", "kael?", 1));
         clock += 1000;
         Check(await canned.TickAsync(default) is [{ Name: "Kael", Text.Length: > 0 }], "without a model the bots use canned lines");
+        // The OpenAI-style call: POST {endpoint}/chat/completions with the model, the messages and the key; the first choice's text.
+        string? sentUrl = null, sentBody = null, sentAuth = null;
+        var http = new HttpClient(new FakeHttp((request, body) =>
+        {
+            (sentUrl, sentBody, sentAuth) = (request.RequestUri!.ToString(), body, request.Headers.Authorization?.ToString());
+            return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"choices":[{"message":{"role":"assistant","content":"anyone up for a run?"}}]}""", System.Text.Encoding.UTF8, "application/json"),
+            };
+        }));
+        var openAi = new OpenAiChatModel(http, new BotChatOptions { Endpoint = "http://127.0.0.1:11434/v1/", Model = "llama3.2:3b", ApiKey = "test-key" });
+        var answered = await openAi.CompleteAsync([("system", "be brief"), ("user", "hi")], default);
+        Check(answered == "anyone up for a run?" && sentUrl == "http://127.0.0.1:11434/v1/chat/completions" && sentAuth == "Bearer test-key"
+              && sentBody!.Contains("\"model\":\"llama3.2:3b\"") && sentBody.Contains("\"role\":\"system\""), "the OpenAI-style request and its answer");
+        var down = new OpenAiChatModel(new HttpClient(new FakeHttp((_, _) => new HttpResponseMessage(System.Net.HttpStatusCode.ServiceUnavailable))), new BotChatOptions());
+        Check(await down.CompleteAsync([("user", "hi")], default) is null, "a failing model answers null (the bot uses a canned line)");
         Check(Throws(() => new BotChatOptions { Room = "GUILD" }.Validated()) && Throws(() => new BotChatOptions { ReplyChance = 2 }.Validated()), "Aion:BotChat is validated");
 
         // The relay: bots speak in the joined rooms (faction filtered), whispers to bots are echoed and heard.
