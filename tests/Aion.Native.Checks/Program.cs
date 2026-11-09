@@ -2856,7 +2856,7 @@ checks = 0;
     var slowed = await sorcerer.HandleAsync(Cast(BittercoldWind, Combat.TrainingDummyKey, dummyNpc.Position), t + 10);
     Check(wish[0][3] == 0 && sorcerer.BuffStatOf("FixingDamage") == 30 && slowed[0][3] == 0
           && sorcerer.Resource.Mp == mpWish - data.Skill(BittercoldWind)!.Cost.Mp * 7000 / 10_000, "Wish of Concentration: FixingDamage and cheaper casts (MPUseDecrease)");
-    Check(dummyNpc.SpeedScale(t + 20) == 0.5 && dummyNpc.SpeedScale(t + 10 + 6_000) == 1.0, "Bittercold Wind halves the monster's speed for 6 s");
+    Check(dummyNpc.SpeedScale(t + 20) < 0.01 && dummyNpc.SpeedScale(t + 10 + 3_000) == 1.0, "Bittercold Wind roots the monster for 3 s (a speed of 1/10000)");
     // Debuff and damage over time on the dummyNpc.
     t += 30_000;
     dummyNpc.Hp = dummyNpc.HpMax;
@@ -3335,7 +3335,8 @@ checks = 0;
     await Run(200, () => guard.Brain.CastsAccepted > guardCasts && m2.Hp < Sturdy);
     var dealt = Sturdy - m2.Hp;
     var m2Brain = supAi.Brains[m2.Key];
-    Check(dealt > 0 && m2Brain.Hate.GetValueOrDefault(guard.Session.PlayerKey) == (long)Math.Round(dealt * embeddedRotations.TankHateMultiplier)
+    // At least the multiplied damage: the Templar's enmity attacks (skill-effects "threat") add hate of their own.
+    Check(dealt > 0 && m2Brain.Hate.GetValueOrDefault(guard.Session.PlayerKey) >= (long)Math.Round(dealt * embeddedRotations.TankHateMultiplier)
           && m2Brain.VictimKey == guard.Session.PlayerKey, $"the tank's hits count x{embeddedRotations.TankHateMultiplier} in the hate table and the monster turns to it ({dealt} damage, {m2Brain.Hate.GetValueOrDefault(guard.Session.PlayerKey)} hate)");
     await squad.CommandAsync(chief, "assist", t, default);
     m2.Hp = Math.Min(m2.Hp, m2.HpMax);
@@ -3361,6 +3362,162 @@ checks = 0;
     Check(chief.MapId == 1010 && squad.All.All(b => b.Session.InstanceKey == 0 && b.Session.MapId == 1010), "when the leader leaves the copy, the bots leave it too (0x4004)");
     chief.ExitSharedWorld();
     await squad.OwnerLeftAsync(chief);
+}
+// Class rotations (tools/bot_rotations.py): interrupts, stuns and bigBoss stagger, taunts and threat, areas, combos, positioning.
+{
+    static double Apart3(Vector3d a, Vector3d b) => Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
+    var rots = BotRotations.Embedded;
+    Check(rots.Classes.Where(c => c.Key != "Cleric").All(c => c.Value.Rotation.Any(s => s.Condition.TargetCasting == true))
+          && rots.For("Assassin")!.Position == "behind" && rots.For("Templar")!.Position == "front"
+          && rots.For("Cleric")!.RangeFor("heal") == 1500 && rots.For("Cleric")!.RangeFor("dps") == 1800,
+          "bot-rotations.json: every class but the Cleric has an interrupt; positions and role ranges load");
+    var rotWorld = new SharedWorld(data);
+    var rotOptions = new GameSessionOptions { World = rotWorld, TrainingDummy = true, CharacterLevel = 20 };
+    long t = Now + 5_000_000;
+    var lead = new GameSession(data, rotOptions, new Random(41));
+    await lead.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), t);
+    await lead.HandleAsync(new PacketWriter().U16(0x361b).String("Lead").U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), t);
+    await lead.HandleAsync(select, t);
+    await lead.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    var rai = lead.SharedMap!.Ai;
+    bool Calm(Target m) => m.Hostile && !m.Dead && !m.Aggressive && m.RunSpeed > 0 && m.Key != Combat.TrainingDummyKey && m.HpMax > 500
+                           && !m.Elite && m.Skills.Count(id => data.NpcSkill(id) is not null) >= 2;
+    // A special being wound up: the monster's second damaging skill, its hit due later.
+    void WindUp(Target m, long now)
+    {
+        var special = m.Skills.Where(id => data.NpcSkill(id) is not null).Skip(1).First();
+        rai.Brains[m.Key].Pending = new NpcAi.PendingHit(special, data.NpcSkill(special)!, 7, now + 60_000);
+    }
+    async Task Go(Target m)
+    {
+        lead.Teleport(lead.MapId!.Value, m.Position with { X = m.Position.X + 500 }, t);
+        await lead.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    }
+
+    // The server side: a stun holds an ordinary monster and interrupts its special (Mocking Blade, the Gladiator's knockdown).
+    var mob = lead.Targets.Values.Where(Calm).OrderBy(m => Apart3(m.Position, lead.WorldPosition!.Value)).First();
+    await Go(mob);
+    await lead.TickAsync(t += 50);
+    const int Sturdy = 1_000_000;   // HP raised for the checks, so the monsters live through the hits
+    mob.Hp = Sturdy;
+    rai.Engage(lead.Targets, mob, t, lead.PlayerKey);
+    WindUp(mob, t);
+    Check(rai.CastingSpecial(mob) is not null, "the monster winds up a special");
+    var knock = await lead.HandleAsync(Cast(11290000, mob.Key, mob.Position), t += 50);
+    Check(knock[0][3] == 0 && mob.Stunned(t) && rai.CastingSpecial(mob) is null && rai.Interrupts == 1
+          && mob.StunImmuneUntil == t + 3000 * GameSession.StunImmunityFactor,
+          "Mocking Blade stuns the monster for 3 s and interrupts its special; it then shrugs off stuns for a while");
+    var heldAt = mob.Position;
+    for (var k = 0; k < 20; k++) await lead.TickAsync(t += 100);
+    Check(mob.Position == heldAt && rai.Brains[mob.Key].Pending is null, "a stunned monster neither moves nor attacks");
+
+    // A boss: a stun only interrupts; every third stun breaks its stagger and holds it for 5 s.
+    lead.Teleport(1010, lead.WorldPosition!.Value, t);
+    await lead.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    rai = lead.SharedMap!.Ai;
+    var bigBoss = lead.Targets.Values.Where(m => m.Boss && !m.Dead && m.RunSpeed > 0 && m.Skills.Count(id => data.NpcSkill(id) is not null) >= 2)
+        .OrderBy(m => Apart3(m.Position, lead.WorldPosition!.Value)).First();
+    await Go(bigBoss);
+    bigBoss.Hp = Sturdy;
+    t += data.Skill(11290000)!.CooldownMs;   // Mocking Blade off cooldown again
+    var bossHits = new List<bool>();
+    for (var n = 0; n < 3; n++)
+    {
+        lead.SetResource('H', lead.Resource.HpMax);
+        lead.SetResource('M', lead.Resource.MpMax);
+        rai.Engage(lead.Targets, bigBoss, t, lead.PlayerKey);
+        WindUp(bigBoss, t);
+        var bossReply = await lead.HandleAsync(Cast(11290000, bigBoss.Key, bigBoss.Position), t += 50);
+        bossHits.Add(bossReply[0][3] == 0 && rai.CastingSpecial(bigBoss) is null);
+        if (n < 2) Check(!bigBoss.Stunned(t), $"stun {n + 1} on the boss interrupts but does not hold it");
+        if (n < 2) t += data.Skill(11290000)!.CooldownMs + 100;
+    }
+    Check(bossHits.All(x => x) && bigBoss.Stunned(t) && bigBoss.StunnedUntil == t + GameSession.StaggerMs && bigBoss.StaggerStuns == 0,
+          "every stun interrupts the boss's special; the third breaks its stagger (held 5 s)");
+    lead.Teleport(1010, lead.WorldPosition!.Value with { X = lead.WorldPosition!.Value.X + 6000 }, t);   // away from the boss
+    await lead.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    t += 60_000;
+
+    // The bots: a tank Templar, an Assassin and a dps Cleric with the embedded rotations.
+    var team = new PlayerBots(data, new BotOptions { Enabled = true, MaxPerAccount = 3, MaxTotal = 5 }, rotWorld);
+    foreach (var (name, cls) in new[] { ("Guard", "Templar"), ("Stab", "Assassin"), ("Prayer", "Cleric") })
+        Check(await team.CommandAsync(lead, $"add {name} {cls}", t, default) == $"Summoning {name}.", $"a {cls} bot joins");
+    await team.TickAsync(t += 50);
+    var guard = team.All.Single(b => b.Name == "Guard");
+    var stab = team.All.Single(b => b.Name == "Stab");
+    var prayer = team.All.Single(b => b.Name == "Prayer");
+    await team.CommandAsync(lead, "role dps Prayer", t, default);
+    async Task Run(int ticks, Func<bool>? until = null)
+    {
+        for (var k = 0; k < ticks && until?.Invoke() != true; k++)
+        {
+            await team.TickAsync(t += 50);
+            await lead.TickAsync(t);
+            // Nobody dies in these checks (a dead victim sends its monster home at full HP): the monsters' hits are healed away.
+            foreach (var s in team.All.Select(b => b.Session).Append(lead).Where(s => !s.Dead)) s.SetResource('H', s.Resource.HpMax);
+        }
+    }
+    await Run(40);
+    Check(guard.Brain!.Role == "tank" && prayer.Brain!.Role == "dps" && prayer.Brain.Range == 1800, "a tank Templar, an Assassin, a dps Cleric at 18 m");
+
+    // Taunt: a monster attacks the leader; the tank hooks it off (Poach) and it turns to the tank.
+    await team.CommandAsync(lead, "passive Stab", t, default);
+    await team.CommandAsync(lead, "passive Prayer", t, default);
+    var prey = lead.Targets.Values.Where(Calm).OrderBy(m => Apart3(m.Position, lead.WorldPosition!.Value)).First();
+    await Go(prey);
+    await Run(40);
+    prey.Hp = Sturdy;
+    rai.ForceAggro(prey, lead.PlayerKey, t);
+    await Run(200, () => guard.Brain!.CastLog.Any(c => c.Skill == 12130000));
+    Check(guard.Brain!.CastLog.Any(c => c.Skill == 12130000), "the tank Templar hooks the monster off its leader (Poach, a taunt)");
+    Check(rai.Brains[prey.Key].VictimKey == guard.Session.PlayerKey, "the monster turns on the tank");
+
+    // Interrupt: the monster winds up a special; the tank stuns it (Shield Smite).
+    await Run(400, () => t >= guard.Session.CooldownUntil(12100000) && !prey.Stunned(t));   // Shield Smite ready, the monster free
+    WindUp(prey, t);
+    var interruptsBefore = rai.Interrupts;
+    await Run(100, () => rai.Interrupts > interruptsBefore);
+    Check(rai.Interrupts > interruptsBefore && guard.Brain.Interrupts > 0 && guard.Brain.CastLog.Any(c => c.Skill == 12100000),
+          "the tank interrupts the special with Shield Smite (target_casting)");
+    var smiteAt = guard.Brain.CastLog.Last(c => c.Skill == 12100000).At;
+    await Run(60);
+    Check(guard.Brain.CastLog.Where(c => c.At > smiteAt).Take(2).Any(c => c.Skill is 12300000 or 12240000),
+          "the stun opens its follow-ups (Annihilate on a stunned target, Judgment after a shield skill)");
+
+    // Behind: the Assassin works from the monster's back while the monster attacks the tank.
+    await team.CommandAsync(lead, "assist Stab", t, default);
+    await Run(200, () => stab.Brain!.CastsAccepted > 3);
+    var stabAt = stab.Session.WorldPosition!.Value;
+    var facing = prey.Direction * Math.PI / 180;
+    var along = (stabAt.X - prey.Position.X) * Math.Cos(facing) + (stabAt.Y - prey.Position.Y) * Math.Sin(facing);
+    Check(stab.Brain!.CastsAccepted > 3 && along < 0, $"the Assassin fights from behind the monster ({along:F0} cm along its facing)");
+
+    // Debuff upkeep and a follow-up: the Cleric keeps Chain of Torment up and casts Condemnation only while it is on.
+    await team.CommandAsync(lead, "assist Prayer", t, default);
+    await Run(300, () => prayer.Brain!.CastLog.Count(c => c.Skill == 17350000) >= 2 || prey.Dead);
+    var clericLog = prayer.Brain!.CastLog.Select(c => c.Skill).ToList();
+    Check(clericLog.Contains(17070000) && clericLog.Contains(17350000) && clericLog.IndexOf(17070000) < clericLog.IndexOf(17350000),
+          "the Cleric opens with Chain of Torment, then Condemnation on it (target_has)");
+    Check(clericLog.Count(c => c == 17070000) <= 1 + prayer.Brain.CastLog.Count / 8, "it does not recast the dot while it runs (target_effect_missing)");
+    prey.Hp = Math.Min(prey.Hp, prey.HpMax);
+    rai.ForceAggro(prey, guard.Session.PlayerKey, t);
+    await Run(1500, () => prey.Dead);
+    Check(prey.Dead, "the party kills the monster");
+
+    // Areas: two monsters on the leader at once; the melee bots use their area skills (cast at their own key).
+    await Run(200, () => team.All.All(b => b.Brain!.FightingKey is null));
+    var pair = lead.Targets.Values.Where(Calm).SelectMany(a => lead.Targets.Values.Where(b => b != a && Calm(b) && Apart3(a.Position, b.Position) < 500).Select(b => (a, b)))
+        .OrderBy(x => Apart3(x.a.Position, lead.WorldPosition!.Value)).First();
+    await Go(pair.a);
+    await Run(60);
+    rai.ForceAggro(pair.a, lead.PlayerKey, t);
+    rai.ForceAggro(pair.b, lead.PlayerKey, t);
+    await Run(600, () => team.All.Any(b => b.Brain!.AreaCasts > 0));
+    Check(team.All.Any(b => b.Brain!.AreaCasts > 0), "with two monsters on the group a melee bot casts an area skill around itself");
+    await Run(2000, () => pair.a.Dead && pair.b.Dead);
+    Check(pair.a.Dead && pair.b.Dead, "the party kills both");
+    lead.ExitSharedWorld();
+    await team.OwnerLeftAsync(lead);
 }
 Console.WriteLine($"{checks} playerbot checks passed (Aion:Bots).");
 

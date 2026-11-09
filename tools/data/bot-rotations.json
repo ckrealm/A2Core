@@ -1,12 +1,27 @@
 {
  "marker": "OURS",
- "about": "Playerbot rotations (docs/PLAYERBOTS.md); built by tools/bot_rotations.py from class-skills.json and skill-effects.json.",
+ "about": "Playerbot rotations (docs/PLAYERBOTS.md); built by tools/bot_rotations.py from the class plans, class-skills.json, progression.json and skill-effects.json.",
  "global_cooldown_ms": 1000,
  "tank_hate_multiplier": 3,
+ "skipped": {
+  "11200000": "Ankle Slice: only after a successful block",
+  "11360000": "Rush Strike: only after a Dodge",
+  "12270000": "Debilitating Smash: only after a successful block",
+  "12430000": "Shield Rush: only after a Dodge",
+  "13210000": "Whirlwind Slice: only after a successful evasion",
+  "13350000": "Heart Gore: only after a critical hit",
+  "13360000": "Infiltrate: only after a Dodge",
+  "14050000": "Drill Dart: only after a critical hit",
+  "16300000": "Elemental Fusion: needs Four Elements stacks from spirits (no spirits)",
+  "16330000": "Dimensional Control: fires when a spirit uses a skill (no spirits)",
+  "18150000": "Heat Wave Blow: only after a successful block",
+  "18210000": "Tremor Crush: only after a Dodge"
+ },
  "classes": {
   "Gladiator": {
    "weapon_type": "Greatsword",
    "range": 300,
+   "position": "behind",
    "roles": [
     "dps",
     "tank"
@@ -23,6 +38,24 @@
      }
     },
     {
+     "skill": 11290000,
+     "name": "Mocking Blade",
+     "level": 3,
+     "when": {
+      "target": "enemy",
+      "target_casting": true
+     }
+    },
+    {
+     "skill": 11190000,
+     "name": "Leaping Slam",
+     "level": 1,
+     "when": {
+      "target": "enemy",
+      "target_distance_above": 500
+     }
+    },
+    {
      "skill": 11100000,
      "name": "Ruinous Blow",
      "level": 14,
@@ -35,7 +68,39 @@
      "name": "Aerial Snare",
      "level": 12,
      "when": {
-      "target": "enemy"
+      "target": "enemy",
+      "target_stunned": true,
+      "target_elite": true
+     }
+    },
+    {
+     "skill": 11170000,
+     "name": "Overhead Slam",
+     "level": 4,
+     "when": {
+      "target": "enemy",
+      "target_stunned": true
+     }
+    },
+    {
+     "skill": 11170000,
+     "name": "Overhead Slam",
+     "level": 4,
+     "when": {
+      "target": "enemy",
+      "after": [
+       11290000,
+       11300000
+      ]
+     }
+    },
+    {
+     "skill": 11280000,
+     "name": "Sword Aura Rampage",
+     "level": 5,
+     "when": {
+      "target": "enemy",
+      "target_stunned": true
      }
     },
     {
@@ -51,37 +116,95 @@
      "name": "Crushing Wave",
      "level": 8,
      "when": {
-      "target": "enemy"
-     }
+      "target": "enemy",
+      "enemies_at_least": 2
+     },
+     "area": "self"
     },
     {
-     "skill": 11360000,
-     "name": "Rush Strike",
-     "level": 10,
+     "skill": 11130000,
+     "name": null,
+     "level": 46,
      "when": {
       "target": "enemy"
      }
     },
     {
-     "skill": 11190000,
-     "name": "Leaping Slam",
-     "level": 1,
+     "skill": 11340000,
+     "name": null,
+     "level": 66,
      "when": {
       "target": "enemy"
      }
     },
     {
-     "skill": 11200000,
-     "name": "Ankle Slice",
-     "level": 7,
+     "skill": 11400000,
+     "name": null,
+     "level": 87,
      "when": {
       "target": "enemy"
      }
     },
     {
-     "skill": 11170000,
-     "name": "Overhead Slam",
-     "level": 4,
+     "skill": 11110000,
+     "name": null,
+     "level": 39,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 11250000,
+     "name": null,
+     "level": 60,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 11390000,
+     "name": null,
+     "level": 80,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 11430000,
+     "name": null,
+     "level": 100,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 11080000,
+     "name": null,
+     "level": 26,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 11240000,
+     "name": null,
+     "level": 53,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 11380000,
+     "name": null,
+     "level": 73,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 11410000,
+     "name": null,
+     "level": 93,
      "when": {
       "target": "enemy"
      }
@@ -91,15 +214,29 @@
      "name": "Rending Blow",
      "level": 1,
      "when": {
-      "target": "enemy"
-     }
+      "target": "enemy",
+      "enemies_at_least": 2,
+      "self_mp_above": 20
+     },
+     "area": "self"
     },
     {
-     "skill": 11280000,
-     "name": "Sword Aura Rampage",
-     "level": 5,
+     "skill": 11020000,
+     "name": "Keen Strike",
+     "level": 1,
      "when": {
-      "target": "enemy"
+      "target": "enemy",
+      "enemies_at_least": 2
+     },
+     "area": "self"
+    },
+    {
+     "skill": 11010000,
+     "name": "Rending Blow",
+     "level": 1,
+     "when": {
+      "target": "enemy",
+      "self_mp_above": 30
      }
     },
     {
@@ -115,6 +252,7 @@
   "Templar": {
    "weapon_type": "Sword",
    "range": 300,
+   "position": "front",
    "roles": [
     "tank",
     "dps"
@@ -131,35 +269,12 @@
      }
     },
     {
-     "skill": 12090000,
-     "name": "Punishment",
-     "level": 14,
+     "skill": 12100000,
+     "name": "Shield Smite",
+     "level": 3,
      "when": {
-      "target": "enemy"
-     }
-    },
-    {
-     "skill": 12350000,
-     "name": "Warding Strike",
-     "level": 8,
-     "when": {
-      "target": "enemy"
-     }
-    },
-    {
-     "skill": 12300000,
-     "name": "Annihilate",
-     "level": 12,
-     "when": {
-      "target": "enemy"
-     }
-    },
-    {
-     "skill": 12430000,
-     "name": "Shield Rush",
-     "level": 10,
-     "when": {
-      "target": "enemy"
+      "target": "enemy",
+      "target_casting": true
      }
     },
     {
@@ -167,7 +282,61 @@
      "name": "Poach",
      "level": 1,
      "when": {
-      "target": "enemy"
+      "target": "enemy",
+      "target_on_self": false
+     },
+     "roles": [
+      "tank"
+     ]
+    },
+    {
+     "skill": 12090000,
+     "name": "Punishment",
+     "level": 14,
+     "when": {
+      "target": "enemy",
+      "target_distance_above": 600
+     }
+    },
+    {
+     "skill": 12300000,
+     "name": "Annihilate",
+     "level": 12,
+     "when": {
+      "target": "enemy",
+      "target_stunned": true
+     }
+    },
+    {
+     "skill": 12300000,
+     "name": "Annihilate",
+     "level": 12,
+     "when": {
+      "target": "enemy",
+      "after": [
+       12100000
+      ]
+     }
+    },
+    {
+     "skill": 12240000,
+     "name": "Judgment",
+     "level": 4,
+     "when": {
+      "target": "enemy",
+      "after": [
+       12100000,
+       12350000
+      ]
+     }
+    },
+    {
+     "skill": 12340000,
+     "name": "Flash Rampage",
+     "level": 5,
+     "when": {
+      "target": "enemy",
+      "target_stunned": true
      }
     },
     {
@@ -179,17 +348,120 @@
      }
     },
     {
-     "skill": 12270000,
-     "name": "Debilitating Smash",
-     "level": 7,
+     "skill": 12350000,
+     "name": "Warding Strike",
+     "level": 8,
+     "when": {
+      "target": "enemy",
+      "self_hp_below": 70
+     },
+     "roles": [
+      "tank"
+     ]
+    },
+    {
+     "skill": 12350000,
+     "name": "Warding Strike",
+     "level": 8,
+     "when": {
+      "target": "enemy"
+     },
+     "roles": [
+      "dps"
+     ]
+    },
+    {
+     "skill": 12090000,
+     "name": "Punishment",
+     "level": 14,
      "when": {
       "target": "enemy"
      }
     },
     {
-     "skill": 12240000,
-     "name": "Judgment",
-     "level": 4,
+     "skill": 12110000,
+     "name": null,
+     "level": 39,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 12120000,
+     "name": null,
+     "level": 46,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 12200000,
+     "name": null,
+     "level": 60,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 12220000,
+     "name": null,
+     "level": 66,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 12250000,
+     "name": null,
+     "level": 80,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 12310000,
+     "name": null,
+     "level": 87,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 12410000,
+     "name": null,
+     "level": 100,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 12070000,
+     "name": null,
+     "level": 26,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 12190000,
+     "name": null,
+     "level": 53,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 12230000,
+     "name": null,
+     "level": 73,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 12320000,
+     "name": null,
+     "level": 93,
      "when": {
       "target": "enemy"
      }
@@ -199,16 +471,23 @@
      "name": "Pummel",
      "level": 1,
      "when": {
-      "target": "enemy"
-     }
+      "target": "enemy",
+      "enemies_at_least": 2,
+      "self_mp_above": 20
+     },
+     "area": "self"
     },
     {
-     "skill": 12340000,
-     "name": "Flash Rampage",
-     "level": 5,
+     "skill": 12040000,
+     "name": "Pummel",
+     "level": 1,
      "when": {
-      "target": "enemy"
-     }
+      "target": "enemy",
+      "self_mp_above": 30
+     },
+     "roles": [
+      "tank"
+     ]
     },
     {
      "skill": 12010000,
@@ -223,6 +502,7 @@
   "Assassin": {
    "weapon_type": "Dagger",
    "range": 250,
+   "position": "behind",
    "roles": [
     "dps"
    ],
@@ -238,11 +518,12 @@
      }
     },
     {
-     "skill": 13360000,
-     "name": "Infiltrate",
-     "level": 10,
+     "skill": 13070000,
+     "name": "Shadowstrike",
+     "level": 1,
      "when": {
-      "target": "enemy"
+      "target": "enemy",
+      "target_casting": true
      }
     },
     {
@@ -250,7 +531,8 @@
      "name": "Shadowstrike",
      "level": 1,
      "when": {
-      "target": "enemy"
+      "target": "enemy",
+      "target_distance_above": 500
      }
     },
     {
@@ -258,7 +540,29 @@
      "name": "Shadow Fall",
      "level": 12,
      "when": {
-      "target": "enemy"
+      "target": "enemy",
+      "target_stunned": true
+     }
+    },
+    {
+     "skill": 13220000,
+     "name": "Shadow Fall",
+     "level": 12,
+     "when": {
+      "target": "enemy",
+      "after": [
+       13070000,
+       13130000
+      ]
+     }
+    },
+    {
+     "skill": 13340000,
+     "name": "Storm Rampage",
+     "level": 5,
+     "when": {
+      "target": "enemy",
+      "target_stunned": true
      }
     },
     {
@@ -266,7 +570,25 @@
      "name": "Insignia Explosion",
      "level": 14,
      "when": {
-      "target": "enemy"
+      "target": "enemy",
+      "enemies_at_least": 2,
+      "after": [
+       13100000
+      ],
+      "after_within_ms": 10000
+     },
+     "area": "target"
+    },
+    {
+     "skill": 13130000,
+     "name": "Insignia Explosion",
+     "level": 14,
+     "when": {
+      "target": "enemy",
+      "after": [
+       13100000
+      ],
+      "after_within_ms": 10000
      }
     },
     {
@@ -282,21 +604,103 @@
      "name": "Flash Slice",
      "level": 8,
      "when": {
-      "target": "enemy"
-     }
+      "target": "enemy",
+      "enemies_at_least": 2
+     },
+     "area": "target"
     },
     {
-     "skill": 13210000,
-     "name": "Whirlwind Slice",
-     "level": 7,
+     "skill": 13050000,
+     "name": "Flash Slice",
+     "level": 8,
      "when": {
       "target": "enemy"
      }
     },
     {
-     "skill": 13350000,
-     "name": "Heart Gore",
-     "level": 4,
+     "skill": 13080000,
+     "name": null,
+     "level": 39,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 13180000,
+     "name": null,
+     "level": 46,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 13250000,
+     "name": null,
+     "level": 60,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 13270000,
+     "name": null,
+     "level": 66,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 13300000,
+     "name": null,
+     "level": 80,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 13310000,
+     "name": null,
+     "level": 87,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 13390000,
+     "name": null,
+     "level": 100,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 13020000,
+     "name": null,
+     "level": 26,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 13230000,
+     "name": null,
+     "level": 53,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 13280000,
+     "name": null,
+     "level": 73,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 13370000,
+     "name": null,
+     "level": 93,
      "when": {
       "target": "enemy"
      }
@@ -306,16 +710,30 @@
      "name": "Savage Roar",
      "level": 1,
      "when": {
-      "target": "enemy"
+      "target": "enemy",
+      "enemies_at_least": 2,
+      "self_mp_above": 20
+     },
+     "area": "self"
+    },
+    {
+     "skill": 13100000,
+     "name": "Savage Roar",
+     "level": 1,
+     "when": {
+      "target": "enemy",
+      "self_mp_above": 30
      }
     },
     {
-     "skill": 13340000,
-     "name": "Storm Rampage",
-     "level": 5,
+     "skill": 13010000,
+     "name": "Quick Slice",
+     "level": 1,
      "when": {
-      "target": "enemy"
-     }
+      "target": "enemy",
+      "enemies_at_least": 2
+     },
+     "area": "self"
     },
     {
      "skill": 13010000,
@@ -329,11 +747,15 @@
   },
   "Cleric": {
    "weapon_type": "Mace",
-   "range": 300,
+   "range": 1800,
+   "position": "ranged",
    "roles": [
     "heal",
     "dps"
    ],
+   "role_ranges": {
+    "heal": 1500
+   },
    "rotation": [
     {
      "skill": 17100000,
@@ -405,11 +827,12 @@
      }
     },
     {
-     "skill": 17060000,
-     "name": "Bolt",
-     "level": 14,
+     "skill": 17370000,
+     "name": "Lightning Strike Scattershot",
+     "level": 5,
      "when": {
-      "target": "enemy"
+      "target": "enemy",
+      "target_stunned": true
      }
     },
     {
@@ -417,7 +840,35 @@
      "name": "Chain of Torment",
      "level": 4,
      "when": {
-      "target": "enemy"
+      "target": "enemy",
+      "target_effect_missing": true,
+      "self_mp_above": 40
+     },
+     "roles": [
+      "heal"
+     ]
+    },
+    {
+     "skill": 17070000,
+     "name": "Chain of Torment",
+     "level": 4,
+     "when": {
+      "target": "enemy",
+      "target_effect_missing": true
+     },
+     "roles": [
+      "dps"
+     ]
+    },
+    {
+     "skill": 17350000,
+     "name": "Condemnation",
+     "level": 8,
+     "when": {
+      "target": "enemy",
+      "target_has": [
+       17070000
+      ]
      }
     },
     {
@@ -425,31 +876,380 @@
      "name": "Debilitating Mark",
      "level": 1,
      "when": {
+      "target": "enemy",
+      "target_effect_missing": true,
+      "self_mp_above": 40
+     },
+     "roles": [
+      "heal"
+     ]
+    },
+    {
+     "skill": 17080000,
+     "name": "Debilitating Mark",
+     "level": 1,
+     "when": {
+      "target": "enemy",
+      "target_effect_missing": true
+     },
+     "roles": [
+      "dps"
+     ]
+    },
+    {
+     "skill": 17150000,
+     "name": "Divine Aura",
+     "level": 3,
+     "when": {
       "target": "enemy"
      }
     },
     {
-     "skill": 17350000,
-     "name": "Condemnation",
-     "level": 8,
+     "skill": 17060000,
+     "name": "Bolt",
+     "level": 14,
+     "when": {
+      "target": "enemy",
+      "enemies_at_least": 3,
+      "self_mp_above": 40
+     },
+     "area": "target",
+     "roles": [
+      "heal"
+     ]
+    },
+    {
+     "skill": 17060000,
+     "name": "Bolt",
+     "level": 14,
+     "when": {
+      "target": "enemy",
+      "enemies_at_least": 3
+     },
+     "area": "target",
+     "roles": [
+      "dps"
+     ]
+    },
+    {
+     "skill": 17060000,
+     "name": "Bolt",
+     "level": 14,
+     "when": {
+      "target": "enemy",
+      "target_elite": true,
+      "self_mp_above": 40
+     },
+     "roles": [
+      "heal"
+     ]
+    },
+    {
+     "skill": 17060000,
+     "name": "Bolt",
+     "level": 14,
+     "when": {
+      "target": "enemy",
+      "target_elite": true
+     },
+     "roles": [
+      "dps"
+     ]
+    },
+    {
+     "skill": 17270000,
+     "name": null,
+     "level": 44,
+     "when": {
+      "target": "enemy",
+      "self_mp_above": 40
+     },
+     "roles": [
+      "heal"
+     ]
+    },
+    {
+     "skill": 17270000,
+     "name": null,
+     "level": 44,
      "when": {
       "target": "enemy"
-     }
+     },
+     "roles": [
+      "dps"
+     ]
+    },
+    {
+     "skill": 17300000,
+     "name": null,
+     "level": 63,
+     "when": {
+      "target": "enemy",
+      "self_mp_above": 40
+     },
+     "roles": [
+      "heal"
+     ]
+    },
+    {
+     "skill": 17300000,
+     "name": null,
+     "level": 63,
+     "when": {
+      "target": "enemy"
+     },
+     "roles": [
+      "dps"
+     ]
+    },
+    {
+     "skill": 17410000,
+     "name": null,
+     "level": 82,
+     "when": {
+      "target": "enemy",
+      "self_mp_above": 40
+     },
+     "roles": [
+      "heal"
+     ]
+    },
+    {
+     "skill": 17410000,
+     "name": null,
+     "level": 82,
+     "when": {
+      "target": "enemy"
+     },
+     "roles": [
+      "dps"
+     ]
+    },
+    {
+     "skill": 17440000,
+     "name": null,
+     "level": 100,
+     "when": {
+      "target": "enemy",
+      "self_mp_above": 40
+     },
+     "roles": [
+      "heal"
+     ]
+    },
+    {
+     "skill": 17440000,
+     "name": null,
+     "level": 100,
+     "when": {
+      "target": "enemy"
+     },
+     "roles": [
+      "dps"
+     ]
+    },
+    {
+     "skill": 17190000,
+     "name": null,
+     "level": 38,
+     "when": {
+      "target": "enemy",
+      "self_mp_above": 40
+     },
+     "roles": [
+      "heal"
+     ]
+    },
+    {
+     "skill": 17190000,
+     "name": null,
+     "level": 38,
+     "when": {
+      "target": "enemy"
+     },
+     "roles": [
+      "dps"
+     ]
+    },
+    {
+     "skill": 17290000,
+     "name": null,
+     "level": 57,
+     "when": {
+      "target": "enemy",
+      "self_mp_above": 40
+     },
+     "roles": [
+      "heal"
+     ]
+    },
+    {
+     "skill": 17290000,
+     "name": null,
+     "level": 57,
+     "when": {
+      "target": "enemy"
+     },
+     "roles": [
+      "dps"
+     ]
+    },
+    {
+     "skill": 17400000,
+     "name": null,
+     "level": 75,
+     "when": {
+      "target": "enemy",
+      "self_mp_above": 40
+     },
+     "roles": [
+      "heal"
+     ]
+    },
+    {
+     "skill": 17400000,
+     "name": null,
+     "level": 75,
+     "when": {
+      "target": "enemy"
+     },
+     "roles": [
+      "dps"
+     ]
+    },
+    {
+     "skill": 17430000,
+     "name": null,
+     "level": 94,
+     "when": {
+      "target": "enemy",
+      "self_mp_above": 40
+     },
+     "roles": [
+      "heal"
+     ]
+    },
+    {
+     "skill": 17430000,
+     "name": null,
+     "level": 94,
+     "when": {
+      "target": "enemy"
+     },
+     "roles": [
+      "dps"
+     ]
+    },
+    {
+     "skill": 17160000,
+     "name": null,
+     "level": 26,
+     "when": {
+      "target": "enemy",
+      "self_mp_above": 40
+     },
+     "roles": [
+      "heal"
+     ]
+    },
+    {
+     "skill": 17160000,
+     "name": null,
+     "level": 26,
+     "when": {
+      "target": "enemy"
+     },
+     "roles": [
+      "dps"
+     ]
+    },
+    {
+     "skill": 17280000,
+     "name": null,
+     "level": 51,
+     "when": {
+      "target": "enemy",
+      "self_mp_above": 40
+     },
+     "roles": [
+      "heal"
+     ]
+    },
+    {
+     "skill": 17280000,
+     "name": null,
+     "level": 51,
+     "when": {
+      "target": "enemy"
+     },
+     "roles": [
+      "dps"
+     ]
+    },
+    {
+     "skill": 17390000,
+     "name": null,
+     "level": 69,
+     "when": {
+      "target": "enemy",
+      "self_mp_above": 40
+     },
+     "roles": [
+      "heal"
+     ]
+    },
+    {
+     "skill": 17390000,
+     "name": null,
+     "level": 69,
+     "when": {
+      "target": "enemy"
+     },
+     "roles": [
+      "dps"
+     ]
+    },
+    {
+     "skill": 17420000,
+     "name": null,
+     "level": 88,
+     "when": {
+      "target": "enemy",
+      "self_mp_above": 40
+     },
+     "roles": [
+      "heal"
+     ]
+    },
+    {
+     "skill": 17420000,
+     "name": null,
+     "level": 88,
+     "when": {
+      "target": "enemy"
+     },
+     "roles": [
+      "dps"
+     ]
     },
     {
      "skill": 17040000,
      "name": "Judgment Thunder",
      "level": 1,
      "when": {
-      "target": "enemy"
-     }
+      "target": "enemy",
+      "enemies_at_least": 3,
+      "self_mp_above": 50
+     },
+     "area": "target"
     },
     {
-     "skill": 17370000,
-     "name": "Lightning Strike Scattershot",
-     "level": 5,
+     "skill": 17040000,
+     "name": "Judgment Thunder",
+     "level": 1,
      "when": {
-      "target": "enemy"
+      "target": "enemy",
+      "self_mp_above": 60
      }
     },
     {
@@ -465,6 +1265,7 @@
   "Ranger": {
    "weapon_type": "Bow",
    "range": 1800,
+   "position": "ranged",
    "roles": [
     "dps"
    ],
@@ -480,41 +1281,42 @@
      }
     },
     {
-     "skill": 14010000,
-     "name": "Deadshot",
-     "level": 14,
-     "when": {
-      "target": "enemy"
-     }
-    },
-    {
      "skill": 14070000,
      "name": "Suppressing Arrow",
      "level": 12,
      "when": {
-      "target": "enemy"
+      "target": "enemy",
+      "target_casting": true,
+      "after": [
+       14090000
+      ],
+      "after_within_ms": 10000
      }
     },
     {
-     "skill": 14080000,
-     "name": "Burst Arrow",
-     "level": 10,
+     "skill": 14170000,
+     "name": "Explosion Trap",
+     "level": 8,
      "when": {
-      "target": "enemy"
-     }
+      "target": "enemy",
+      "target_on_self": true
+     },
+     "area": "self"
     },
     {
      "skill": 14110000,
      "name": "Gale Arrow",
      "level": 7,
      "when": {
-      "target": "enemy"
-     }
+      "target": "enemy",
+      "enemies_at_least": 2
+     },
+     "area": "target"
     },
     {
-     "skill": 14130000,
-     "name": "Snare Shot",
-     "level": 1,
+     "skill": 14110000,
+     "name": "Gale Arrow",
+     "level": 7,
      "when": {
       "target": "enemy"
      }
@@ -528,9 +1330,150 @@
      }
     },
     {
-     "skill": 14050000,
-     "name": "Drill Dart",
-     "level": 4,
+     "skill": 14330000,
+     "name": "Arrow Scattershot",
+     "level": 5,
+     "when": {
+      "target": "enemy",
+      "target_stunned": true
+     }
+    },
+    {
+     "skill": 14130000,
+     "name": "Snare Shot",
+     "level": 1,
+     "when": {
+      "target": "enemy",
+      "target_effect_missing": true
+     }
+    },
+    {
+     "skill": 14080000,
+     "name": "Burst Arrow",
+     "level": 10,
+     "when": {
+      "target": "enemy",
+      "target_slowed": true
+     }
+    },
+    {
+     "skill": 14010000,
+     "name": "Deadshot",
+     "level": 14,
+     "when": {
+      "target": "enemy",
+      "after": [
+       14090000
+      ],
+      "after_within_ms": 10000
+     }
+    },
+    {
+     "skill": 14070000,
+     "name": "Suppressing Arrow",
+     "level": 12,
+     "when": {
+      "target": "enemy",
+      "target_elite": true,
+      "after": [
+       14090000
+      ],
+      "after_within_ms": 10000
+     }
+    },
+    {
+     "skill": 14010000,
+     "name": "Deadshot",
+     "level": 14,
+     "when": {
+      "target": "enemy",
+      "target_elite": true
+     }
+    },
+    {
+     "skill": 14120000,
+     "name": null,
+     "level": 39,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 14150000,
+     "name": null,
+     "level": 46,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 14180000,
+     "name": null,
+     "level": 60,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 14190000,
+     "name": null,
+     "level": 66,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 14270000,
+     "name": null,
+     "level": 80,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 14310000,
+     "name": null,
+     "level": 87,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 14360000,
+     "name": null,
+     "level": 100,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 14060000,
+     "name": null,
+     "level": 26,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 14160000,
+     "name": null,
+     "level": 53,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 14220000,
+     "name": null,
+     "level": 73,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 14350000,
+     "name": null,
+     "level": 93,
      "when": {
       "target": "enemy"
      }
@@ -540,15 +1483,19 @@
      "name": "Tempest Shot",
      "level": 1,
      "when": {
-      "target": "enemy"
-     }
+      "target": "enemy",
+      "enemies_at_least": 2,
+      "self_mp_above": 20
+     },
+     "area": "target"
     },
     {
-     "skill": 14330000,
-     "name": "Arrow Scattershot",
-     "level": 5,
+     "skill": 14340000,
+     "name": "Tempest Shot",
+     "level": 1,
      "when": {
-      "target": "enemy"
+      "target": "enemy",
+      "self_mp_above": 40
      }
     },
     {
@@ -564,6 +1511,7 @@
   "Elementalist": {
    "weapon_type": "Orb",
    "range": 1800,
+   "position": "ranged",
    "roles": [
     "dps"
    ],
@@ -583,13 +1531,131 @@
      "name": "Soul's Cry",
      "level": 12,
      "when": {
-      "target": "enemy"
+      "target": "enemy",
+      "target_casting": true
+     }
+    },
+    {
+     "skill": 16070000,
+     "name": "Soul's Cry",
+     "level": 12,
+     "when": {
+      "target": "enemy",
+      "target_on_self": true
+     }
+    },
+    {
+     "skill": 16340000,
+     "name": "Rapid Scattershot",
+     "level": 5,
+     "when": {
+      "target": "enemy",
+      "target_stunned": true
      }
     },
     {
      "skill": 16140000,
      "name": "Jointstrike: Curse",
      "level": 4,
+     "when": {
+      "target": "enemy",
+      "enemies_at_least": 2
+     },
+     "area": "target"
+    },
+    {
+     "skill": 16140000,
+     "name": "Jointstrike: Curse",
+     "level": 4,
+     "when": {
+      "target": "enemy",
+      "target_effect_missing": true
+     }
+    },
+    {
+     "skill": 16150000,
+     "name": null,
+     "level": 46,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 16230000,
+     "name": null,
+     "level": 66,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 16260000,
+     "name": null,
+     "level": 87,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 16060000,
+     "name": null,
+     "level": 26,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 16080000,
+     "name": null,
+     "level": 39,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 16190000,
+     "name": null,
+     "level": 53,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 16220000,
+     "name": null,
+     "level": 60,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 16240000,
+     "name": null,
+     "level": 73,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 16250000,
+     "name": null,
+     "level": 80,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 16360000,
+     "name": null,
+     "level": 93,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 16370000,
+     "name": null,
+     "level": 100,
      "when": {
       "target": "enemy"
      }
@@ -599,15 +1665,19 @@
      "name": "Combustion",
      "level": 1,
      "when": {
-      "target": "enemy"
-     }
+      "target": "enemy",
+      "enemies_at_least": 3,
+      "self_mp_above": 25
+     },
+     "area": "target"
     },
     {
-     "skill": 16340000,
-     "name": "Rapid Scattershot",
-     "level": 5,
+     "skill": 16040000,
+     "name": "Combustion",
+     "level": 1,
      "when": {
-      "target": "enemy"
+      "target": "enemy",
+      "self_mp_above": 50
      }
     },
     {
@@ -617,28 +1687,13 @@
      "when": {
       "target": "enemy"
      }
-    },
-    {
-     "skill": 16300000,
-     "name": "Elemental Fusion",
-     "level": 14,
-     "when": {
-      "target": "enemy"
-     }
-    },
-    {
-     "skill": 16330000,
-     "name": "Dimensional Control",
-     "level": 8,
-     "when": {
-      "target": "enemy"
-     }
     }
    ]
   },
   "Sorcerer": {
    "weapon_type": "Magicbook",
    "range": 1800,
+   "position": "ranged",
    "roles": [
     "dps"
    ],
@@ -664,27 +1719,12 @@
      }
     },
     {
-     "skill": 15110000,
-     "name": "Winter's Shackles",
-     "level": 8,
-     "when": {
-      "target": "enemy"
-     }
-    },
-    {
-     "skill": 15060000,
-     "name": "Hellfire",
-     "level": 14,
-     "when": {
-      "target": "enemy"
-     }
-    },
-    {
      "skill": 15150000,
      "name": "Frost",
      "level": 7,
      "when": {
-      "target": "enemy"
+      "target": "enemy",
+      "target_casting": true
      }
     },
     {
@@ -692,7 +1732,86 @@
      "name": "Frost Burst",
      "level": 10,
      "when": {
-      "target": "enemy"
+      "target": "enemy",
+      "target_stunned": true
+     },
+     "area": "target"
+    },
+    {
+     "skill": 15220000,
+     "name": "Frost Burst",
+     "level": 10,
+     "when": {
+      "target": "enemy",
+      "after": [
+       15150000
+      ]
+     },
+     "area": "target"
+    },
+    {
+     "skill": 15010000,
+     "name": "Flame Scattershot",
+     "level": 5,
+     "when": {
+      "target": "enemy",
+      "target_stunned": true
+     }
+    },
+    {
+     "skill": 15280000,
+     "name": "Bittercold Wind",
+     "level": 3,
+     "when": {
+      "target": "enemy",
+      "target_on_self": true
+     }
+    },
+    {
+     "skill": 15060000,
+     "name": "Hellfire",
+     "level": 14,
+     "when": {
+      "target": "enemy",
+      "enemies_at_least": 3
+     },
+     "area": "target"
+    },
+    {
+     "skill": 15060000,
+     "name": "Hellfire",
+     "level": 14,
+     "when": {
+      "target": "enemy",
+      "target_elite": true
+     }
+    },
+    {
+     "skill": 15110000,
+     "name": "Winter's Shackles",
+     "level": 8,
+     "when": {
+      "target": "enemy",
+      "enemies_at_least": 3
+     },
+     "area": "target"
+    },
+    {
+     "skill": 15110000,
+     "name": "Winter's Shackles",
+     "level": 8,
+     "when": {
+      "target": "enemy",
+      "target_elite": true
+     }
+    },
+    {
+     "skill": 15150000,
+     "name": "Frost",
+     "level": 7,
+     "when": {
+      "target": "enemy",
+      "target_elite": true
      }
     },
     {
@@ -700,13 +1819,108 @@
      "name": "Firestorm",
      "level": 1,
      "when": {
-      "target": "enemy"
+      "target": "enemy",
+      "self_mp_above": 30
      }
     },
     {
      "skill": 15050000,
      "name": "Blaze",
      "level": 4,
+     "when": {
+      "target": "enemy",
+      "after": [
+       15210000,
+       15040000,
+       15060000
+      ],
+      "after_within_ms": 10000
+     }
+    },
+    {
+     "skill": 15140000,
+     "name": null,
+     "level": 46,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 15230000,
+     "name": null,
+     "level": 66,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 15360000,
+     "name": null,
+     "level": 87,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 15130000,
+     "name": null,
+     "level": 39,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 15200000,
+     "name": null,
+     "level": 60,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 15320000,
+     "name": null,
+     "level": 80,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 15400000,
+     "name": null,
+     "level": 100,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 15120000,
+     "name": null,
+     "level": 26,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 15160000,
+     "name": null,
+     "level": 53,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 15300000,
+     "name": null,
+     "level": 73,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 15390000,
+     "name": null,
+     "level": 93,
      "when": {
       "target": "enemy"
      }
@@ -716,16 +1930,11 @@
      "name": "Ice Chain",
      "level": 1,
      "when": {
-      "target": "enemy"
-     }
-    },
-    {
-     "skill": 15010000,
-     "name": "Flame Scattershot",
-     "level": 5,
-     "when": {
-      "target": "enemy"
-     }
+      "target": "enemy",
+      "enemies_at_least": 3,
+      "self_mp_above": 40
+     },
+     "area": "target"
     },
     {
      "skill": 15210000,
@@ -740,6 +1949,7 @@
   "Chanter": {
    "weapon_type": "Staff",
    "range": 300,
+   "position": "behind",
    "roles": [
     "heal",
     "dps"
@@ -765,11 +1975,33 @@
      }
     },
     {
-     "skill": 18290000,
-     "name": "Spinning Strike",
-     "level": 14,
+     "skill": 18060000,
+     "name": "Impactful Crush",
+     "level": 3,
      "when": {
-      "target": "enemy"
+      "target": "enemy",
+      "target_casting": true
+     }
+    },
+    {
+     "skill": 18090000,
+     "name": "Rushing Smash",
+     "level": 1,
+     "when": {
+      "target": "enemy",
+      "target_distance_above": 500
+     }
+    },
+    {
+     "skill": 18100000,
+     "name": "Dark Crush",
+     "level": 4,
+     "when": {
+      "target": "enemy",
+      "after": [
+       18060000,
+       18290000
+      ]
      }
     },
     {
@@ -777,16 +2009,80 @@
      "name": "Wave Blow",
      "level": 12,
      "when": {
-      "target": "enemy"
+      "target": "enemy",
+      "target_stunned": true
      }
     },
     {
-     "skill": 18210000,
-     "name": "Tremor Crush",
-     "level": 10,
+     "skill": 18300000,
+     "name": "Gust Rampage",
+     "level": 5,
+     "when": {
+      "target": "enemy",
+      "target_stunned": true
+     }
+    },
+    {
+     "skill": 18290000,
+     "name": "Spinning Strike",
+     "level": 14,
+     "when": {
+      "target": "enemy",
+      "enemies_at_least": 2,
+      "self_mp_above": 40
+     },
+     "area": "target",
+     "roles": [
+      "heal"
+     ]
+    },
+    {
+     "skill": 18290000,
+     "name": "Spinning Strike",
+     "level": 14,
+     "when": {
+      "target": "enemy",
+      "enemies_at_least": 2
+     },
+     "area": "target",
+     "roles": [
+      "dps"
+     ]
+    },
+    {
+     "skill": 18290000,
+     "name": "Spinning Strike",
+     "level": 14,
+     "when": {
+      "target": "enemy",
+      "self_mp_above": 40
+     },
+     "roles": [
+      "heal"
+     ]
+    },
+    {
+     "skill": 18290000,
+     "name": "Spinning Strike",
+     "level": 14,
      "when": {
       "target": "enemy"
-     }
+     },
+     "roles": [
+      "dps"
+     ]
+    },
+    {
+     "skill": 18060000,
+     "name": "Impactful Crush",
+     "level": 3,
+     "when": {
+      "target": "enemy",
+      "self_mp_above": 40
+     },
+     "roles": [
+      "heal"
+     ]
     },
     {
      "skill": 18060000,
@@ -794,7 +2090,10 @@
      "level": 3,
      "when": {
       "target": "enemy"
-     }
+     },
+     "roles": [
+      "dps"
+     ]
     },
     {
      "skill": 18090000,
@@ -805,17 +2104,97 @@
      }
     },
     {
-     "skill": 18150000,
-     "name": "Heat Wave Blow",
-     "level": 7,
+     "skill": 18140000,
+     "name": null,
+     "level": 38,
      "when": {
       "target": "enemy"
      }
     },
     {
-     "skill": 18100000,
-     "name": "Dark Crush",
-     "level": 4,
+     "skill": 18160000,
+     "name": null,
+     "level": 44,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 18190000,
+     "name": null,
+     "level": 57,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 18220000,
+     "name": null,
+     "level": 63,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 18240000,
+     "name": null,
+     "level": 75,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 18250000,
+     "name": null,
+     "level": 82,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 18420000,
+     "name": null,
+     "level": 94,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 18440000,
+     "name": null,
+     "level": 100,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 18130000,
+     "name": null,
+     "level": 26,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 18170000,
+     "name": null,
+     "level": 51,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 18230000,
+     "name": null,
+     "level": 69,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 18330000,
+     "name": null,
+     "level": 88,
      "when": {
       "target": "enemy"
      }
@@ -825,15 +2204,29 @@
      "name": "Incandescent Blow",
      "level": 1,
      "when": {
-      "target": "enemy"
-     }
+      "target": "enemy",
+      "enemies_at_least": 3,
+      "self_mp_above": 50
+     },
+     "area": "self"
     },
     {
-     "skill": 18300000,
-     "name": "Gust Rampage",
-     "level": 5,
+     "skill": 18010000,
+     "name": "Onslaught",
+     "level": 1,
      "when": {
-      "target": "enemy"
+      "target": "enemy",
+      "enemies_at_least": 2
+     },
+     "area": "self"
+    },
+    {
+     "skill": 18040000,
+     "name": "Incandescent Blow",
+     "level": 1,
+     "when": {
+      "target": "enemy",
+      "self_mp_above": 60
      }
     },
     {

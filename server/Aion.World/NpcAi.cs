@@ -404,6 +404,48 @@ public sealed class NpcAi(Random rng, GameData? data = null)
         return StartChase(target, brain, now);
     }
 
+    /// <summary>
+    /// A taunt (skill-effects.json "taunt", OURS): the taunter's hate goes above the current top (plus a tenth of it), so the
+    /// monster turns on it at once and the taunter keeps it while it keeps hitting.
+    /// </summary>
+    public List<byte[]> Taunt(IReadOnlyDictionary<int, Target> targets, Target target, long now, int taunterKey)
+    {
+        Sync(targets);
+        if (!brains.TryGetValue(target.Key, out var brain) || target.Dead || target.RunSpeed == 0 || brain.Mode == Mode.Return) return [];
+        awake.Add(target.Key);
+        var top = brain.Hate.Count == 0 ? 0 : brain.Hate.Values.Max();
+        brain.Hate[taunterKey] = Math.Max(brain.Hate.GetValueOrDefault(taunterKey), top + Math.Max(1, top / 10));
+        brain.CandidateKey = taunterKey;
+        brain.VictimIsNpc = false;
+        return StartChase(target, brain, now);
+    }
+
+    /// <summary>
+    /// The special the NPC is winding up (a skill other than its basic attack whose hit has not landed yet), or null. A stun or
+    /// an interrupt in that window cancels it (<see cref="Interrupt"/>).
+    /// </summary>
+    public int? CastingSpecial(Target target)
+    {
+        if (!brains.TryGetValue(target.Key, out var brain) || brain.Pending is not { } hit) return null;
+        return Basic(target) is { } basic && basic.Id == hit.SkillId ? null : hit.SkillId;
+    }
+
+    /// <summary>Interrupts the special being wound up (OURS): its hit never lands and the NPC needs a moment before its next attack.</summary>
+    public bool Interrupt(Target target, long now)
+    {
+        if (CastingSpecial(target) is null) return false;
+        var brain = brains[target.Key];
+        brain.Pending = null;
+        brain.NextAttackMs = Math.Max(brain.NextAttackMs, now + InterruptRecoverMs);
+        Interrupts++;
+        return true;
+    }
+
+    /// <summary>An interrupted NPC waits this long before it attacks again (OURS).</summary>
+    public const int InterruptRecoverMs = 1500;
+    /// <summary>Diagnostics: specials interrupted so far.</summary>
+    public int Interrupts { get; private set; }
+
     static int? TopHate(Brain brain) => brain.Hate.Count == 0 ? null : brain.Hate.MaxBy(h => h.Value).Key;
 
     /// <summary>The NPC died: it leaves combat (official 0x8d21 off after the kill) and drops a pending hit.</summary>
@@ -703,8 +745,8 @@ public sealed class NpcAi(Random rng, GameData? data = null)
             brain.Mode = Mode.Idle;
             brain.WanderAtMs = WanderDelay(now);
         }
-        // Held by a scripted abnormal (stun, hold, stone): it stops where it is and does nothing until released.
-        if (target.Held)
+        // Held by a scripted abnormal (stun, hold, stone) or a player's stun: it stops where it is and does nothing until released.
+        if (target.Held || target.Stunned(now))
         {
             brain.Pending = null;
             return brain.Moving ? Stop(target, brain, brain.Heading, now) : [];

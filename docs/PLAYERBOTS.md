@@ -103,7 +103,7 @@ mod-playerbots splits a bot into *strategies* (which triggers are active), *trig
 | **follow** (default) | Leader more than `FollowFar` (450 cm) away, or still moving to its slot | Run to its slot, a point `FollowDistance` (250 cm) from the leader. Bot 0 stands behind the leader and the others fan out at ±60° steps. |
 | **stay** | Always | Stop and hold position. Still fights when assist is on. |
 | **support** (always on) | A heal, resurrection or buff entry of the rotation holds for a group member (see [Rotation data](#rotation-data)) | Run to within 80% of the skill-effects `heal_range` (2500) of that member, stop, and cast at it. |
-| **assist** (default) | The leader cast at a living hostile NPC in the last 8 s (`GameSession.AttackTarget`), or the bot's own target still lives, or a monster is attacking the group (self-defence), within 3000 cm of the leader | Run until within the class's `range`, stop, and cast the first rotation entry that can be cast now. |
+| **assist** (default) | The leader cast at a living hostile NPC in the last 8 s (`GameSession.AttackTarget`), or the bot's own target still lives, or a monster is attacking the group (self-defence), within 3000 cm of the leader | Run until within the class's `range` (its role's, for a heal Cleric), stop, and cast the first rotation entry that can be cast now. A gap closer (`target_distance_above`) is cast from where the bot stands. A `behind` class first walks to the monster's back while the monster attacks someone else. |
 | **loot** (with assist) | No fight, and the bot's own drops lie within 2500 cm | Walk to within 300 cm and pick them up with the client's `0x5620` request. |
 | **passive** | Never | Does not fight or loot. It still heals and buffs. |
 | teleport (always on) | Leader on another map, or beyond `TeleportBeyond` | Teleport next to the leader. |
@@ -132,7 +132,24 @@ then loot, then follow. The "group" is the bot, its leader and their party membe
 **Threat.** `NpcAi` keeps a hate table per monster: each hit adds its damage under the attacker's key, and the monster
 chases the top entry. A tank bot's session has `HateMultiplier` set from `tank_hate_multiplier` in
 `bot-rotations.json`, and `GameSession.HitTarget` multiplies the hate a hit adds. The damage itself and every message
-stay the same. There is no taunt skill and no hate from heals.
+stay the same. On top of that, skills with a `taunt` effect put the caster at the top of the hate table (the Templar's
+Poach), and skills with a `threat` effect add extra hate (the Templar's enmity attacks). Heals add no hate.
+
+### Monster control: stuns, interrupts and stagger
+
+Bots need something to interrupt, so the server now gives monster control effects to the skills that have them in the
+official game (skill-effects.json, all OURS amounts; `GameSession.SkillEffects.cs`, `NpcAi`):
+
+- **stun** (`duration_ms`): an ordinary or elite monster is held (no movement, no attacks) for the duration, and any
+  special it is winding up is **interrupted**: the hit never lands (`NpcAi.Interrupt`, then 1.5 s before its next
+  attack). It then shrugs off new stuns for 3x the duration, so a party cannot stun-lock it.
+- A **boss** (NpcSubType `HeroMonster`) is never held by one stun. Each stun still interrupts its special and fills its
+  stagger: every 3rd stun breaks it and the boss reels (held) for 5 s. This stands in for the official stagger gauge.
+- **interrupt**: the interrupt alone. **taunt** and **threat**: see Threat above.
+
+A monster "winds up a special" while its `NpcAi` brain has a pending hit of a skill other than its basic attack
+(`NpcAi.CastingSpecial`). The client sees no new message: the special's start was already sent, and its hit simply does
+not follow (CANDIDATE: the official cancel message is not recorded).
 
 ### Looting
 
@@ -187,21 +204,24 @@ Casting:
 
 ## Rotation data
 
-The rotations live in `tools/data/bot-rotations.json`. `tools/bot_rotations.py` builds them from
-`tools/data/class-skills.json`, and they are embedded in `Aion.World` as `bot-rotations.json`. The format:
+The rotations live in `tools/data/bot-rotations.json`. `tools/bot_rotations.py` builds them, and they are embedded in
+`Aion.World` as `bot-rotations.json`. Do not edit the JSON: change the class's plan in the builder and rebuild. The format:
 
 ```json
 {
  "marker": "OURS",
  "global_cooldown_ms": 1000,
+ "tank_hate_multiplier": 3,
+ "skipped": {"11200000": "Ankle Slice: only after a successful block"},
  "classes": {
-  "Gladiator": {
-   "weapon_type": "Greatsword",
-   "range": 300,
-   "roles": ["tank", "dps"],
+  "Templar": {
+   "weapon_type": "Sword", "range": 300, "position": "front", "roles": ["tank", "dps"],
    "rotation": [
-    {"skill": 11100000, "name": "Ruinous Blow", "level": 14, "when": {"target": "enemy"}},
-    {"skill": 11020000, "name": "Keen Strike",  "level": 1,  "when": {"target": "enemy"}}
+    {"skill": 12100000, "name": "Shield Smite", "level": 3, "when": {"target": "enemy", "target_casting": true}},
+    {"skill": 12130000, "name": "Poach", "level": 1, "when": {"target": "enemy", "target_on_self": false}, "roles": ["tank"]},
+    {"skill": 12240000, "name": "Judgment", "level": 4, "when": {"target": "enemy", "after": [12100000, 12350000]}},
+    {"skill": 12040000, "name": "Pummel", "level": 1, "area": "self", "when": {"target": "enemy", "enemies_at_least": 2, "self_mp_above": 20}},
+    {"skill": 12010000, "name": "Vicious Strike", "level": 1, "when": {"target": "enemy"}}
    ]
   }
  }
@@ -211,26 +231,42 @@ The rotations live in `tools/data/bot-rotations.json`. `tools/bot_rotations.py` 
 - `rotation` is a priority list. The bot casts the first entry that is learned at its level, matches its role,
   meets its `when` conditions, is off cooldown and is affordable. A friendly entry also needs a group member that
   meets its conditions.
-- `level` is the class unlock level from class-skills.json. `roles` (optional) limits an entry to tank, dps or
-  heal bots.
+- `level` is the class unlock level: class-skills.json up to 25, progression.json past it. `roles` (optional) limits an
+  entry to tank, dps or heal bots.
+- `area` (optional): `self` or `target`. The bot casts the skill at its own key, so the server's area path hits every
+  monster within 4 m of the bot (`self`) or of its target (`target`). Area casts carry no debuff or stun (those need the
+  monster's key), so control skills are always single-target entries.
+- `position` (class): `front`, `behind` (melee damage that works from the monster's back while the monster attacks someone
+  else) or `ranged`. `range` is how close the bot gets before it casts; `role_ranges` overrides it per role.
 - `when` conditions. A missing condition holds.
   - `target`: `enemy` (the fight's target), `self` (the bot), `leader`, `ally` (the living group member with the lowest
     HP share that meets the conditions; the bot itself is one) or `dead_ally` (a dead group member, for resurrection).
   - `target_hp_below` and `target_hp_above`: percentages of the target's HP.
-  - `self_hp_below` and `self_mp_above`: percentages of the bot's own HP and MP.
+  - `self_hp_below`, `self_mp_above` and `self_mp_below`: percentages of the bot's own HP and MP.
   - `in_combat`: true or false. The group is "in combat" when the bot has a fight, a monster attacks a group member, or
     a group member hit a monster in the last 8 s. A heal's cast bracket alone does not count.
   - `buff_missing`: true when the target must not already carry this skill's buff or heal over time.
+  - Enemy entries only:
+    - `target_casting`: the monster is winding up a special. These are the interrupts; the entry's skill must have a
+      `stun` or `interrupt` effect.
+    - `target_stunned`: the monster is held by a stun (or a boss's stagger broke). Combo follow-ups and the
+      staggered-only skills use it.
+    - `target_slowed`, `target_elite` (EliteMonster or HeroMonster), `target_boss` (HeroMonster).
+    - `target_on_self`: true when the monster attacks this bot, false when it attacks someone else (taunts, peels).
+    - `target_effect_missing`: this bot's debuff, dot or stun of this skill is not on the monster now (debuff upkeep).
+    - `target_has`: this bot's effect of one of these skills is on the monster now (a follow-up that needs a debuff).
+    - `target_distance_above` (cm): gap closers and ranged openers, cast from where the bot stands.
+    - `enemies_at_least`: monsters fighting the group within 4 m of the area's centre (the bot for `self` areas, the
+      target otherwise).
+    - `after` and `after_within_ms` (3000 by default): the bot's last accepted cast was one of these skills (combo chains).
 - `tank_hate_multiplier` (top level): the factor a tank bot's hits count in a monster's hate table.
-- `range` is how close the bot gets before it casts. Melee classes use 250-300 cm and ranged classes 1800 cm.
-  The client's per-skill ranges are not in class-skills.json.
+- `skipped` (top level): Active skills no plan may use, with the reason (see [Class plans](#class-plans)).
 
-The generated lists have two parts:
+The builder writes, for each class:
 
-1. **Support entries**, made from `tools/data/skill-effects.json` (`SUPPORT` in the builder). Every Active skill of
-   the class that is usable with its weapon and has a heal, hot, resurrect or buff effect gets entries. They are
-   ordered heal, then heal over time, then resurrection, then buffs (mod-playerbots' priority heal > rez > buff), and
-   always come before the damage entries.
+1. **Support entries**, made from `tools/data/skill-effects.json` (`SUPPORT` in the builder): every Active skill of the
+   class with a heal, hot, resurrect or buff effect. They are ordered heal, then heal over time, then resurrection, then
+   buffs (mod-playerbots' priority heal > rez > buff), and always come before the damage entries.
 
    | Effect (its skill-effects target) | Entry |
    |---|---|
@@ -240,21 +276,39 @@ The generated lists have two parts:
    | resurrect (dead_friendly) | `dead_ally`, `in_combat: false`, every role. |
    | buff (self / friendly) | `self` / `ally` with `buff_missing`, every role. A buff shorter than its cooldown gets `in_combat: true` (a combat buff such as Defiance). A longer one is kept up all the time. |
 
-   The class data has no resurrection skill yet, so no generated list has a resurrection entry. One appears as
-   soon as a `resurrect` entry for a class skill is added to skill-effects.json.
-2. **Damage entries**: Active skills with Damage rows and the class's weapon whose skill-effects entry, if any, lands
-   on an enemy. They are ordered with long cooldowns first, then shorter ones, then the cooldown-free fillers, with
-   MP fillers before the free one. Dodge is left out.
+2. **The class's plan** (`PLAN` in the builder), in the order a player of the class presses its skills in a dungeon:
+   interrupts, gap closers, combo follow-ups, cooldowns (the big ones on elites and bosses), area skills on packs,
+   debuff upkeep, then the fillers.
+3. **Skills past level 25** (progression.json's OURS fallback skills, which have no known behaviour) go in front of the
+   fillers, long cooldowns first, so a high-level bot uses its whole kit.
+4. A **heal** bot keeps 40% MP for its heals: its MP-costing damage entries get `self_mp_above: 40` (interrupts excepted).
 
-Hand-made entries go to `EXTRA` in `tools/bot_rotations.py`.
+Rebuild with `python tools/bot_rotations.py`. `python tools/bot_rotations.py --check` and `tests/test_bot_rotations.py`
+check that the tracked file is current and valid: every skill exists, belongs to the class and unlocks at that level;
+conditions, areas, positions and roles are known; `after` and `target_has` name the class's own skills; interrupts have a
+stun; `target_effect_missing` skills leave something on the monster; skipped skills stay out; friendly entries have a
+fitting heal, hot, buff or resurrect effect; every class ends on an unconditional filler and uses every skill past 25.
 
-Rebuild with `python tools/bot_rotations.py`. `python tools/bot_rotations.py --check` and
-`tests/test_bot_rotations.py` check that every skill exists and belongs to that class, that the unlock levels
-match, that the conditions and roles are known, and that the tracked file is current. They also check each entry's
-target against the skill's skill-effects.json entry. A friendly target needs a heal, hot or buff effect landing on
-`self`/`friendly` (`self` also takes self-only skills). `dead_ally` needs a `resurrect` effect on `dead_friendly`.
-`buff_missing` needs a buff or hot. An `enemy` entry must not be a friendly skill and needs Damage rows or an enemy
-effect.
+### Class plans
+
+The plans follow the public Aion 2 skill descriptions and class guides (thegameswiki.com class skill pages;
+allthings.how, iggm, gamerblurb and roonby class guides, 2026). The orders, thresholds and pack sizes are ours.
+"Staggered only" skills wait for `target_stunned`.
+
+| Class | Role(s), position | Plan, in priority order |
+|---|---|---|
+| Gladiator | dps (tank possible), melee behind | Mocking Blade interrupts (knockdown) · Leaping Slam in from range · Ruinous Blow on cooldown · Aerial Snare on a knocked-down elite · Overhead Slam on a knocked-down target or right after Mocking Blade · Sword Aura Rampage (staggered only) · Mocking Blade on cooldown · Crushing Wave on 2+ · Rending Blow / Keen Strike around itself on 2+ · Rending Blow · Keen Strike (MP back) |
+| Templar | tank (dps possible), melee front | Shield Smite interrupts (stun) · Poach hooks a monster off someone else (taunt) · Punishment as the ranged opener · Annihilate on a stunned target or after Shield Smite · Judgment after a shield skill · Flash Rampage (staggered only) · Shield Smite on cooldown · Warding Strike below 70% HP (tank) · Punishment · Pummel around itself on 2+ · Pummel (threat) · Vicious Strike (threat, MP back) |
+| Assassin | dps, melee behind | Shadowstrike interrupts (stun) and opens from range · Shadow Fall on a stunned target or after Shadowstrike / Insignia Explosion · Storm Rampage (staggered only) · Insignia Explosion after Savage Roar (area on 2+) · Ambush · Flash Slice (area on 2+) · Savage Roar (Insignia) · Quick Slice |
+| Ranger | dps, ranged 18 m | Suppressing Arrow interrupts when Marking Shot's Precision is up · Explosion Trap when a monster is on the Ranger · Gale Arrow · Marking Shot · Arrow Scattershot (staggered only) · Snare Shot kept up · Burst Arrow on a slowed target · Deadshot with Precision · Suppressing Arrow / Deadshot on elites · Tempest Shot (area on 2+) · Snipe |
+| Sorcerer | dps, ranged 18 m | Frost interrupts (freeze) · Frost Burst on a frozen target · Flame Scattershot (staggered only) · Bittercold Wind roots a monster on the Sorcerer · Hellfire and Winter's Shackles on 3+ or an elite · Frost on an elite · Firestorm · Blaze on a Fire Mark · Ice Chain on 3+ · Flame Arrow |
+| Elementalist | dps, ranged 18 m | Soul's Cry interrupts (fear) or peels a monster off itself · Rapid Scattershot (staggered only) · Jointstrike: Curse kept up (area on 2+) · Combustion · Cold Shock. No spirits. |
+| Cleric | heal (dps possible), ranged 18 m (15 m as healer) | Heals, HoT and Defiance first · Lightning Strike Scattershot (staggered only) · Chain of Torment kept up · Condemnation on Chain of Torment · Debilitating Mark kept up · Divine Aura · Bolt on 3+ or an elite · Judgment Thunder · Earth's Retribution (MP back). No interrupt: its kit has no stun before level 26. |
+| Chanter | heal (dps possible), melee behind | Recuperation and Defiance first · Impactful Crush interrupts (stun) · Rushing Smash in from range · Dark Crush after Impactful Crush / Spinning Strike · Wave Blow on a stunned target · Gust Rampage (staggered only) · Spinning Strike (area on 2+) · Impactful Crush · Rushing Smash · Incandescent Blow / Onslaught around itself on packs · Onslaught (MP back) |
+
+Left out (`SKIPPED`): Ankle Slice, Debilitating Smash and Heat Wave Blow (after a block), Whirlwind Slice (after an
+evasion), Heart Gore and Drill Dart (after a critical hit), Rush Strike, Shield Rush, Infiltrate and Tremor Crush (after a
+Dodge), Dimensional Control and Elemental Fusion (spirits).
 
 ## Configuration
 
@@ -283,13 +337,21 @@ the bots of a map into one map turn.
 | `server/Aion.World/GameSession.Bots.cs` | Reads a bot needs (`AttackTarget`, `Knows`, `CooldownUntil`, `WorldPosition`, `HasSkillBuff`, `LootableDrops`, `InstanceReturn`, `Options`), `BotRole`, `HateMultiplier` and `JoinPartyAsBot` |
 | `server/Aion.World/GmCommands.cs` | `//bot` and its permission check |
 | `server/Aion.Host/Native/PlayerBotsService.cs` | The hosted bot loop. `Program.cs` binds `Aion:Bots`, and `NativeListeners.cs` dismisses a leader's bots on disconnect. |
-| `tools/bot_rotations.py`, `tools/data/bot-rotations.json` | Rotation builder, validator and data |
+| `tools/bot_rotations.py`, `tools/data/bot-rotations.json` | Rotation builder (the class plans), validator and data |
+| `server/Aion.World/GameSession.SkillEffects.cs`, `NpcAi.cs`, `Combat.cs` (`Target`) | Stuns, interrupts, boss stagger, taunts and threat on monsters |
+| `tools/data/skill-effects.json` | The class skills' effects, now including the stuns, taunt, threat and slows the plans rely on |
 | `tests/Aion.Native.Checks/Program.cs` ("Playerbots") | The checks, plus `tests/test_bot_rotations.py` |
 
 ## Not done yet
 
-- **Taunts and threat from heals.** Tanking is the hate multiplier and the target choice only. No skill is used as a
-  taunt, and heals add no hate.
+- **Hate from heals.** Heals add no hate.
+- **Proc skills.** Skills that need a block, an evasion, a critical hit or a Dodge just before are left out
+  (`SKIPPED` in the builder). The server has no such events yet.
+- **Spirits.** Elementalist summons do nothing on the server, so the Elementalist bot fights without a spirit.
+- **Kiting and dodging.** Ranged bots stand still at their range; nobody dodges telegraphed attacks.
+- **Mismatches with the official kits.** Our skill-effects table still has Defiance as +200 Defense (officially a
+  crowd-control break), Healing Light, Radiant Recovery and Recuperation as single-target heals (officially party
+  heals), and Debilitating Mark as a damage-taken debuff. The rotations use them the way our server implements them.
 - **Resurrection skills.** The brain and the builder handle them, but no class skill has a `resurrect` effect in
   skill-effects.json yet (the class data carries none). The checks use a table entry of their own.
 - **Solo instances and unrecorded entries.** See [Instances](#instances).

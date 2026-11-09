@@ -1,5 +1,5 @@
 {
-  "source": "OURS: a hand-made table, not extracted data. tools/data/class-skills.json keeps only the Damage rows of Skill.dat (tools/class_skills.py damage_rows); the heal, heal-over-time, stat and debuff rows of the same SkillEffect list were never exported, so every value here is our choice until they are.",
+  "source": "OURS: a hand-made table, not extracted data. tools/data/class-skills.json keeps only the Damage rows of Skill.dat (tools/class_skills.py damage_rows); the heal, heal-over-time, stat and debuff rows of the same SkillEffect list were never exported, so every value here is our choice until they are. Stun, interrupt, taunt and threat entries (and the slows of Snare Shot, Ice Chain, Winter's Shackles, Bittercold Wind's root) follow the public Aion 2 skill descriptions (thegameswiki.com class skill pages, 2026); their durations and amounts are OURS.",
   "regenerate": "With the client: research/local/game-catalog-v2/entries.jsonl (kind 'skills') carries each skill's SkillEffect rows under relationships.effects[].rows (EffectType + EffectValueList), the rows tools/class_skills.py reads for Damage. Extending damage_rows to the heal/abnormal EffectTypes (and tools/box_data.py _abnormals to the class skills' Abnormal_True ids: SkillAbnormal table-000 / SkillAbnormalEffect table-001) would replace this table with extracted values; the server reads the same fields from here.",
   "formula": "heal = roll(flat) + power * roll(ratio) / 10000 + target HPMax * roll(hp_ratio) / 10000, power = the caster's weapon roll + FixingDamage (the attack of Combat.SkillHits). A dot tick is roll(flat) + power * roll(ratio) / 10000 against the NPC's defense like a hit.",
   "targets": "self: the caster. friendly: the selected player when on the map, alive, within heal_range and not an enemy (same race or same party), else the caster; a selected hostile NPC or enemy player refuses the cast. enemy: the selected hostile NPC. dead_friendly: a dead friendly player in range.",
@@ -20,6 +20,27 @@
     "18200000": { "name": "Defiance", "target": "self", "effects": [ { "type": "buff", "duration_ms": 10000, "stats": { "Defense": 200 } } ] },
     "17080000": { "name": "Debilitating Mark", "target": "enemy", "effects": [ { "type": "debuff", "duration_ms": 10000, "damage_taken": 1500 } ] },
     "17070000": { "name": "Chain of Torment", "target": "enemy", "effects": [ { "type": "dot", "duration_ms": 8000, "interval_ms": 2000, "flat": [20, 20], "ratio": [3000, 3000] } ] },
-    "15280000": { "name": "Bittercold Wind", "target": "enemy", "effects": [ { "type": "debuff", "duration_ms": 6000, "speed": 5000 } ] }
+    "15280000": { "name": "Bittercold Wind", "target": "enemy", "effects": [ { "type": "debuff", "duration_ms": 3000, "speed": 1 } ] },
+    "11290000": { "name": "Mocking Blade", "target": "enemy", "effects": [ { "type": "stun", "duration_ms": 3000 } ] },
+    "11300000": { "name": "Aerial Snare", "target": "enemy", "effects": [ { "type": "stun", "duration_ms": 3000 } ] },
+    "11360000": { "name": "Rush Strike", "target": "enemy", "effects": [ { "type": "stun", "duration_ms": 3000 } ] },
+    "12100000": { "name": "Shield Smite", "target": "enemy", "effects": [ { "type": "stun", "duration_ms": 3000 }, { "type": "threat", "flat": [100, 100], "ratio": [10000, 10000] } ] },
+    "12430000": { "name": "Shield Rush", "target": "enemy", "effects": [ { "type": "stun", "duration_ms": 3000 } ] },
+    "12300000": { "name": "Annihilate", "target": "enemy", "effects": [ { "type": "stun", "duration_ms": 3000 } ] },
+    "12130000": { "name": "Poach", "target": "enemy", "effects": [ { "type": "taunt" } ] },
+    "12010000": { "name": "Vicious Strike", "target": "enemy", "effects": [ { "type": "threat", "flat": [30, 30], "ratio": [3000, 3000] } ] },
+    "12040000": { "name": "Pummel", "target": "enemy", "effects": [ { "type": "threat", "flat": [80, 80], "ratio": [8000, 8000] } ] },
+    "12240000": { "name": "Judgment", "target": "enemy", "effects": [ { "type": "threat", "flat": [100, 100], "ratio": [10000, 10000] } ] },
+    "13070000": { "name": "Shadowstrike", "target": "enemy", "effects": [ { "type": "stun", "duration_ms": 3000 } ] },
+    "13220000": { "name": "Shadow Fall", "target": "enemy", "effects": [ { "type": "stun", "duration_ms": 3000 } ] },
+    "14070000": { "name": "Suppressing Arrow", "target": "enemy", "effects": [ { "type": "stun", "duration_ms": 3000 } ] },
+    "14130000": { "name": "Snare Shot", "target": "enemy", "effects": [ { "type": "debuff", "duration_ms": 5000, "speed": 6000 } ] },
+    "15150000": { "name": "Frost", "target": "enemy", "effects": [ { "type": "stun", "duration_ms": 3000 } ] },
+    "15090000": { "name": "Ice Chain", "target": "enemy", "effects": [ { "type": "debuff", "duration_ms": 5000, "speed": 6000 } ] },
+    "15110000": { "name": "Winter's Shackles", "target": "enemy", "effects": [ { "type": "debuff", "duration_ms": 3000, "speed": 5000 } ] },
+    "16070000": { "name": "Soul's Cry", "target": "enemy", "effects": [ { "type": "stun", "duration_ms": 5000 } ] },
+    "16140000": { "name": "Jointstrike: Curse", "target": "enemy", "effects": [ { "type": "dot", "duration_ms": 5000, "interval_ms": 1000, "flat": [10, 10], "ratio": [2000, 2000] } ] },
+    "18060000": { "name": "Impactful Crush", "target": "enemy", "effects": [ { "type": "stun", "duration_ms": 3000 } ] },
+    "18080000": { "name": "Wave Blow", "target": "enemy", "effects": [ { "type": "stun", "duration_ms": 3000 } ] }
   }
 }

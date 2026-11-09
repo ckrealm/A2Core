@@ -31,3 +31,10 @@
 ## 2026-11-09 — progression merged; pushed to the fork
 - Skills unlock to level 100 (OURS spread of the client's dev-menu class kits over 26–100), +10% damage/heal per skill level, fallback damage rows for skills without data, MP max by level and class, combat power computed and sent in the existing appear-message field. 17 checks. See PROGRESSION.md.
 - `dev` pushed to `BrandonGWoW/A2Core` as branch `friends-server`.
+
+## 2026-11-09 — Class rotations for dungeon bots (branch `claude/project-thread-8plppl`)
+- **Hand-made rotations for all 8 classes** (`tools/bot_rotations.py` plans, from public Aion 2 skill pages and class guides): interrupts first, gap closers, combo chains (Mocking Blade → Overhead Slam, Shield Smite → Annihilate/Judgment, Impactful Crush → Dark Crush ...), big cooldowns on elites and bosses, area skills on packs of 2-3+, debuff/dot upkeep, MP-restoring fillers last. Skills past level 25 are now used too. Heal bots keep 40% MP for heals.
+- **New rotation conditions**: `target_casting`, `target_stunned`, `target_slowed`, `target_elite`, `target_boss`, `target_on_self`, `target_effect_missing`, `target_has`, `target_distance_above`, `enemies_at_least`, `after`, `self_mp_below`; entries can be area casts (`area: self|target`); classes have a `position` (melee damage dealers fight from the monster's back) and per-role ranges (the Cleric fights from 18 m, 15 m as a healer).
+- **Monster control on the server** (skill-effects.json, OURS amounts): stuns hold ordinary monsters and interrupt a special being wound up (then 3x-duration stun immunity); bosses are only interrupted, and every 3rd stun breaks their stagger (held 5 s). Templar Poach taunts; Templar attacks add extra threat. Snare Shot, Ice Chain and Winter's Shackles slow; Bittercold Wind now roots for 3 s.
+- Not done: proc skills (after a block, evasion, crit or Dodge), Elementalist spirits, kiting/dodging; our Defiance and Cleric/Chanter heals still differ from the official kits (docs/PLAYERBOTS.md "Not done yet").
+- Checks: 80 playerbot native checks (21 new, in-world), 14 rotation unit tests; all Python tests (525) pass.

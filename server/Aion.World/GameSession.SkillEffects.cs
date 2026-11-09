@@ -2,7 +2,8 @@ using Aion.Protocol.Native;
 
 namespace Aion.World;
 
-// Class skills beyond their Damage rows: heals, heals over time, buffs, NPC debuffs, damage over time and resurrection, from
+// Class skills beyond their Damage rows: heals, heals over time, buffs, NPC debuffs, damage over time, resurrection, and the NPC
+// control effects bots rely on (stun / interrupt, taunt, extra threat; docs/PLAYERBOTS.md), from
 // tools/data/skill-effects.json (OURS: class-skills.json carries no heal/abnormal rows yet; see the file's "regenerate"). A cast
 // goes through CastReplies like a damage skill (learned, weapon, MP, cooldown), refused when its target is wrong (a heal at a
 // monster or an enemy player, a dead or distant ally).
@@ -121,6 +122,32 @@ public sealed partial class GameSession
                     if (e.DamageTaken > 0) (npc.DamageTakenBonus, npc.DamageTakenUntil) = (e.DamageTaken, now + e.DurationMs);
                     if (e.Speed > 0) (npc.SlowRatio, npc.SlowUntil) = (e.Speed, now + e.DurationMs);
                     break;
+                case "stun":
+                    // Always interrupts a special being wound up; holds the monster unless it is a boss or shook off a stun lately.
+                    ai.Interrupt(npc, now);
+                    if (npc.Boss)
+                    {
+                        // A boss is not held by one stun: every BossStaggerStuns stuns break its stagger gauge and it reels for StaggerMs.
+                        if (npc.Stunned(now) || ++npc.StaggerStuns < BossStaggerStuns) break;
+                        npc.StaggerStuns = 0;
+                        npc.StunnedUntil = now + StaggerMs;
+                    }
+                    else if (e.DurationMs > 0 && now >= npc.StunImmuneUntil)
+                    {
+                        npc.StunnedUntil = now + e.DurationMs;
+                        npc.StunImmuneUntil = now + e.DurationMs * StunImmunityFactor;
+                    }
+                    break;
+                case "interrupt":
+                    ai.Interrupt(npc, now);
+                    break;
+                case "taunt":
+                    replies.AddRange(ai.Taunt(targets, npc, now, playerKey));
+                    break;
+                case "threat":
+                    // Extra hate on top of the hit's own (an enmity-raising attack): flat + power x ratio / 10000, a tank bot's multiplier on top.
+                    replies.AddRange(ai.Engage(targets, npc, now, playerKey, Threat(Math.Max(1, RollRange(e.Flat, rng) + (int)((long)SkillPower() * RollRange(e.Ratio, rng) / 10_000)))));
+                    break;
                 case "dot" when e.IntervalMs > 0:
                     dots.RemoveAll(d => d.Target == npc && d.Skill == skill);   // a recast renews it
                     var raw = (RollRange(e.Flat, rng) + (double)SkillPower() * RollRange(e.Ratio, rng) / 10_000) * data.Progression.SkillLevelScale(SkillLevel(skill));
@@ -135,6 +162,11 @@ public sealed partial class GameSession
         if (data.Skill(skill)?.Damage is not { Length: > 0 }) replies.AddRange(ai.Engage(targets, npc, now, playerKey, Threat(1)));
         return replies;
     }
+
+    /// <summary>A monster is immune to new stuns for this many times a stun's duration from its start (OURS diminishing return).</summary>
+    public const int StunImmunityFactor = 3;
+    /// <summary>A boss's stagger (OURS stand-in for the official stagger gauge): this many stuns, then held for StaggerMs.</summary>
+    public const int BossStaggerStuns = 3, StaggerMs = 5000;
 
     /// <summary>A heal lands on this player: HP up to its maximum, the bars (0x8d00) as a potion sends them.</summary>
     List<byte[]> ReceiveHeal(int amount)
