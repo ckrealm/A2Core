@@ -249,6 +249,15 @@ var lakeBoss = Combat.MapTargets(data, 210016).Values.Single(t => t.NpcId == 270
 Check(lakeBoss.HpMax == 3000 && Combat.MapTargets(data, 210016).Values.First(t => t.NpcId == 2701033).HpMax == 50
       && Combat.HpUnit("NormalMonster", 2) == 75 && Combat.HpForLevel(6) == 532,
       "NPC HP as recorded 2026-10-19: the lake cave boss (hero, grade 5, level 5) 3000, its grade-1 level-1 helper 50, grade 2 at 75 per level unit");
+// From 31 to 44 the HP curve (and the NPC hits it drives) follows the observed 16-30 growth, not a straight line to the level-45
+// endgame point: level 40 ~17.1k (was ~50.5k), so a level-40 monster still needs ~15 hits to kill a level-40 player in level-40
+// gear, as at 30 (it was ~5). The observed points (30, 45) are unchanged.
+{
+    var climbs = Enumerable.Range(16, 30).Select(Combat.HpForLevel).ToList();
+    Check(Combat.HpForLevel(30) == 9975 && Combat.HpForLevel(45) == 70756 && Combat.HpForLevel(40) is > 16_500 and < 18_000
+          && Combat.HpForLevel(44) < 21_000 && climbs.Zip(climbs.Skip(1)).All(p => p.Second > p.First),
+          "monster HP from 31 to 44 follows the observed growth (40 ~17.1k, not ~50.5k) and rises every level to the level-45 point");
+}
 var game = new GameSession(data, new GameSessionOptions { TrainingDummy = true }, new Random(7));   // the combat checks still hit the dummy
 var reply = (await game.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now)).Single();
 Check(reply[0] == 0xff && reply[1] == 0xff, "game login answers with the compressed 0x3615");

@@ -16,6 +16,10 @@ class WorldNpcTests(unittest.TestCase):
             self.assertEqual(world_npcs.hp_for_level(level), hp)
         self.assertEqual(world_npcs.hp_for_level(6), 532)    # between 5 (399) and 7 (665)
         self.assertGreater(world_npcs.hp_for_level(40), world_npcs.hp_for_level(30))
+        # 31-44 follow the observed 16-30 growth (power law), not a line to the level-45 endgame point.
+        self.assertTrue(16_500 < world_npcs.hp_for_level(40) < 18_000)
+        levels = [world_npcs.hp_for_level(level) for level in range(16, 46)]
+        self.assertEqual(levels, sorted(set(levels)))
         boss = next(t for t in world_npcs.map_targets(210016, combat.Target).values() if t.npc_id == 2701034)
         self.assertEqual(boss.hp_max, 3000)   # the Grade 5 hero monster: 1000 HP per level unit (recorded 2026-10-19)
         self.assertEqual(world_npcs.hp_for(6, 'EliteMonster', 1), 3200)
