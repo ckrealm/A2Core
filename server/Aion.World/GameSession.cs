@@ -2241,13 +2241,18 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
     {
         dead = true;
         diving = false;
-        if (copy is { } dungeonCopy) dungeonCopy.Deaths++;
+        List<byte[]> limitNote = [];
+        if (copy is { } dungeonCopy)
+        {
+            dungeonCopy.Deaths++;
+            limitNote = HardModeDeath(dungeonCopy);
+        }
         reviveAt = now + ReviveDelayMs;
         diedAt = position;
         inCombat = false;
         var kill = GamePackets.Kill(playerKey, 0, killerKey, ServerId, "", dieType: 2);
         worldPlayer?.Map?.Broadcast(worldPlayer, [kill]);
-        return [.. ForceDismount(), .. ClearBuffs(), kill, GamePackets.CombatState(playerKey, false)];
+        return [.. ForceDismount(), .. ClearBuffs(), kill, GamePackets.CombatState(playerKey, false), .. limitNote];
     }
 
     /// <summary>
@@ -2286,6 +2291,8 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         dead = false;
         if (resources is null) return [];
         (resources.Hp, resources.Mp) = (resources.HpMax, resources.MpMax);
+        // A hard mode's revives used up: back outside instead (Aion:Dungeons:HardModeRevives).
+        if (OutOfRevives()) return [resources.Update(), .. LeaveInstance(now)];
         if (inPlace && diedAt is { } fell) return [resources.Update(), .. Teleport(worldMap, fell, now)];
         // Inside a dungeon: the running stage's revival point, else the dungeon's start (the reload keeps the events).
         var raceWord = profileRace == 2 ? "Dark" : "Light";

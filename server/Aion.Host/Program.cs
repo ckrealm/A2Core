@@ -86,7 +86,8 @@ if (native.MaxPlayers is < 0) throw new InvalidOperationException("Aion:Native:M
 var rates = (builder.Configuration.GetSection("Aion:Rates").Get<Aion.World.RatesOptions>() ?? new Aion.World.RatesOptions()).Resolve();
 var rules = (builder.Configuration.GetSection("Aion:Rules").Get<Aion.World.WorldRules>() ?? Aion.World.WorldRules.Default).Validated();
 // Aion:Dungeons (OURS): EntryLimits (default off), DailyEntries, Entries:<dungeon id or name> overrides, ResetHour (server
-// local time), UntrackedObjectiveSeconds (the map-event objectives the server cannot follow).
+// local time), UntrackedObjectiveSeconds (the map-event objectives the server cannot follow), LevelGates global|client,
+// GlobalLevel, GlobalDailyLevel, KoreaOnly, KoreaOnlyLevel, Command (/dungeon), HardModeRevives.
 var dungeonRules = (builder.Configuration.GetSection("Aion:Dungeons").Get<Aion.World.DungeonOptions>() ?? Aion.World.DungeonOptions.Default)
     .Validated(Aion.World.DungeonOptions.KnownDungeon);
 builder.Services.AddSingleton(rates);

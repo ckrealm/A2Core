@@ -39,3 +39,10 @@
 - Config `Aion:Market:*` (all on by default), migration `040_market.sql`, `docs/MARKET.md`. 78 checks (`tests/Aion.Market.Checks`, `tools/check_market.py`).
 - Not yet: the client's own Trade Post window (its browse protocol is not captured).
 - **Reference prices** (`Aion:Market:PriceFile`, CSV or JSON): the bots follow a price table (e.g. official NA East Siel prices) instead of vendor values; the buyer pays at most 80% of the reference, so overpriced listings stay unsold. No licensed live feed exists, so the table is filled by hand (`deploy/market-prices.example.csv`).
+
+## 2026-11-09 — dungeons opened to match global
+- **Entry levels** (`Aion:Dungeons:LevelGates` = global (default) | client): the client's placeholder level 99 on every Expedition hard mode, the Transcendence entries, Ascension Trial Insane/Hell/Doom and two daily dungeons becomes global's entry level (`GlobalLevel` 45, daily dungeons `GlobalDailyLevel` 30). Item levels and quest steps unchanged.
+- **Korea-only content** (`Aion:Dungeons:KoreaOnly`, default off): Dramata's Nest, Cradle of Nihility, Hall of Illusion, Azure Breath Isle, Fallen Daeva Citadel, Sunken Temple, Mirror Heart, Fafnite Gully and the raids Corroded Decontamination Facility and Chalice of Muspel are closed, as on global. On, they open at `KoreaOnlyLevel` (45).
+- **`/dungeon`** player command: lists the dungeons with difficulties and entry levels; `/dungeon <name> [difficulty]` enters (party shares the copy). Portals still pick Easy (the client's expedition window is unrecorded), so this is how players reach Normal, Hard, Transcendence stages, trial tiers and Ludra. `Aion:Dungeons:Command` turns it off.
+- **Hard-mode revives** (`Aion:Dungeons:HardModeRevives`, default 3 as on global): a notice shows revives left; after the last one the revive puts the player outside.
+- Not done: the 4-minute boss frenzy (dungeon objectives thread), Ariel Fragments (no such item in client 2.0.6.0), `Dungeon_Daily_0001` (its only event waits for a Prepare phase the dungeon never has, so it can't start).

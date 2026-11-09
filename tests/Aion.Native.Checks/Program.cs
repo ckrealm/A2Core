@@ -2395,7 +2395,15 @@ presence.Enter("Player1", game, null);
 presence.Enter("Visitor", stored, null);
 Check((await gm.HandleAsync(chatter, "player1", "//help", default)).StartsWith("Builder commands"), "configured development GM");
 Check((await gm.HandleAsync(chatter, "[GM] Player1", "//help", default)).StartsWith("Builder commands"), "chat under the displayed name finds the character");
-Check(await gm.HandleAsync(chatter, "Visitor", "//help", default) == "Commands: //report <text> sends a report to the staff.", "players get the report command as help");
+Check(await gm.HandleAsync(chatter, "Visitor", "//help", default) == "Commands: //report <text> sends a report to the staff. " + GameSession.DungeonHelp, "players get the report and dungeon commands as help");
+async Task<string> ChatOnLoop(GameSession loop, string name, string line)
+{
+    var pending = gm.HandleAsync(chatter, name, line, default);
+    for (var i = 0; i < 50 && !pending.IsCompleted; i++) { await Task.Delay(10); await loop.TickAsync(Now); }
+    return await pending;
+}
+Check((await ChatOnLoop(stored, "Visitor", "/dungeon")).StartsWith("Dungeons (/dungeon") && await ChatOnLoop(stored, "Visitor", "//dungeon help") == GameSession.DungeonHelp,
+      "/dungeon (and //dungeon) reach the player's dungeon command on its game loop");
 Check(await gm.HandleAsync(chatter, "Visitor", "//report the bridge is broken", default) == "Reports are not available on this server.", "no reports without staff tools");
 var reports = new List<string>();
 var reporting = new GmCommands(presence, builder) { Report = (_, name, text, _) => { reports.Add(name + ":" + text); return Task.FromResult("sent"); } };
@@ -3027,6 +3035,88 @@ checks = 0;
     Check(await Run(follower, 600002, noon + 50) && follower.DungeonEntriesToday(noon + 60)[600002] == 1, "back into the same copy: free, not counted again");
     leader.ExitSharedWorld(); follower.ExitSharedWorld();
 
+    // Entry levels (Aion:Dungeons:LevelGates, KoreaOnly): the client's placeholder 99 becomes global's level, Korea-only content is closed.
+    {
+        var tables = MapEventTables.Embedded;
+        var kraoHard = tables.Dungeon(600004)!; var daily = tables.Dungeon(900003)!; var fafnite = tables.Dungeon(610070)!; var arkanis = tables.Dungeon(600061)!;
+        var rules = DungeonOptions.Default;
+        Check(rules.MinLevelOf(kraoHard) == 45 && rules.MinLevelOf(arkanis) == 45 && rules.MinLevelOf(daily) == 30 && rules.MinLevelOf(kraoEasy) == 20
+              && rules.MinLevelOf(tables.Dungeon(910015)!) == 45 && rules.MinLevelOf(tables.Dungeon(600082)!) == 45,
+              "global gates: hard modes, Transcendence, Insane trials and Ludra at 45, daily dungeons at 30, real client levels kept");
+        Check((rules with { LevelGates = "client" }).MinLevelOf(kraoHard) == 99, "LevelGates=client keeps the client's 99");
+        Check(!rules.IsOpen(fafnite) && !rules.IsOpen(tables.Dungeon(620021)!) && rules.IsOpen(kraoHard) && DungeonOptions.IsKoreaOnly(tables.Dungeon(600151)!)
+              && (rules with { KoreaOnly = true }).IsOpen(fafnite) && (rules with { KoreaOnly = true, KoreaOnlyLevel = 50 }).MinLevelOf(fafnite) == 50,
+              "Korea-only dungeons and raids are closed by default; KoreaOnly opens them at KoreaOnlyLevel");
+        Check(DungeonOptions.IsHardMode(kraoHard) && DungeonOptions.IsHardMode(tables.Dungeon(610044)!) && !DungeonOptions.IsHardMode(kraoEasy) && !DungeonOptions.IsHardMode(arkanis),
+              "the hard modes are the Party rows named *_Hard");
+        Check(DungeonChoices.All.All(c => c.Modes.All(m => tables.Dungeon(m.Id) is not null)) && DungeonChoices.All.Count(c => c.Kind == "Expedition" && c.Modes.Any(m => rules.IsOpen(tables.Dungeon(m.Id)!))) == 6
+              && DungeonChoices.All.SelectMany(c => c.Modes).Select(m => m.Id).Distinct().Count() == DungeonChoices.All.Sum(c => c.Modes.Count),
+              "every /dungeon choice is a known dungeon, once; six Expeditions are open as on global");
+        foreach (var bad in new[] { rules with { LevelGates = "korea" }, rules with { GlobalLevel = 0 }, rules with { KoreaOnlyLevel = 100 }, rules with { HardModeRevives = -1 } })
+        {
+            var gateRefused = false;
+            try { bad.Validated(DungeonOptions.KnownDungeon); } catch (InvalidOperationException) { gateRefused = true; }
+            Check(gateRefused, "an invalid entry-level setting stops the host");
+        }
+        async Task<GameSession> AtLevel(DungeonOptions dungeons, string name, int lvl) =>
+            await Adventurer(dungeons, name, new FakeStore(), s => s.States[0] = s.States[0] with { Progress = s.States[0].Progress with { Level = lvl } });
+        var low = await AtLevel(rules, "Lowbie", 29);
+        Check(low.EnterDungeonById(900003, noon).Count == 0 && low.MapEventNotes.Any(n => n.Contains("Dungeon_Daily_0002: entry refused (level 29 < 30)")), "a level 29 is refused from a daily dungeon (30)");
+        var thirty = await AtLevel(rules, "Thirty", 30);
+        Check(await Run(thirty, 900003, noon), "level 30 enters the daily dungeon the client marks 99");
+        var korea = await AtLevel(rules, "Capped45", 45);
+        Check(korea.EnterDungeonById(610070, noon).Count == 0 && korea.MapEventNotes.Any(n => n.Contains("FafniteGully_G_01: entry refused (Korea-only")), "Korea-only content refused by default");
+        var koreaOpen = await AtLevel(rules with { KoreaOnly = true }, "Korean", 45);
+        Check(await Run(koreaOpen, 610070, noon), "KoreaOnly=true: enterReply at 45");
+        var clientGates = await AtLevel(rules with { LevelGates = "client" }, "Strict", 45);
+        Check(clientGates.EnterDungeonById(900003, noon).Count == 0, "LevelGates=client: still 99");
+
+        // /dungeon: the list, an entry at a difficulty, the refusals with reasons.
+        var dungeonList = thirty.DungeonCommand("", noon + 100).Reply;
+        Check(dungeonList.Contains("krao (easy/normal/hard") && dungeonList.Contains("ludra") && dungeonList.Contains("trial6") && !dungeonList.Contains("dramata") && dungeonList.Contains("Korea-only dungeons are closed"),
+              "/dungeon lists global's dungeons with their difficulties, not the Korea-only ones");
+        Check(thirty.DungeonCommand("dramata hard", noon + 200).Reply.Contains("Korea-only") && thirty.DungeonCommand("krao hard", noon + 300).Reply.Contains("level 30 < 45")
+              && thirty.DungeonCommand("krao insane", noon + 400).Reply == "Krao Cave has easy, normal, hard." && thirty.DungeonCommand("nowhere", noon + 500).Reply.StartsWith("No dungeon called nowhere"),
+              "/dungeon refuses with the reason: Korea-only, level, unknown difficulty or name");
+        Check(thirty.DungeonCommand("krao easy", noon + 550).Reply == "Krao Cave (easy): item level 0 < 200.", "the item level gate stays the client's");
+        var (enterReply, enterPackets) = thirty.DungeonCommand("daily3", noon + 600);
+        Check(enterReply == "Entering Daily dungeon 3 (normal)." && enterPackets.Count > 0 && thirty.InstanceKey != 0
+              && thirty.DungeonCommand("daily1", noon + 700).Reply == "Leave this dungeon first.", "/dungeon daily3 moves the player; inside, another /dungeon waits");
+    }
+
+    // Hard-mode revives (Aion:Dungeons:HardModeRevives, global 3): the fourth dying's revive puts the player outside.
+    {
+        var diver = await Adventurer(DungeonOptions.Default with { Zone = TimeZoneInfo.Utc }, "Diver");
+        diver.EnterDungeonById(600004, noon);
+        await diver.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), noon + 10);
+        var insideHard = diver.InstanceKey != 0;
+        var stillInside = true;
+        for (var dying = 1; dying <= 3; dying++)
+        {
+            var died = diver.NpcHitsPlayer(diver.Resource.HpMax * 10, noon + dying * 10_000, killerKey: 2001);
+            await diver.HandleAsync(new PacketWriter().U16(0x8d22).U8(2).I64(0).ToArray(), noon + dying * 10_000 + 100);
+            await diver.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), noon + dying * 10_000 + 200);
+            stillInside &= died.Count > 0 && diver.InstanceKey != 0 && !diver.Dead;
+        }
+        var lastDeath = diver.NpcHitsPlayer(diver.Resource.HpMax * 10, noon + 50_000, killerKey: 2001);
+        Check(insideHard && stillInside && lastDeath.Any(b => b.SequenceEqual(GameSession.Notice("No revives left: you will leave the dungeon when you revive.", color: "FF6060"))),
+              "three deaths in a hard mode revive inside; the fourth warns that no revives are left");
+        await diver.HandleAsync(new PacketWriter().U16(0x8d22).U8(2).I64(0).ToArray(), noon + 50_100);
+        await diver.TickAsync(noon + 50_150);
+        await diver.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), noon + 50_200);
+        Check(!diver.Dead && diver.InstanceKey == 0, "the revive after the fourth dying is outside the dungeon");
+        var easyDiver = await Adventurer(DungeonOptions.Default with { Zone = TimeZoneInfo.Utc }, "EasyDiver");
+        easyDiver.EnterDungeonById(600002, noon);
+        await easyDiver.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), noon + 10);
+        for (var dying = 1; dying <= 5; dying++)
+        {
+            easyDiver.NpcHitsPlayer(easyDiver.Resource.HpMax * 10, noon + dying * 10_000, killerKey: 2001);
+            await easyDiver.HandleAsync(new PacketWriter().U16(0x8d22).U8(2).I64(0).ToArray(), noon + dying * 10_000 + 100);
+            await easyDiver.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), noon + dying * 10_000 + 200);
+        }
+        Check(easyDiver.InstanceKey != 0 && !easyDiver.Dead, "no revive limit outside the hard modes");
+    }
+
     // Boss area attacks (tools/data/boss-area-skills.json, OURS): the expeditions' final bosses; their basic attack stays single-target.
     var areas = BossAreaSkills.Embedded;
     var finalBossSkills = data.NpcFromTemplate(2320171, "boss", [0, 0, 0], 0)!.Skills!.Where(id => data.NpcSkill(id) is not null).ToList();
@@ -3061,7 +3151,7 @@ checks = 0;
     var (capHits, _) = Fight(new BossAreaSkills(new Dictionary<int, BossAreaSkill> { [999] = new(5000, 2, [1220560]) }), 999);
     Check(capHits.Select(h => h.Key).OrderBy(k => k).SequenceEqual([100_001, 100_002]), "max_targets caps the players one hit reaches (2: the victim and the nearest)");
 }
-Console.WriteLine($"{checks} dungeon checks passed (entry limits, untracked objectives, boss area attacks).");
+Console.WriteLine($"{checks} dungeon checks passed (entry limits, entry levels, /dungeon, hard-mode revives, untracked objectives, boss area attacks).");
 
 // ---------- Playerbots (docs/PLAYERBOTS.md): sessions without a connection, driven by BotBrain ----------
 checks = 0;
