@@ -13,7 +13,29 @@ LINUX = ROOT / 'deploy/linux'
 WINDOWS = ROOT / 'deploy/windows'
 NEW_SCRIPTS = [LINUX / 'backup.sh', LINUX / 'restore.sh', WINDOWS / 'wsl-install.sh']
 SHELL_SCRIPTS = NEW_SCRIPTS + [LINUX / 'install.sh', LINUX / 'update.sh']
+POWERSHELL_SCRIPTS = [WINDOWS / 'setup-wsl.ps1', WINDOWS / 'renew-cert.ps1', WINDOWS / 'wsl-portproxy.ps1']
 POSIX = os.name != 'nt' and shutil.which('bash') is not None
+PWSH = shutil.which('pwsh') or shutil.which('powershell')
+
+
+def run_pwsh(script, *args):
+    """Runs PowerShell code from a temporary .ps1 file (so no quoting through -Command)."""
+    with tempfile.TemporaryDirectory() as temp:
+        path = Path(temp) / 'test.ps1'
+        path.write_text(script, encoding='utf-8')
+        return subprocess.run([PWSH, '-NoProfile', '-NonInteractive', '-File', str(path), *map(str, args)],
+                              capture_output=True, text=True)
+
+
+# Loads the named functions of a script (by its syntax tree, so nothing else in it runs).
+LOAD_FUNCTIONS = '''
+param([string]$Script, [string]$Names)
+$ast = [System.Management.Automation.Language.Parser]::ParseFile($Script, [ref]$null, [ref]$null)
+$wanted = $Names -split ','
+foreach ($f in $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $wanted -contains $n.Name }, $false)) {
+    . ([scriptblock]::Create($f.Extent.Text.Replace('function ' + $f.Name, 'function global:' + $f.Name)))
+}
+'''
 
 # Stands in for tools/postgres_dev.py: `backup` writes a file, `verify-backup` succeeds unless STUB_VERIFY_FAIL is set.
 STUB = textwrap.dedent('''\
@@ -39,8 +61,8 @@ STUB = textwrap.dedent('''\
 
 class FilesTests(unittest.TestCase):
     def test_files_exist(self):
-        for path in NEW_SCRIPTS + [WINDOWS / 'README.md', WINDOWS / 'setup-wsl.ps1', WINDOWS / 'renew-cert.ps1',
-                                   LINUX / 'aion-backup.service', LINUX / 'aion-backup.timer']:
+        for path in NEW_SCRIPTS + POWERSHELL_SCRIPTS + [WINDOWS / 'README.md', LINUX / 'aion-backup.service',
+                                                         LINUX / 'aion-backup.timer']:
             self.assertTrue(path.is_file(), path)
 
     @unittest.skipUnless(POSIX, 'needs bash')
@@ -55,14 +77,27 @@ class FilesTests(unittest.TestCase):
         result = subprocess.run(['shellcheck', '--severity=info', *map(str, NEW_SCRIPTS)], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stdout)
 
-    @unittest.skipUnless(shutil.which('pwsh') or shutil.which('powershell'), 'needs PowerShell')
+    @unittest.skipUnless(PWSH, 'needs PowerShell')
     def test_powershell_parses(self):
-        shell = shutil.which('pwsh') or shutil.which('powershell')
-        for path in (WINDOWS / 'setup-wsl.ps1', WINDOWS / 'renew-cert.ps1'):
+        for path in POWERSHELL_SCRIPTS:
             command = ("$e = $null; [System.Management.Automation.Language.Parser]::ParseFile("
                        f"'{path}', [ref]$null, [ref]$e) | Out-Null; if ($e) {{ $e | ForEach-Object {{ $_.ToString() }}; exit 1 }}")
-            result = subprocess.run([shell, '-NoProfile', '-Command', command], capture_output=True, text=True)
+            result = subprocess.run([PWSH, '-NoProfile', '-Command', command], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, f'{path.name}: {result.stdout}{result.stderr}')
+
+    def test_portproxy_script_covers_the_server_ports(self):
+        portproxy = (WINDOWS / 'wsl-portproxy.ps1').read_text(encoding='utf-8')
+        setup = (WINDOWS / 'setup-wsl.ps1').read_text(encoding='utf-8')
+        ports = '$Ports = @("443", "3700", "8087", "8091", "8780", "13328")'
+        self.assertIn(ports, portproxy)
+        self.assertIn(ports, setup)
+        # The same firewall rule name and range as setup-wsl.ps1 -ConfigureFirewall.
+        for text in ('"A2Core-Tailscale-TCP"', '$TailnetRange = "100.64.0.0/10"'):
+            self.assertIn(text, portproxy)
+            self.assertIn(text, setup)
+        self.assertIn('SupportsShouldProcess = $true', portproxy)
+        self.assertIn('[ValidateSet("Auto", "Mirrored", "Nat")]', setup)
+
 
     def test_units_match_install(self):
         install = (LINUX / 'install.sh').read_text(encoding='utf-8')
@@ -73,6 +108,51 @@ class FilesTests(unittest.TestCase):
         self.assertIn('Persistent=true', (LINUX / 'aion-backup.timer').read_text(encoding='utf-8'))
         # update.sh prunes only its own backups, not the nightly ones.
         self.assertIn('before-update-*.dump | tail -n +11', (LINUX / 'update.sh').read_text(encoding='utf-8'))
+
+
+@unittest.skipUnless(PWSH, 'needs PowerShell')
+class PowerShellFunctionTests(unittest.TestCase):
+    def test_wslconfig_nat_removes_only_the_mirrored_keys(self):
+        script = LOAD_FUNCTIONS + '''
+function Lines([string[]]$items) { $l = New-Object System.Collections.Generic.List[string]; foreach ($i in $items) { $l.Add($i) }; return ,$l }
+$original = @('[wsl2]', 'memory=12GB', 'swap=4GB')
+$l = Lines $original
+Set-IniValue $l "wsl2" "networkingMode" "mirrored" | Out-Null
+Set-IniValue $l "experimental" "hostAddressLoopback" "true" | Out-Null
+if (-not ($l -contains 'networkingMode=mirrored')) { throw "mirrored not set: $($l -join '|')" }
+if (-not (Remove-IniValue $l "wsl2" "networkingMode")) { throw "networkingMode not removed" }
+if (-not (Remove-IniValue $l "experimental" "hostAddressLoopback")) { throw "hostAddressLoopback not removed" }
+if (($l -join '|') -ne ($original -join '|')) { throw "after NAT: $($l -join '|')" }
+if (Remove-IniValue $l "wsl2" "networkingMode") { throw "second removal changed something" }
+$m = Lines @('[experimental]', 'hostAddressLoopback=true', 'sparseVhd=true', '', '[wsl2]', 'networkingMode=mirrored', 'memory=6GB')
+Remove-IniValue $m "wsl2" "networkingMode" | Out-Null
+Remove-IniValue $m "experimental" "hostAddressLoopback" | Out-Null
+if (($m -join '|') -ne '[experimental]|sparseVhd=true||[wsl2]|memory=6GB') { throw "other keys: $($m -join '|')" }
+'ok'
+'''
+        result = run_pwsh(script, WINDOWS / 'setup-wsl.ps1', 'Note,Set-IniValue,Remove-IniValue')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('ok', result.stdout)
+
+    def test_portproxy_rows_and_managed_entries(self):
+        script = LOAD_FUNCTIONS + '''
+$global:Ports = @("443", "3700", "8087", "8091", "8780", "13328")
+function global:Invoke-Native { [pscustomobject]@{ Code = 0; Output = @(
+    '', 'Listen on ipv4:             Connect to ipv4:', '', 'Address         Port        Address         Port',
+    '--------------- ----------  --------------- ----------',
+    '0.0.0.0         443         172.20.1.2      443', '100.101.1.2     8780        172.20.1.2      8780',
+    '192.168.1.5     3700        10.0.0.1        3700', '0.0.0.0         9000        172.20.1.2      9000') } }
+$rows = @(Get-PortProxies)
+if ($rows.Count -ne 4) { throw "rows: $($rows.Count)" }
+$managed = @($rows | Where-Object { Test-Managed $_ "100.101.1.2" } | ForEach-Object { "$($_.ListenAddress):$($_.ListenPort)" })
+if (($managed -join ',') -ne '0.0.0.0:443,100.101.1.2:8780') { throw "managed: $($managed -join ',')" }
+if (-not (Test-Ipv4 '172.20.1.2') -or (Test-Ipv4 'fe80::1') -or (Test-Ipv4 '1.2.3')) { throw 'Test-Ipv4' }
+if (-not (Test-Tailnet '100.64.0.1') -or (Test-Tailnet '100.128.0.1') -or (Test-Tailnet '10.0.0.1')) { throw 'Test-Tailnet' }
+'ok'
+'''
+        result = run_pwsh(script, WINDOWS / 'wsl-portproxy.ps1', 'Get-PortProxies,Test-Managed,Test-Ipv4,Test-Tailnet')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('ok', result.stdout)
 
 
 @unittest.skipUnless(POSIX and shutil.which('flock'), 'needs bash and flock (Linux)')
@@ -169,6 +249,15 @@ class WslInstallTests(unittest.TestCase):
             self.assertEqual(sorted(lines[3:]), ['Aion__Native__MaxPlayers=10', 'Aion__Rates__Profile=accelerated',
                                                  'Aion__Rules__Pvp=false'])
             self.assertEqual((config / 'game.env').stat().st_mode & 0o777, 0o640)
+
+    def test_public_address_option(self):
+        with tempfile.TemporaryDirectory() as temp:
+            result = self.run_install(Path(temp), '--public-address', '100.64.0.1', '--rates-only', '--pvp', 'on')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('Aion__Rules__Pvp=true', (Path(temp) / 'game.env').read_text(encoding='utf-8'))
+        help_text = self.run_install(Path(temp), '--help').stdout
+        self.assertIn('--public-address', help_text)
+        self.assertIn('NAT networking', help_text)
 
     def test_rejects_bad_values(self):
         with tempfile.TemporaryDirectory() as temp:

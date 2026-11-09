@@ -9,16 +9,20 @@
 # It installs the packages (dotnet-sdk-10.0, postgresql, python3, openssl from the Ubuntu archive; Node.js 22 from
 # NodeSource when the system's is older than the web build needs), writes the rates and rules you give into
 # /etc/aion/game.env (other lines there are kept), then runs deploy/linux/install.sh with --public-address set to the
-# Tailscale IPv4 address (100.64.0.0/10, found on the mirrored interfaces, or --tailscale-ip) and the certificate files
-# (made on Windows by deploy/windows/renew-cert.ps1, `tailscale cert`), or --self-signed. See deploy/windows/README.md.
+# Windows PC's Tailscale IPv4 address (100.64.0.0/10) and the certificate files (made on Windows by
+# deploy/windows/renew-cert.ps1, `tailscale cert`), or --self-signed. Mirrored networking: the address is found on the
+# mirrored interfaces. NAT networking: Tailscale's interface is not visible here, so give --public-address (on Windows:
+# tailscale ip -4); deploy/windows/wsl-portproxy.ps1 forwards that address's ports to WSL. See deploy/windows/README.md.
 set -euo pipefail
 
 CONFIG="${AION_CONFIG_DIR:-/etc/aion}"
 TS_IP="" DATA="" CERT="" KEY="" SELF_SIGNED=0 RATES_ONLY=0 SKIP_PACKAGES=0
 declare -A GAME=()
-usage() { sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; cat <<'EOF'
+usage() { sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; cat <<'EOF'
 Options:
-  --tailscale-ip 100.x.y.z     the address friends use (default: the 100.64.0.0/10 address on this machine)
+  --public-address 100.x.y.z   the Windows PC's Tailscale IPv4 address, which players connect to (Windows: tailscale ip -4);
+                               required with NAT networking; mirrored: default the 100.64.0.0/10 address seen here
+  --tailscale-ip 100.x.y.z     the same as --public-address (older name)
   --data FILE                  server data bundle (first install)
   --certificate FILE --key FILE   account-site certificate (tailscale cert); or --self-signed
   --rates-profile official|accelerated, --exp-rate N, --quest-exp-rate N, --kinah-rate N, --drop-rate N (0-100)
@@ -35,7 +39,7 @@ rate() {
 }
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --tailscale-ip) TS_IP="$2"; shift 2 ;;
+    --public-address|--tailscale-ip) TS_IP="$2"; shift 2 ;;
     --data) DATA="$2"; shift 2 ;;
     --certificate) CERT="$2"; shift 2 ;;
     --key) KEY="$2"; shift 2 ;;
@@ -104,16 +108,20 @@ REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 grep -qi microsoft /proc/version 2>/dev/null || echo "Note: this does not look like WSL; deploy/linux/install.sh is the plain Linux installer." >&2
 case "$REPO" in /mnt/*) echo "Clone the repository into the WSL file system (e.g. ~/a2core), not $REPO: builds on /mnt are slow and file modes break." >&2; exit 1 ;; esac
 [[ "$(ps -p 1 -o comm= 2>/dev/null)" == systemd ]] || { echo "systemd is not running: set [boot] systemd=true in /etc/wsl.conf (setup-wsl.ps1 does), then 'wsl --shutdown' on Windows." >&2; exit 1; }
-if command -v wslinfo &>/dev/null; then
-  MODE="$(wslinfo --networking-mode 2>/dev/null || true)"
-  [[ -z "$MODE" || "$MODE" == mirrored ]] || echo "Warning: WSL networking mode is '$MODE'; friends and the Windows client need networkingMode=mirrored (.wslconfig)." >&2
-fi
+MODE=""
+if command -v wslinfo &>/dev/null; then MODE="$(wslinfo --networking-mode 2>/dev/null || true)"; fi
+case "$MODE" in
+  ""|mirrored) ;;
+  nat) echo "WSL networking: NAT. Players reach the server through deploy/windows/wsl-portproxy.ps1 on Windows (run it as administrator after this)." ;;
+  *) echo "Warning: WSL networking mode is '$MODE'; this setup knows mirrored and nat (deploy/windows/README.md)." >&2 ;;
+esac
 
-# The Tailscale address: Tailscale runs on Windows, mirrored networking shows its interface here.
+# The Tailscale address: Tailscale runs on Windows; mirrored networking shows its interface here, NAT does not.
 in_tailnet() { [[ "$1" =~ ^100\.([0-9]+)\.[0-9]+\.[0-9]+$ ]] && ((BASH_REMATCH[1] >= 64 && BASH_REMATCH[1] <= 127)); }
 if [[ -z "$TS_IP" ]]; then
+  [[ "$MODE" != nat ]] || { echo "NAT networking: pass --public-address <the Windows PC's Tailscale IPv4> (Windows: tailscale ip -4)." >&2; exit 2; }
   mapfile -t FOUND < <(ip -4 -o addr show 2>/dev/null | awk '{ split($4, a, "/"); print a[1] }' | while read -r a; do in_tailnet "$a" && echo "$a"; done)
-  [[ ${#FOUND[@]} -eq 1 ]] || { echo "Found ${#FOUND[@]} Tailscale (100.64.0.0/10) addresses (${FOUND[*]:-none}): pass --tailscale-ip (Windows: tailscale ip -4)." >&2; exit 1; }
+  [[ ${#FOUND[@]} -eq 1 ]] || { echo "Found ${#FOUND[@]} Tailscale (100.64.0.0/10) addresses (${FOUND[*]:-none}): pass --public-address (Windows: tailscale ip -4)." >&2; exit 1; }
   TS_IP="${FOUND[0]}"
 fi
 in_tailnet "$TS_IP" || { echo "$TS_IP is not a Tailscale address (100.64.0.0/10)" >&2; exit 2; }
@@ -150,3 +158,4 @@ bash "$REPO/deploy/linux/install.sh" "${ARGS[@]}" --skip-packages
 # The aion group exists now (first install): game.env like aion.env, root:aion 640.
 [[ ! -f "$CONFIG/game.env" ]] || { chown root:aion "$CONFIG/game.env"; chmod 640 "$CONFIG/game.env"; }
 echo "Account site: https://<this PC's Tailscale name>:8780 (the name on the certificate); friends' launcher.json: serverAddress $TS_IP"
+[[ "$MODE" != nat ]] || echo "NAT networking: on Windows, as administrator: deploy\\windows\\wsl-portproxy.ps1 -Register"

@@ -6,17 +6,22 @@ Prepares Windows 11 to host the A2Core server in WSL2 Ubuntu 24.04 (deploy/windo
 Run in an elevated PowerShell (Run as administrator) as the Windows user who will own the server. Safe to run again:
 each step checks first and changes only what is missing. -WhatIf shows the changes without making them.
 
-1. Checks Windows 11 22H2 or later (mirrored networking needs build 22621+).
+1. Chooses the WSL networking mode (-Networking Mirrored|Nat; default: Nat when this PC's default route goes through
+   a Hyper-V virtual switch adapter "vEthernet (...)", which mirrored mode does not mirror, or the build is older
+   than 22621; Mirrored otherwise) and checks Windows 11 (mirrored networking needs build 22621+).
 2. Enables WSL (wsl --install --no-distribution) when it is missing; Windows then needs a restart, run this again.
 3. Installs the Ubuntu-24.04 distribution when it is missing (it asks for a Linux user name and password).
-4. Merges into %UserProfile%\.wslconfig: [wsl2] networkingMode=mirrored and [experimental] hostAddressLoopback=true
-   (the Windows game client reaches the server on this PC's Tailscale address). Other settings stay; the old file is
-   copied to .wslconfig.bak-<time> first.
+4. %UserProfile%\.wslconfig, other settings kept, the old file copied to .wslconfig.bak-<time> first:
+   Mirrored: merges [wsl2] networkingMode=mirrored and [experimental] hostAddressLoopback=true (the Windows game
+   client reaches the server on this PC's Tailscale address).
+   Nat: removes exactly those two keys (WSL's default NAT networking; deploy/windows/wsl-portproxy.ps1 then forwards
+   the server's ports from the Tailscale address to WSL).
 5. Enables systemd in Ubuntu-24.04's /etc/wsl.conf ([boot] systemd=true), with a backup of the old file.
+6. Warns when a Windows program already listens on one of the server's ports.
 Optional:
    -ConfigureFirewall     inbound rules for the server's TCP ports (443, 3700, 8087, 8091, 8780, 13328), only from
                           Tailscale addresses (100.64.0.0/10): a Windows Defender Firewall rule and a Hyper-V firewall
-                          rule for WSL.
+                          rule for WSL (mirrored only; in NAT mode the traffic reaches WSL from Windows itself).
    -RegisterStartupTask   a scheduled task that keeps Ubuntu-24.04 running (and so its systemd services) from logon;
                           with -AtStartup from boot, before anyone logs on (UNVERIFIED with WSL, see README).
 Other distributions are never touched. Nothing is deleted.
@@ -25,11 +30,14 @@ Other distributions are never touched. Nothing is deleted.
 deploy\windows\setup-wsl.ps1 -WhatIf
 deploy\windows\setup-wsl.ps1
 deploy\windows\setup-wsl.ps1 -ConfigureFirewall -RegisterStartupTask
+deploy\windows\setup-wsl.ps1 -Networking Nat -ConfigureFirewall -RegisterStartupTask
 #>
 #Requires -Version 5.1
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
     [string]$Distro = "Ubuntu-24.04",
+    [ValidateSet("Auto", "Mirrored", "Nat")]
+    [string]$Networking = "Auto",
     [switch]$ConfigureFirewall,
     [switch]$RegisterStartupTask,
     [switch]$AtStartup
@@ -64,6 +72,69 @@ function Invoke-InDistro([string]$Script) {
     $bytes = [Text.Encoding]::UTF8.GetBytes(($Script -replace "`r`n", "`n"))
     $encoded = [Convert]::ToBase64String($bytes)
     return Invoke-Native "wsl.exe" @("-d", $Distro, "-u", "root", "--exec", "/bin/bash", "-c", "echo $encoded | base64 -d | bash")
+}
+
+# The adapter of the IPv4 default route with the lowest metric (route metric + interface metric), or $null.
+function Get-DefaultRouteAdapter {
+    $best = $null; $bestMetric = [int]::MaxValue
+    foreach ($route in @(Get-NetRoute -AddressFamily IPv4 -DestinationPrefix "0.0.0.0/0" -ErrorAction SilentlyContinue)) {
+        $interface = Get-NetIPInterface -AddressFamily IPv4 -InterfaceIndex $route.InterfaceIndex -ErrorAction SilentlyContinue
+        if (-not $interface -or $interface.ConnectionState -ne "Connected") { continue }
+        $metric = [int]$route.RouteMetric + [int]$interface.InterfaceMetric
+        if ($metric -lt $bestMetric) { $bestMetric = $metric; $best = $route }
+    }
+    if (-not $best) { return $null }
+    return Get-NetAdapter -InterfaceIndex $best.InterfaceIndex -IncludeHidden -ErrorAction SilentlyContinue
+}
+
+# Programs listening on the server's ports that would clash: WSL's own localhost relay (wslrelay) and the portproxy
+# service (iphlpsvc, wsl-portproxy.ps1's listeners) are ours and skipped.
+function Get-PortConflicts([string[]]$PortList) {
+    $ours = @()
+    $iphlp = Get-CimInstance Win32_Service -Filter "Name='iphlpsvc'" -ErrorAction SilentlyContinue
+    if ($iphlp -and $iphlp.ProcessId) { $ours += [int]$iphlp.ProcessId }
+    $found = @()
+    foreach ($port in $PortList) {
+        foreach ($c in @(Get-NetTCPConnection -State Listen -LocalPort ([int]$port) -ErrorAction SilentlyContinue)) {
+            $process = Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue
+            $name = if ($process) { $process.ProcessName } else { "pid $($c.OwningProcess)" }
+            if ($name -eq "wslrelay" -or $ours -contains [int]$c.OwningProcess) { continue }
+            $found += [pscustomobject]@{ Port = $port; Address = $c.LocalAddress; Process = $name; Pid = $c.OwningProcess }
+        }
+    }
+    return $found
+}
+
+# Removes every Key= line in [Section]; drops the section header when nothing but blank lines is left in it.
+function Remove-IniValue {
+    param([System.Collections.Generic.List[string]]$Lines, [string]$Section, [string]$Key)
+    $header = -1
+    for ($i = 0; $i -lt $Lines.Count; $i++) {
+        if ($Lines[$i] -match ('^\s*\[\s*' + [regex]::Escape($Section) + '\s*\]\s*$')) { $header = $i; break }
+    }
+    if ($header -lt 0) { return $false }
+    $end = $Lines.Count
+    for ($i = $header + 1; $i -lt $Lines.Count; $i++) {
+        if ($Lines[$i] -match '^\s*\[') { $end = $i; break }
+    }
+    $removed = $false
+    for ($i = $end - 1; $i -gt $header; $i--) {
+        if ($Lines[$i] -match ('^\s*' + [regex]::Escape($Key) + '\s*=')) {
+            Note "removing $Section.$($Lines[$i].Trim())"
+            $Lines.RemoveAt($i); $end--; $removed = $true
+        }
+    }
+    if (-not $removed) { return $false }
+    $empty = $true
+    for ($i = $header + 1; $i -lt $end; $i++) { if ($Lines[$i].Trim() -ne "") { $empty = $false; break } }
+    if ($empty) {
+        Note "removing the now empty [$Section] section"
+        $wasLast = $end -eq $Lines.Count
+        for ($i = $end - 1; $i -ge $header; $i--) { $Lines.RemoveAt($i) }
+        # The blank separator line Set-IniValue put before a section it appended at the end.
+        while ($wasLast -and $Lines.Count -gt 0 -and $Lines[$Lines.Count - 1].Trim() -eq "") { $Lines.RemoveAt($Lines.Count - 1) }
+    }
+    return $true
 }
 
 # INI merge keeping every other line: returns $true when $Lines changed.
@@ -104,12 +175,32 @@ if (-not $isAdmin) {
     else { throw "Run this in an elevated PowerShell (Run as administrator)." }
 }
 
-Step "Windows version"
+Step "Windows version and networking mode"
 $os = Get-CimInstance Win32_OperatingSystem
 $build = [int]$os.BuildNumber
 Note "$($os.Caption), build $build"
-if ($build -lt 22000) { throw "Windows 11 is required (WSL mirrored networking); this is build $build." }
-if ($build -lt 22621) { throw "Windows 11 22H2 (build 22621) or later is required for networkingMode=mirrored; run Windows Update." }
+if ($build -lt 22000) { throw "Windows 11 is required; this is build $build." }
+$mode = $Networking
+if ($mode -eq "Auto") {
+    $adapter = Get-DefaultRouteAdapter
+    $isVSwitch = $adapter -and $adapter.Name -notlike "vEthernet (WSL*" -and
+        ($adapter.Name -like "vEthernet (*" -or $adapter.InterfaceDescription -like "Hyper-V Virtual Ethernet Adapter*")
+    if ($adapter) { Note "Default route: '$($adapter.Name)' ($($adapter.InterfaceDescription))" }
+    if ($isVSwitch) {
+        $mode = "Nat"
+        Note "Nat: this PC reaches the internet through a Hyper-V virtual switch ('$($adapter.Name)'). Mirrored networking"
+        Note "does not mirror vEthernet adapters, so WSL would have no internet. wsl-portproxy.ps1 forwards the ports instead."
+    } elseif ($build -lt 22621) {
+        $mode = "Nat"
+        Note "Nat: mirrored networking needs build 22621 (Windows 11 22H2) or later."
+    } else {
+        $mode = "Mirrored"
+        Note "Mirrored: the default route is a physical adapter. (-Networking Nat to choose NAT anyway.)"
+    }
+} else {
+    Note "$mode (from -Networking)."
+}
+if ($mode -eq "Mirrored" -and $build -lt 22621) { throw "Windows 11 22H2 (build 22621) or later is required for networkingMode=mirrored; run Windows Update, or use -Networking Nat." }
 
 Step "WSL"
 $status = Invoke-Native "wsl.exe" @("--status")
@@ -128,7 +219,7 @@ if ($status.Code -ne 0 -or $version.Code -ne 0) {
     $line = ($version.Output | Where-Object { $_ -match '\d+\.\d+\.\d+' } | Select-Object -First 1)
     Note "WSL present: $line"
     if ($line -match '(\d+)\.(\d+)\.(\d+)' -and [int]$Matches[1] -lt 2) {
-        Write-Warning "WSL $($Matches[0]) is older than 2.0 (mirrored networking). Run: wsl --update"
+        Write-Warning "WSL $($Matches[0]) is older than 2.0 (mirrored networking, wslinfo). Run: wsl --update"
     }
 }
 
@@ -148,7 +239,7 @@ $verbose = Invoke-Native "wsl.exe" @("--list", "--verbose")
 $row = $verbose.Output | Where-Object { $_ -match ('\s' + [regex]::Escape($Distro) + '\s') } | Select-Object -First 1
 if ($row -and $row -match '\s1\s*$') { Write-Warning "$Distro runs as WSL 1; convert it: wsl --set-version $Distro 2" }
 
-Step ".wslconfig (mirrored networking)"
+Step ".wslconfig ($($mode.ToLowerInvariant()) networking)"
 $wslconfig = Join-Path $env:USERPROFILE ".wslconfig"
 Note $wslconfig
 $lines = New-Object System.Collections.Generic.List[string]
@@ -163,11 +254,19 @@ foreach ($l in $lines) {
     }
 }
 $changed = $false
-if (Set-IniValue $lines "wsl2" "networkingMode" "mirrored") { $changed = $true }
-if (Set-IniValue $lines "experimental" "hostAddressLoopback" "true") { $changed = $true }
+if ($mode -eq "Mirrored") {
+    if (Set-IniValue $lines "wsl2" "networkingMode" "mirrored") { $changed = $true }
+    if (Set-IniValue $lines "experimental" "hostAddressLoopback" "true") { $changed = $true }
+    $what = "set networkingMode=mirrored, hostAddressLoopback=true (backup first)"
+} else {
+    # Only the two keys the Mirrored path adds; NAT is WSL's default when networkingMode is absent.
+    if (Remove-IniValue $lines "wsl2" "networkingMode") { $changed = $true }
+    if (Remove-IniValue $lines "experimental" "hostAddressLoopback") { $changed = $true }
+    $what = "remove networkingMode and hostAddressLoopback (NAT networking; backup first)"
+}
 if (-not $changed) {
     Note "Already set."
-} elseif ($PSCmdlet.ShouldProcess($wslconfig, "set networkingMode=mirrored, hostAddressLoopback=true (backup first)")) {
+} elseif ($PSCmdlet.ShouldProcess($wslconfig, $what)) {
     if (Test-Path -LiteralPath $wslconfig) {
         $backup = "$wslconfig.bak-$(Get-Date -Format yyyyMMdd-HHmmss)"
         Copy-Item -LiteralPath $wslconfig -Destination $backup
@@ -175,6 +274,17 @@ if (-not $changed) {
     }
     [IO.File]::WriteAllLines($wslconfig, $lines.ToArray(), (New-Object System.Text.UTF8Encoding($false)))
     Note "Written. It takes effect after: wsl --shutdown"
+}
+
+Step "Ports on Windows ($($Ports -join ', '))"
+$conflicts = @(Get-PortConflicts $Ports)
+if ($conflicts.Count -eq 0) {
+    Note "None of them is in use by another Windows program."
+} else {
+    foreach ($c in $conflicts) {
+        Write-Warning "TCP $($c.Port) is already listened on by $($c.Process) (pid $($c.Pid)) on $($c.Address): stop it or the server's port clashes."
+    }
+    Note "Port 443: IIS/http.sys (process 'System'), VMware's shared VM service, Docker containers publishing 443, Skype."
 }
 
 Step "systemd in $Distro"
@@ -226,9 +336,12 @@ if ($ConfigureFirewall) {
         if ($existing) { Set-NetFirewallRule -Name $ruleName @params; Note "Updated rule $ruleName." }
         else { New-NetFirewallRule -Name $ruleName -DisplayName "A2Core server (Tailscale only)" -Group "A2Core" -Direction Inbound @params | Out-Null; Note "Added rule $ruleName." }
     }
-    # WSL in mirrored mode sits behind the Hyper-V firewall, which blocks inbound by default.
+    # WSL in mirrored mode sits behind the Hyper-V firewall, which blocks inbound by default. In NAT mode friends reach
+    # the Windows portproxy listener (the rule above); the forwarded connection comes from Windows itself.
     $hyperv = Get-Command New-NetFirewallHyperVRule -ErrorAction SilentlyContinue
-    if (-not $hyperv) {
+    if ($mode -eq "Nat") {
+        Note "Hyper-V firewall rule: not needed in NAT mode (wsl-portproxy.ps1 connects to WSL from Windows)."
+    } elseif (-not $hyperv) {
         Write-Warning "New-NetFirewallHyperVRule is not available on this Windows; see README (Hyper-V firewall)."
     } elseif (-not $hyperv.Parameters.ContainsKey("RemoteAddresses")) {
         Write-Warning "New-NetFirewallHyperVRule has no RemoteAddresses parameter here; not adding an unscoped rule. See README."
@@ -268,10 +381,17 @@ if ($RegisterStartupTask) {
     }
 }
 
-Step "Next steps"
-Note "1. wsl --shutdown   (applies .wslconfig and systemd; stops all WSL distributions)"
+Step "Next steps ($mode networking)"
+Note "1. wsl --shutdown   (applies .wslconfig and systemd; stops all WSL distributions, Docker Desktop's too)"
 Note "2. Tailscale for Windows: sign in; admin console > DNS: MagicDNS and HTTPS Certificates on."
 Note "3. deploy\windows\renew-cert.ps1   (tailscale cert for this PC's ts.net name)"
 Note "4. In ${Distro}: clone the repository to ~/a2core, put the data bundle in ~/a2core/data, then"
-Note "   sudo deploy/windows/wsl-install.sh --data data/aion-server-data.tar.gz --certificate <cert> --key <key>"
+if ($mode -eq "Nat") {
+    Note "   sudo deploy/windows/wsl-install.sh --public-address <this PC's Tailscale IPv4: tailscale ip -4> \"
+    Note "       --data data/aion-server-data.tar.gz --certificate <cert> --key <key>"
+    Note "5. deploy\windows\wsl-portproxy.ps1 -Register   (as administrator: forwards the ports from the Tailscale address"
+    Note "   to WSL now and, by a scheduled task, after every reboot)"
+} else {
+    Note "   sudo deploy/windows/wsl-install.sh --data data/aion-server-data.tar.gz --certificate <cert> --key <key>"
+}
 Note "See deploy/windows/README.md."

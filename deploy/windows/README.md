@@ -8,7 +8,7 @@ Two ways to run it:
 - **A. WSL2 + Ubuntu 24.04 (recommended).** The supported Linux installer (`deploy/linux/install.sh`) runs unchanged
   inside WSL: systemd services, nightly backups, `update.sh`, the same layout as a Linux server
   (`deploy/linux/README.md`). Scripts here: `setup-wsl.ps1` (Windows side), `wsl-install.sh` (inside Ubuntu),
-  `renew-cert.ps1` (Tailscale certificate).
+  `renew-cert.ps1` (Tailscale certificate), and for WSL's NAT networking `wsl-portproxy.ps1` (A2b).
 - **B. Native Windows** (the host and `tools/postgres_dev.py`'s Windows mode, as on a development PC). No services,
   no backup timer, no update script: everything by hand. Only if WSL is not an option.
 
@@ -26,14 +26,16 @@ on a real Windows 11 + Tailscale machine when this was written; please report wh
 | 8091 | chat (HTTP + WebSocket) | game client |
 | 8780 | account site and API (HTTPS) | launcher, browser |
 
-Port 443 must be free on Windows too (mirrored networking shares ports with Windows): stop IIS, VMware's shared VM
-service, or anything else listening there (`Get-NetTCPConnection -LocalPort 443 -State Listen`).
+Port 443 must be free on Windows too (mirrored networking shares ports with Windows; in NAT mode the portproxy
+listens on Windows): stop IIS, VMware's shared VM service, a Docker container publishing 443, or anything else
+listening there (`Get-NetTCPConnection -LocalPort 443 -State Listen`). `setup-wsl.ps1` and `wsl-portproxy.ps1` warn
+about every other program they find on the six ports (WSL's own `wslrelay` and the portproxy service are not counted).
 
 The server must be given an **IPv4** address (`tools/server_env.py` and the launcher's `serverAddress` accept only
 IPv4): that is your PC's Tailscale address, `100.x.y.z` (Windows: `tailscale ip -4`). The account site's name is your
 PC's MagicDNS name, `<machine>.<tailnet>.ts.net` (Windows: `tailscale status --json`, field `Self.DNSName`).
 
-Needs: Windows 11 22H2 or later (build 22621+, for mirrored networking), virtualisation on in the firmware, about
+Needs: Windows 11 (22H2 or later, build 22621+, for mirrored networking; NAT works on any Windows 11), virtualisation on in the firmware, about
 20 GB free disk (server data 2-3 GB, .NET SDK, Node, build output), and 3 GB RAM for the server while it runs. WSL
 gives Linux half the PC's memory by default; on an 8 GB PC add `memory=6GB` under `[wsl2]` in `.wslconfig`.
 
@@ -61,10 +63,15 @@ deploy\windows\setup-wsl.ps1                  # does it; run again after the res
 
 It is idempotent and touches nothing but what it lists:
 
-1. Checks the Windows build (22621 or later).
+1. Chooses the networking mode, `-Networking Mirrored|Nat`. Without the switch it looks at the interface of this PC's
+   IPv4 default route: when that is a Hyper-V virtual switch adapter (`vEthernet (...)`, "Hyper-V Virtual Ethernet
+   Adapter", other than WSL's own `vEthernet (WSL...)`), it chooses **Nat** and says why: mirrored networking does not
+   mirror vEthernet adapters, so a PC whose internet goes through an external virtual switch (for example
+   `vEthernet (ExternalSwitch)`) leaves WSL with no internet at all. It also chooses Nat on a build older than 22621.
+   Otherwise **Mirrored**. Then it checks the Windows build (Windows 11; 22621 or later for Mirrored).
 2. Enables WSL (`wsl --install --no-distribution`) if missing, then asks you to restart Windows and run it again.
 3. Installs `Ubuntu-24.04` if missing (`wsl --install -d Ubuntu-24.04`; you create the Linux user, then `exit`).
-4. Merges into `%UserProfile%\.wslconfig` (backup `.wslconfig.bak-<time>` first; other settings kept):
+4. **Mirrored**: merges into `%UserProfile%\.wslconfig` (backup `.wslconfig.bak-<time>` first; other settings kept):
 
    ```ini
    [wsl2]
@@ -78,8 +85,14 @@ It is idempotent and touches nothing but what it lists:
    PC's Tailscale address. `hostAddressLoopback` lets Windows programs (your own game client) reach a WSL server on
    one of the PC's own addresses. **UNVERIFIED**: Tailscale's interface showing up inside WSL in mirrored mode, and
    your own client reaching `100.x.y.z` through `hostAddressLoopback`. If `ip -4 addr` in Ubuntu shows no `100.x`
-   address, pass `--tailscale-ip` to `wsl-install.sh` (the server binds 0.0.0.0, so the address is only what it
+   address, pass `--public-address` to `wsl-install.sh` (the server binds 0.0.0.0, so the address is only what it
    announces).
+
+   **Nat**: removes exactly those two keys again (`networkingMode` under `[wsl2]`, `hostAddressLoopback` under
+   `[experimental]`, and the `[experimental]` header when nothing else is left in it), with a new
+   `.wslconfig.bak-<time>` first. Everything else (`memory=`, `swap=`, ...) stays. Without `networkingMode` WSL uses
+   its default, NAT, which is also what Docker Desktop and other distributions had before mirrored mode was set: all
+   WSL 2 distributions share one VM and so one networking mode. Continue with A2b after A4.
 5. Sets `[boot] systemd=true` in Ubuntu's `/etc/wsl.conf` (backup first). The installer needs systemd for its
    services; Ubuntu 24.04 from the Store usually has it already.
 
@@ -88,7 +101,8 @@ Optional switches (also idempotent):
 - `-ConfigureFirewall`: inbound TCP 443, 3700, 8087, 8091, 8780, 13328 **only from 100.64.0.0/10** (Tailscale's
   address range): a Windows Defender Firewall rule `A2Core-Tailscale-TCP` (also limited to the `Tailscale` adapter when
   one has that name) and a Hyper-V firewall rule `A2Core-WSL-Tailscale-TCP` for WSL (mirrored WSL sits behind the
-  Hyper-V firewall, which blocks inbound by default). Nothing is opened to your LAN or the internet, and no rule is
+  Hyper-V firewall, which blocks inbound by default; Mirrored only: in NAT mode friends reach the portproxy on
+  Windows, and the forwarded connection comes from Windows itself). Nothing is opened to your LAN or the internet, and no rule is
   needed on your router. **UNVERIFIED**: the Hyper-V rule's parameters (`New-NetFirewallHyperVRule -LocalPorts
   -RemoteAddresses -VMCreatorId {40E0AC32-46A5-438A-A0B2-2B479E8F2E90}`); the script checks the parameter exists and
   warns instead of adding an unscoped rule. Check with `Get-NetFirewallHyperVRule -Name A2Core-WSL-Tailscale-TCP`.
@@ -98,8 +112,77 @@ Optional switches (also idempotent):
   anyone logs on (S4U logon). **UNVERIFIED**: WSL started from a non-interactive (S4U) task; if the server does not
   come up after a reboot without logon, register it again without `-AtStartup`.
 
-Then apply the settings: `wsl --shutdown` (stops all WSL distributions), open Ubuntu-24.04 again, and check
-`ps -p 1 -o comm=` prints `systemd`.
+6. Warns about other Windows programs listening on the server's ports (see "What runs where").
+
+Then apply the settings: `wsl --shutdown` (stops all WSL distributions, Docker Desktop's included; Docker Desktop
+starts its own again), open Ubuntu-24.04 again, and check `ps -p 1 -o comm=` prints `systemd`, and
+`wslinfo --networking-mode` prints `nat` or `mirrored`. In NAT mode check the internet too: `curl -sI https://github.com`.
+
+### A2b. NAT networking: `wsl-portproxy.ps1`
+
+In NAT mode Ubuntu has its own private address behind Windows (`172.x.y.z`, `hostname -I`), reachable only from
+Windows itself, and Tailscale's interface is not visible inside it. Windows therefore forwards the server's ports:
+`wsl-portproxy.ps1` (PowerShell **as administrator**, after A4 so the server is there) runs, for each of 443, 3700,
+8087, 8091, 8780, 13328,
+
+```
+netsh interface portproxy add v4tov4 listenaddress=<this PC's Tailscale IPv4> listenport=P connectaddress=<WSL IPv4> connectport=P
+```
+
+```powershell
+deploy\windows\wsl-portproxy.ps1 -WhatIf      # shows the WSL address, the listen address and the changes
+deploy\windows\wsl-portproxy.ps1 -Register    # does it, and registers the task that keeps it current
+netsh interface portproxy show v4tov4          # the entries
+```
+
+- **WSL address**: `wsl -d Ubuntu-24.04 hostname -I`, the first IPv4 address (this starts the distribution if it is
+  not running).
+- **Listen address**: this PC's Tailscale IPv4 (the `Tailscale` adapter's address, else `tailscale ip -4`), or
+  `-ListenAddress 0.0.0.0` for every Windows address (then only the firewall rule keeps the ports to Tailscale
+  peers; prefer the default). Listening on the Tailscale address only also stays clear of WSL's localhost forwarding,
+  which takes `127.0.0.1:<port>` on Windows for the same ports.
+- **Idempotent**: an entry that is already right is kept (and added again if its listener is missing, as when the
+  Tailscale address appeared after the IP Helper service started). Entries for these six ports on the listen address,
+  `0.0.0.0`, `*` or another `100.64.0.0/10` address are replaced when they point elsewhere; entries for other ports,
+  or for these ports on other addresses (it warns), are never touched. Starts the IP Helper service (`iphlpsvc`,
+  which carries portproxy) if it is stopped.
+- **Firewall**: adds the same Windows Defender Firewall rule as `setup-wsl.ps1 -ConfigureFirewall`,
+  `A2Core-Tailscale-TCP` (the six ports, only from `100.64.0.0/10`, on the `Tailscale` adapter), when it is missing
+  (`-NoFirewall` skips this). The friend's connection ends at the portproxy listener on Windows, so this is the rule
+  that counts; no Hyper-V firewall rule is needed.
+- **Reboot behaviour**: the WSL address changes with every WSL start (each boot, every `wsl --shutdown`), which
+  leaves the entries pointing at an old address. `-Register` creates the scheduled task **A2Core WSL portproxy**
+  that runs the script again at startup (1 minute after boot), at your logon, and every 5 minutes, as you, elevated,
+  whether you are logged on or not (S4U); it logs to `%ProgramData%\A2Core\wsl-portproxy.log`. It runs the script
+  from where it is, so keep the repository there (or register again after moving it). After a `wsl --shutdown` the
+  server is unreachable until the next run (at most 5 minutes) or until you run the script by hand. With the
+  keepalive task from `setup-wsl.ps1 -RegisterStartupTask` the distribution keeps running between runs.
+  **UNVERIFIED**: `wsl.exe` from an S4U task (as for the keepalive's `-AtStartup`); if the log shows that the WSL
+  address could not be read, register it with `-Register -LogonOnly` (at logon and every 5 minutes while you are
+  logged on).
+- **Undo**: `deploy\windows\wsl-portproxy.ps1 -Remove` deletes exactly those portproxy entries and the task
+  (the firewall rule stays: `Remove-NetFirewallRule -Name A2Core-Tailscale-TCP`).
+
+**Which address the server announces.** `Aion__Network__PublicAddress` (`tools/server_env.py --public-address`,
+`server/Aion.Host/NetworkOptions.cs`) is not a listen address: the host hands it to the game client in the platform
+bootstrap's policy (login server `ip:port`), in the login port's redirect to the game port, and to the chat client.
+So it must be an IPv4 address every client reaches, and in NAT mode that is the **Windows PC's Tailscale address**,
+given to `wsl-install.sh --public-address` (A4); the WSL address would only work on this PC and changes per boot.
+The host binds `0.0.0.0` inside WSL (`Aion__Network__BindAddress`, the `server_env.py` default), which is right
+here: the portproxy connects to the WSL address on `eth0`, and WSL's localhost forwarding needs it too. The VM's
+address is reachable only from this PC, so nothing is exposed to the LAN.
+
+**Your own game client on this PC** uses the same launcher and `launcher.json` as your friends (`serverAddress` =
+the Tailscale address): connecting to the PC's own Tailscale address reaches the portproxy listener locally.
+`localhost` (WSL's localhost forwarding, `localhostForwarding`, on by default) reaches the server too, for example
+`curl -k https://localhost:8780` for a quick check, but the game client cannot stay on it, because the server sends
+it on to the announced Tailscale address. **UNVERIFIED** on the owner's PC: a local client through the portproxy.
+
+**One source address.** Behind the portproxy every player's connection reaches the host from Windows' address on the
+WSL switch, not from the player's Tailscale address. The host's per-address limits then apply to all players
+together (account-site sign-in and launch requests: 15 a minute), and its logs show that one address. Launch pairing
+by address (a client started without a launch code) cannot tell players apart; the launcher always passes a launch
+code (`/c/<code>/` in the bootstrap URL), so it is not affected.
 
 Keep the PC awake while friends play: Settings > System > Power > Screen and sleep > "Make my device sleep after"
 Never (plugged in), or `powercfg /change standby-timeout-ac 0`.
@@ -151,9 +234,11 @@ sudo deploy/windows/wsl-install.sh --data data/aion-server-data.tar.gz \
 
 What `wsl-install.sh` does:
 
-1. Checks it runs under systemd, from outside `/mnt`, and (with `wslinfo`) that networking is mirrored.
-2. Finds the Tailscale address: the one IPv4 address in 100.64.0.0/10 on this machine's interfaces, or
-   `--tailscale-ip 100.x.y.z`.
+1. Checks it runs under systemd, from outside `/mnt`, and reads the networking mode (`wslinfo --networking-mode`).
+2. The address players connect to, the Windows PC's Tailscale IPv4: `--public-address 100.x.y.z` (Windows:
+   `tailscale ip -4`; `--tailscale-ip` is the older name). **Required in NAT mode**, where Tailscale's interface is
+   not visible inside WSL (it stops with a message when it is missing). In mirrored mode, without the option, the one
+   IPv4 address in 100.64.0.0/10 on this machine's interfaces.
 3. Installs `dotnet-sdk-10.0`, `postgresql` (16 on 24.04), `python3`, `openssl` from the Ubuntu archive
    (`dotnet-sdk-10.0` is in `noble-updates`). The web build (Vite 8) needs Node.js ^20.19 or >=22.12 and Ubuntu 24.04's
    `nodejs` is 18, so it adds NodeSource's signed Node.js 22 repository (`deb.nodesource.com/node_22.x nodistro`) and
@@ -166,6 +251,8 @@ What `wsl-install.sh` does:
    --skip-packages`. That is the normal Linux install (`deploy/linux/README.md`): service account `aion`, the
    database cluster on 127.0.0.1:55432, the host in `/opt/aion/host`, configuration in `/etc/aion`, data and state in
    `/var/lib/aion`, services `aion-postgres`, `aion-host`, and the nightly `aion-backup.timer`.
+
+In NAT mode add `--public-address 100.x.y.z` to the command above, then do A2b on Windows.
 
 Use `--self-signed` instead of `--certificate/--key` only for a quick local test (see A3). Later runs: no `--data`.
 
@@ -246,7 +333,10 @@ cd ~/a2core && sudo deploy/linux/update.sh   # backup, git pull, rebuild, restar
 
 From Windows: `wsl -d Ubuntu-24.04 -u root -- systemctl status aion-host`. Stopping everything: `wsl --terminate
 Ubuntu-24.04` (or `wsl --shutdown` for all distributions); with the keepalive task, `Stop-ScheduledTask -TaskName
-'A2Core WSL keepalive'` first, or it keeps (re)starting it.
+'A2Core WSL keepalive'` first, or it keeps (re)starting it. In NAT mode the task 'A2Core WSL portproxy' starts the
+distribution too (its `wsl hostname -I`): `Disable-ScheduledTask -TaskName 'A2Core WSL portproxy'` while it should stay
+off, `Enable-ScheduledTask` afterwards. After a restart of WSL, `deploy\windows\wsl-portproxy.ps1` (as administrator)
+points the ports at the new address at once instead of within 5 minutes.
 
 ### A9. Backups
 
@@ -313,10 +403,13 @@ Unregister-ScheduledTask -TaskName 'A2Core WSL keepalive' -Confirm:$false
 Unregister-ScheduledTask -TaskName 'A2Core certificate renewal' -Confirm:$false
 Remove-NetFirewallRule -Name A2Core-Tailscale-TCP
 Remove-NetFirewallHyperVRule -Name A2Core-WSL-Tailscale-TCP
+deploy\windows\wsl-portproxy.ps1 -Remove        # NAT mode: the portproxy entries and the task "A2Core WSL portproxy"
 Remove-Item -Recurse "$env:LOCALAPPDATA\A2Core"
 ```
 
-Restore your previous `.wslconfig` from `%UserProfile%\.wslconfig.bak-<time>` if you want NAT networking back. Only if
+`.wslconfig`: `setup-wsl.ps1 -Networking Nat` removes the two keys the Mirrored path added (the result is your file
+as it was before, for a file that had neither key); or copy back a `%UserProfile%\.wslconfig.bak-<time>` (each run
+that changed the file left one). Then `wsl --shutdown`. Only if
 nothing else lives in it: `wsl --unregister Ubuntu-24.04` deletes the whole distribution and everything in it.
 
 ---
@@ -365,8 +458,10 @@ Tailscale and certificate steps are as in A3, A5 and A6 (registration: add `Aion
 
 ## What was checked
 
-- `bash -n` and `shellcheck` on `wsl-install.sh`, `deploy/linux/backup.sh`, `restore.sh`; PowerShell 7 parses both
-  `.ps1` files; `setup-wsl.ps1`'s `.wslconfig` merge and the `/etc/wsl.conf` edit were tried on sample files.
+- `bash -n` and `shellcheck` on `wsl-install.sh`, `deploy/linux/backup.sh`, `restore.sh`; PowerShell 7 parses the
+  three `.ps1` files; `setup-wsl.ps1`'s `.wslconfig` merge and the `/etc/wsl.conf` edit were tried on sample files,
+  and its NAT removal on the Mirrored result of `[wsl2] memory=12GB swap=4GB` (gives back the original lines);
+  `wsl-portproxy.ps1`'s parsing of `netsh interface portproxy show v4tov4` rows on sample output.
 - `backup.sh` (backup, verify, retention) and `restore.sh` (`--check`, refusal without `--yes`, `--yes` swap,
   `--list-old`, `--drop-old`) ran against a real cluster made by `postgres_dev.py setup` with Ubuntu 24.04's
   PostgreSQL 16 (all migrations apply on 16); grants and ownership survived the swap.
@@ -374,5 +469,5 @@ Tailscale and certificate steps are as in A3, A5 and A6 (registration: add `Aion
   `postgres_dev.py`, restore refusal, `game.env` merging, the systemd units' paths.
 - .NET loads a `tailscale cert`-style certificate (ECDSA P-256 key, `EC PRIVATE KEY` PEM) with
   `X509Certificate2.CreateFromPemFile`, which the host uses.
-- Not run: anything on Windows itself (WSL, Tailscale, firewall, scheduled tasks), the NodeSource step, a full
+- Not run: anything on Windows itself (WSL, Tailscale, firewall, portproxy, scheduled tasks), the NodeSource step, a full
   `install.sh` inside WSL.
