@@ -26,7 +26,9 @@ This page says what is there, what the server now does with it, and what still n
 - **Profiles.** Light and Dark, male and female Brawler profiles in `starter-skills.json` with OURS creation IDs 45
   (Light) and 46 (Dark). The `pc_id` sent to the client is 45-48 (CANDIDATE: PcData numbers four rows per class in class
   order, Chanter 33-36, Test 37-40, Tutorial 41-44; Fighter, the newest class, would be next). **This is the one value
-  the live test has to confirm.**
+  the live test has to confirm**, so by default the server does not send it: `Aion:Rules:BrawlerModel` is `gladiator`
+  (default, safe: a Brawler is drawn with the Gladiator body of its race and gender, with Brawler skills and fists) or
+  `own` (pc_id 45-48).
 - **Weapon.** The starter weapon is the Brawler's Fist (Light 150960002, Dark 150960003). `tools/equipment_rules.py`
   lets only Brawlers wield gauntlets. Armour has no class limit, so Brawlers wear the same armour as everyone.
 - **Weapon scaling (OURS).** With only level-1 gauntlets in the client, a Brawler would hit like level 1 forever. So a
@@ -34,9 +36,7 @@ This page says what is there, what the server now does with it, and what still n
   the character level or the mean item level of the rest of their worn gear, whichever is higher
   (`GameData.StatWeapon`, `GameSession.StatWeapon`). Better armour makes the fists stronger. The client still shows
   the fist's own level-1 tooltip; damage, the stat sheet and combat power use the scaled values.
-- **Bots.** `tools/bot_rotations.py` knows the Fighter (range 250, stands behind, roles dps and tank). Its hand-made
-  PLAN (and the dodge 19000100 in the dodge code) come next from the bot rotations work; until then a Brawler bot
-  only uses its past-25 unlocks.
+- **Bots.** Not yet: the bot rotations work adds the Fighter with a hand-made PLAN (and the dodge 19000100) next.
 
 ## How to make a Brawler
 
@@ -54,8 +54,11 @@ Skills keep the client's "???" names and the level-1 fist keeps its tooltip.
 2. Make a Light character, `//ClassChange Fighter`, log out to the character list and back in.
 3. Look for: the character list entry and the character in the world (the pc_id test), the fists in the hand, skill
    icons on the bar, and a skill animation when casting `19010000`.
-4. If the client crashes or shows nothing on the character list, pc_id 45-48 is wrong: the next thing to try is the
-   Gladiator body (pc_id 5-8 in `tools/brawler.py` `PC_IDS`, rebuild), which shows a Gladiator model with Brawler skills.
+4. With the default `BrawlerModel=gladiator` this is safe. Then set `Aion__Rules__BrawlerModel=own` in the game env,
+   restart, and log in again: if the character list and world draw the Brawler, keep `own`.
+5. If `own` crashes the client or the character list, set it back to `gladiator` and restart: every Brawler is drawn
+   as a Gladiator again at once (nothing stored changes). To turn a Brawler back into another class, use the staff
+   dashboard's class change (it does not need the character in the world); its fists go back to the bag.
 
 ## Gaps
 

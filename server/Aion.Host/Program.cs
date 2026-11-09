@@ -85,6 +85,7 @@ if (native.MaxPlayers is < 0) throw new InvalidOperationException("Aion:Native:M
 // Drop, QuestExperience) and Aion:Rules (Pvp, RespawnSeconds, PartyLoot freeforall|roundrobin|killer, FallbackLoot). Scheduled dashboard events multiply on top of the rates.
 var rates = (builder.Configuration.GetSection("Aion:Rates").Get<Aion.World.RatesOptions>() ?? new Aion.World.RatesOptions()).Resolve();
 var rules = (builder.Configuration.GetSection("Aion:Rules").Get<Aion.World.WorldRules>() ?? Aion.World.WorldRules.Default).Validated();
+Aion.World.GameData.BrawlerOwnModel = rules.BrawlerOwnModel;
 // Aion:Dungeons (OURS): EntryLimits (default off), DailyEntries, Entries:<dungeon id or name> overrides, ResetHour (server
 // local time), UntrackedObjectiveSeconds (the map-event objectives the server cannot follow).
 var dungeonRules = (builder.Configuration.GetSection("Aion:Dungeons").Get<Aion.World.DungeonOptions>() ?? Aion.World.DungeonOptions.Default)

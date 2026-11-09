@@ -1242,6 +1242,15 @@ Check(data.LearnedSkills("Fighter", 1).Any(k => k.SkillId == 19010000) && !data.
       && data.LearnedSkills("Fighter", 100).Any(k => k.SkillId == 19440000) && data.Profile(45, 1) is { Class: "Fighter", Race: 1 }
       && data.Profile(46, 2) is { Class: "Fighter", Race: 2 } && data.StarterWeapon(data.Profile(45, 1)) == 150960002,
       "the Brawler (Fighter) has its kit to the cap, Light and Dark profiles and a gauntlet");
+Check(!GameData.BrawlerOwnModel && data.Profile(45, 1)!.PcId == data.Profile(1, 1)!.PcId && data.Profile(46, 2)!.PcId == data.Profile(9, 2)!.PcId,
+      "Aion:Rules:BrawlerModel gladiator (default): a Brawler is shown with the Gladiator body of its race and gender");
+GameData.BrawlerOwnModel = true;
+Check(data.Profile(45, 1)!.PcId == 45 && data.Profile(46, 2)!.PcId == 48 && data.Profile(1, 1)!.PcId == 5, "BrawlerModel own: the Fighter pc_id 45-48");
+GameData.BrawlerOwnModel = false;
+var brawlerModelRefused = false;
+try { new WorldRules { BrawlerModel = "fighter" }.Validated(); } catch (InvalidOperationException) { brawlerModelRefused = true; }
+Check(new WorldRules { BrawlerModel = " Own " }.Validated().BrawlerOwnModel && !WorldRules.Default.BrawlerOwnModel && brawlerModelRefused,
+      "Aion:Rules:BrawlerModel is gladiator or own");
 var torso = await staffSession.HandleAsync(new PacketWriter().U16(0xe247).I64(15).U8(5).ToArray(), Now);
 Check(staffSession.Resource.HpMax == hpUnarmoured + 144 && torso.Any(b => b[0] == 0x4a && b[1] == 0x36), "armour HPMax raises the pool; 0x364a carries the new stats");
 var powerArmed = staffSession.CombatPower();
@@ -3104,8 +3113,7 @@ checks = 0;
     var botPresence = new WorldPresence();
     var bots = new PlayerBots(data, botOptions, botWorld, presence: botPresence);
     Check(BotRotations.Embedded.For("Gladiator") is { Range: > 0, Rotation.Length: > 2 } glad && glad.Rotation[^1].Skill == 11020000
-          && BotRotations.Embedded.Classes.Count == 9 && BotRotations.Embedded.For("Fighter") is { WeaponType: "Gauntlet" },
-          "bot-rotations.json is embedded: every playable class (the Brawler too), the filler last");
+          && BotRotations.Embedded.Classes.Count == 8, "bot-rotations.json is embedded: every playable class, the filler last");
     Check((await bots.CommandAsync(leader, "add Leader", t, default)).Contains("yourself") && (await bots.CommandAsync(leader, "add Nobody", t, default)).Contains("not one of your characters"),
           "a bot is one of the summoner's other characters");
     Check(await bots.CommandAsync(leader, "add Alt", t, default) == "Summoning Alt." && bots.All.Single().State == PlayerBot.Phase.Pending, "//bot add queues the character");

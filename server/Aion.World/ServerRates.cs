@@ -104,6 +104,14 @@ public sealed record WorldRules
     /// <summary>freeforall | roundrobin | killer (see <see cref="PartyLootRule"/>).</summary>
     public string PartyLoot { get; init; } = "roundrobin";
     public bool FallbackLoot { get; init; } = true;
+    /// <summary>
+    /// The model the client is told a Brawler (class Fighter, docs/friends-server/BRAWLER.md) has: "gladiator" (default,
+    /// safe: the Gladiator body, pc_id 5-8, with Brawler skills) or "own" (the CANDIDATE Fighter pc_id 45-48 from
+    /// starter-skills.json, unconfirmed on the 2.0.6.0 client). Applied through <see cref="GameData.BrawlerOwnModel"/>.
+    /// </summary>
+    public string BrawlerModel { get; init; } = "gladiator";
+
+    public bool BrawlerOwnModel => BrawlerModel.Trim().Equals("own", StringComparison.OrdinalIgnoreCase);
 
     public const int MinRespawnSeconds = 5, MaxRespawnSeconds = 3600;
     public static WorldRules Default { get; } = new();
@@ -128,9 +136,11 @@ public sealed record WorldRules
             throw new InvalidOperationException($"Aion:Rules:RespawnSeconds must be between {MinRespawnSeconds} and {MaxRespawnSeconds} (got {RespawnSeconds}).");
         if (ParseLootRule(PartyLoot) is null)
             throw new InvalidOperationException($"Aion:Rules:PartyLoot must be \"freeforall\", \"roundrobin\" or \"killer\" (got \"{PartyLoot}\").");
+        if (BrawlerModel.Trim().ToLowerInvariant() is not ("gladiator" or "own"))
+            throw new InvalidOperationException($"Aion:Rules:BrawlerModel must be \"gladiator\" or \"own\" (got \"{BrawlerModel}\").");
         return this;
     }
 
     public override string ToString() =>
-        $"PvP {(Pvp ? "on" : "off")}, monster respawn {RespawnMs / 1000} s, party loot {LootRule.ToString().ToLowerInvariant()}, fallback loot {(FallbackLoot ? "on" : "off")}";
+        $"PvP {(Pvp ? "on" : "off")}, monster respawn {RespawnMs / 1000} s, party loot {LootRule.ToString().ToLowerInvariant()}, fallback loot {(FallbackLoot ? "on" : "off")}, Brawler model {(BrawlerOwnModel ? "own (pc_id 45-48)" : "gladiator")}";
 }

@@ -270,7 +270,21 @@ public sealed class GameData
     public int MaxLevel => classes.MaxLevel;
     public int ClampLevel(int level) => Math.Clamp(level, 1, classes.MaxLevel);
 
-    public StarterProfile? Profile(int creationId, int gender) => profiles.GetValueOrDefault($"{creationId}:{gender}");
+    /// <summary>
+    /// Aion:Rules:BrawlerModel "own" (set once at host startup): a Brawler (class Fighter) is sent with its CANDIDATE pc_id
+    /// 45-48. Off (default): it is sent with the Gladiator body of its race and gender, which the client surely draws.
+    /// </summary>
+    public static bool BrawlerOwnModel { get; set; }
+
+    /// <summary>The creation profile; a Brawler's pc_id follows <see cref="BrawlerOwnModel"/>.</summary>
+    public StarterProfile? Profile(int creationId, int gender)
+    {
+        var found = profiles.GetValueOrDefault($"{creationId}:{gender}");
+        if (found is not { Class: "Fighter" } || BrawlerOwnModel) return found;
+        // PCCreationInfo: creation 1 is the Light Gladiator, 9 the Dark one.
+        return profiles.GetValueOrDefault($"{(found.Race == 1 ? 1 : 9)}:{gender}") is { Class: "Gladiator" } gladiator
+            ? found with { PcId = gladiator.PcId } : found;
+    }
 
     /// <summary>
     /// Skills known at a level: (skill, highest skill level), sorted by skill ID. The recovered SkillAcquireData unlocks end at
