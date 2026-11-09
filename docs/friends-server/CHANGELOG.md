@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-11-09: stigmas
+- **Stigmas, as on global** (`Aion:Stigmas:*`, docs/STIGMAS.md). Stigma skills are bought with Stigma Shards from level 22, not handed out by level. 4 slots open at 22, 27, 32 and 37 (`Slots=6` for Korea's count). Shards come from levelling (30 by 45; `ShardRate` multiplies them). Levels go to 20 at 1/2/4/8 shards a level. Reset is free. A stigma casts only from a stigma slot. `//stigma` shows shards and slots, and playerbots slot their own. Stigma lists for the 8 classes and the Brawler (`Fighter`) come from `tools/stigmas.py` (CANDIDATE). Migration 043 stores the bought levels. Native, persistence and Python checks added. Not tested in a real client yet.
+
 ## 2026-11-08
 - Cloned upstream A2Core `2b5f72c` (AGPL-3.0). Branch `audit/phase1` created as the checkpoint; no source changes yet.
 - Built the server and ran the full test suite on Linux (see TEST_RESULTS.md).

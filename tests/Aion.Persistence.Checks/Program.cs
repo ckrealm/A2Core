@@ -219,6 +219,12 @@ await using(var source=NpgsqlDataSource.Create(connectionString))
     await game.AdminAsync(second,new(Guid.NewGuid(),id,"wings",Wings:[30200600,30100300]));
     await game.AdminAsync(second,new(Guid.NewGuid(),id,"wings",Wings:[30200600,30200400]));
     Check((await game.InventoryAsync(first,id))!.Wings!.SequenceEqual(new[]{30100300,30200400,30200600}),"wings stored once each and loaded with the inventory");
+    // Stigmas (migration 043, docs/STIGMAS.md): bought levels stored per skill, forgotten with level 0, owner only.
+    Check(await game.SetStigmaAsync(first,id,11080000,1) && await game.SetStigmaAsync(first,id,11080000,6) && await game.SetStigmaAsync(first,id,11110000,1)
+          && (await game.StigmasAsync(first,id))!.SequenceEqual([new StigmaState(11080000,6),new StigmaState(11110000,1)]),"stigma levels stored and read back");
+    Check(!await game.SetStigmaAsync(second,id,11080000,20) && await game.StigmasAsync(second,id) is null,"another account cannot read or set them");
+    Check(await game.SetStigmaAsync(first,id,11110000,0) && (await game.StigmasAsync(first,id))!.Single()==new StigmaState(11080000,6),"level 0 forgets a stigma");
+    await Reject(()=>game.SetStigmaAsync(first,id,11080000,41),"invalid_stigma_level");
     // Friends and blocks: a request by name, accepted by the other side, both see the friendship; a block ends it.
     var staffChar=(await game.AdminFindCharactersAsync(second,"[GM]Staff")).Single().CharacterId;
     Check((await game.FriendRequestAsync(first,id,"nobody-here")).Result=="not_found" && (await game.FriendRequestAsync(first,id,"starter")).Result=="self","friend request: unknown name and self refused");

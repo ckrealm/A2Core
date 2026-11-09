@@ -184,6 +184,9 @@ public sealed class GameData
     /// <summary>The OURS progression table (tools/data/progression.json).</summary>
     public ProgressionTable Progression => ProgressionTable.Embedded;
 
+    /// <summary>Stigmas: slots, shards, costs and each class's stigma skills (tools/data/stigmas.json, docs/STIGMAS.md).</summary>
+    public StigmaTable Stigmas => StigmaTable.Embedded;
+
     readonly Dictionary<string, ItemInfo> items;
 
     sealed record BaseFile([property: JsonPropertyName("bases")] Dictionary<string, int> Bases);

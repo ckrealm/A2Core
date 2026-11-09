@@ -8,6 +8,8 @@ public sealed record CreatePlayer(Guid RequestId, string ProfileId, string Name,
 public sealed record ItemState(Guid InstanceId, string BuildId, int TemplateId, long Quantity,
     string Location, int? Slot, long Revision, JsonElement RolledStats, JsonElement Upgrades, long WireId = 0);
 public sealed record SkillState(int SkillId, int Level, int? Slot);
+/// <summary>A stigma skill bought with Stigma Shards and its stigma level (docs/STIGMAS.md).</summary>
+public sealed record StigmaState(int SkillId, int Level);
 // Legions: a member (grade EGuildMemberGrade 0 Master, 1 Officer, 2 Member) and a legion with its members.
 public sealed record GuildMember(Guid CharacterId, string Name, int Level, int Grade, string Comment, int CreationId, DateTimeOffset Joined);
 public sealed record GuildView(long Id, string Name, int Level, long Exp, int Emblem, int JoinRule, string Password, string Intro, string Notice,
@@ -105,6 +107,10 @@ public interface IGameplayStore
     Task<bool> SetSkinEquipsAsync(VerifiedAccount account, Guid character, IReadOnlyDictionary<int, int> equips, CancellationToken ct = default) => Task.FromResult(false);
     /// <summary>A learned skill's level (a skill level bought with skill points).</summary>
     Task<bool> SetSkillLevelAsync(VerifiedAccount account, Guid character, int skillId, int level, CancellationToken ct = default) => Task.FromResult(false);
+    /// <summary>The character's learned stigmas; null when not owned.</summary>
+    Task<IReadOnlyList<StigmaState>?> StigmasAsync(VerifiedAccount account, Guid character, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<StigmaState>?>([]);
+    /// <summary>A stigma's level (1..40); 0 forgets it (reset).</summary>
+    Task<bool> SetStigmaAsync(VerifiedAccount account, Guid character, int skillId, int level, CancellationToken ct = default) => Task.FromResult(false);
     /// <summary>A mastery's level and exp.</summary>
     Task<bool> SaveMasteryAsync(VerifiedAccount account, Guid character, string kind, int category, int level, long exp, CancellationToken ct = default) => Task.FromResult(false);
     // Friends, requests and blocks of an owned character; null when not owned.

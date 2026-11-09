@@ -39,6 +39,10 @@ existing unlock mechanism:
 
 A character at the cap knows 56 to 62 skills, below the 127 that fit one 0x5100 skill list.
 
+**Stigmas.** With `Aion:Stigmas:Enabled` (the default) the developer-kit actives above are stigmas
+([STIGMAS.md](STIGMAS.md)): the server leaves them out of the level kit, and characters buy them with Stigma Shards
+instead. Only the passives among the OURS unlocks still come by level.
+
 ## Skill levels
 
 **What a skill level is.** A skill has level 1 when learned. Levels 2 to 10 are bought with skill points. The levels

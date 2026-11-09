@@ -136,6 +136,10 @@ same members (all to the killer with `killer`). `Aion__Rules__FallbackLoot=false
 without a reward table in the client's data (about three in four) roll instead (tools/data/fallback-loot.json:
 equipment of the monster's level from tools/data/items.json, rebuilt by `tools/fallback_loot.py`).
 
+Stigmas follow global's rules by default (docs/STIGMAS.md): 4 slots at levels 22, 27, 32 and 37, Stigma Shards from
+levelling, stigma levels to 20. `Aion__Stigmas__Slots=6` opens Korea's 6 slots, `Aion__Stigmas__ShardRate=2` doubles
+the shards, and `Aion__Stigmas__Enabled=false` goes back to every kit skill unlocking by level.
+
 ## Playerbots
 
 Off by default. With them on, a player types `//bot add <character>` in chat and one of their own other characters joins

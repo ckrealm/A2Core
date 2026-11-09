@@ -22,7 +22,7 @@ public sealed partial class GameSession
     public bool Bot { get; init; }
 
     /// <summary>Whether the character knows the skill now (its class kit at its level).</summary>
-    public bool Knows(int skillId) => learned.Contains(skillId);
+    public bool Knows(int skillId) => learned.Contains(skillId) || StigmaCastable(skillId);
 
     /// <summary>When the skill is ready again (0: never used); the cast handler refuses it before (unless NoCool).</summary>
     public long CooldownUntil(int skillId) => noCool ? 0 : cooldowns.GetValueOrDefault(skillId);

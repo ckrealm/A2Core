@@ -38,6 +38,8 @@ public sealed record GameSessionOptions
     public WorldRules Rules { get; init; } = WorldRules.Default;
     /// <summary>Aion:Dungeons: daily entry limits (off by default) and the untracked-objective fallback delay.</summary>
     public DungeonOptions Dungeons { get; init; } = DungeonOptions.Default;
+    /// <summary>Aion:Stigmas: stigma slots, shard rate and level cap (docs/STIGMAS.md); on by default, as on global.</summary>
+    public StigmaOptions Stigmas { get; init; } = StigmaOptions.Default;
     /// <summary>Heal/buff/debuff effects of class skills; null: the embedded tools/data/skill-effects.json (OURS values).</summary>
     public SkillEffectTable? SkillEffects { get; init; }
 }
@@ -1631,6 +1633,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
                 registeredWings.UnionWith(await store.WingsAsync(state.Summary.CharacterId, ct));
                 var extras = await store.ExtrasAsync(state.Summary.CharacterId, ct);
                 LoadSkillLevels(await store.SkillsAsync(state.Summary.CharacterId, ct));
+                LoadStigmas(await store.StigmasAsync(state.Summary.CharacterId, ct));
                 LoadAchievements(await store.AchievementsAsync(state.Summary.CharacterId, ct), await store.GroupRewardsTakenAsync(state.Summary.CharacterId, ct), now);
                 LoadCollections(await store.CollectionsAsync(state.Summary.CharacterId, ct));
                 LoadBossChallenges(await store.BossChallengesAsync(state.Summary.CharacterId, ct));
@@ -1702,9 +1705,10 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         var gender = character?.Gender ?? 1;
         var profile = data.Profile(character?.CreationId ?? 1, gender);
         // Skills follow the character level (tools/class_skills.py), not a grant list.
-        var kit = profile is null ? [] : data.LearnedSkills(profile.Class, level);
-        learned = kit.Select(k => k.SkillId).ToHashSet();
         className = profile?.Class;
+        var kit = profile is null ? [] : LevelKit(profile.Class, level);
+        learned = kit.Select(k => k.SkillId).ToHashSet();
+        ChooseBotStigmas();
         var (mapId, at) = spawn ?? (GamePackets.SpawnMapId, GamePackets.SpawnPosition);
         worldMap = mapId;
         // Map geometry loads off the game loop; NPCs use it from the tick it is ready.
@@ -1849,8 +1853,11 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
             if (profile is not null)
             {
                 // Owned skills before the hotbar (0x5100 then 0x5600; not the usmap ordinals).
-                replies.Add(GamePackets.SkillList(WithLevels(kit)));
+                // Learned stigmas follow the level kit with their stigma levels (docs/STIGMAS.md), then the shards left (CANDIDATE:
+                // the official entry sends no SkillPointUpdate, but the shards here are the server's, not the client's Exp.dat).
+                replies.Add(GamePackets.SkillList([.. WithLevels(kit), .. StigmaEntries()]));
                 replies.Add(GamePackets.SkillOptionSlots(learned.Where(id => id >= 11_000_000 && id != CombatDodge && data.Skill(id)?.Type == "Active").Order().ToList()));
+                if (StigmasOn && level >= data.Stigmas.UnlockLevel) replies.Add(StigmaShardUpdate());
                 replies.AddRange(GamePackets.EmptyEntryLists());
                 replies.AddRange(SettingsAtEntry(now));
                 // The player's saved hotbar, else the class's default bar for its level.
@@ -1959,7 +1966,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         var weapons = (definition?.Weapons ?? []).Where(w => w != "None").ToList();
         var accepted = definition is not null && resources is not null && !dead
             && resources.Mp >= cost.Mp && resources.Sp >= cost.Sp && resources.Hp > cost.Hp
-            && (learned.Contains(skill) || normalDodge)
+            && (learned.Contains(skill) || normalDodge || StigmaCastable(skill))
             && (weapons.Count == 0 || weapons.Contains(data.WeaponType(equippedWeapon) ?? ""))
             && (noCool || now >= cooldowns.GetValueOrDefault(cooldownKey))
             && (dodging || SkillTargetAllowed(skill, request.TargetKey));

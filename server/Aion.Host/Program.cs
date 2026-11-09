@@ -102,6 +102,10 @@ var marketReferences = market.PriceFile is { Length: > 0 } priceFile ? Aion.Worl
     : ((Dictionary<int, long> ById, Dictionary<string, long> ByName)?)null;
 
 builder.Services.AddSingleton(dungeonRules);
+// Aion:Stigmas (docs/STIGMAS.md): Enabled (default on, global's stigma rules), Slots (4 global, 6 Korea), ShardRate, MaxLevel,
+// RequireSlot.
+var stigmaOptions = (builder.Configuration.GetSection("Aion:Stigmas").Get<Aion.World.StigmaOptions>() ?? Aion.World.StigmaOptions.Default).Validated();
+builder.Services.AddSingleton(stigmaOptions);
 if (native.LoginPort is not null || native.GamePort is not null)
 {
     if (!native.Development && !accountsReady)
@@ -279,8 +283,8 @@ builder.WebHost.ConfigureKestrel(options =>
 builder.Services.AddSingleton<WardrobeAccess>();
 var app = builder.Build();
 if (native.LoginPort is not null || native.GamePort is not null)
-    app.Logger.LogInformation("World rates: {Rates} (scheduled events multiply on top, each 0.1-10). Rules: {Rules}. Players: {Players}. Dungeons: {Dungeons}.",
-        rates, rules, native.MaxPlayers is > 0 and var maxPlayers ? $"at most {maxPlayers}" : $"no cap beyond {native.MaxConnections} connections per port", dungeonRules);
+    app.Logger.LogInformation("World rates: {Rates} (scheduled events multiply on top, each 0.1-10). Rules: {Rules}. Players: {Players}. Dungeons: {Dungeons}. Stigmas: {Stigmas}.",
+        rates, rules, native.MaxPlayers is > 0 and var maxPlayers ? $"at most {maxPlayers}" : $"no cap beyond {native.MaxConnections} connections per port", dungeonRules, stigmaOptions);
 // Chat mutes and the chat log go through the staff tools when both exist.
 if (app.Services.GetService<Aion.Host.Authentication.ServerControl>() is { } serverControl && app.Services.GetService<ChatRelay>() is { } chatRelay)
     chatRelay.Moderation = serverControl;

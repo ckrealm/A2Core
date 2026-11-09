@@ -112,11 +112,14 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
                 return Market is { } market ? await market.HandleAsync(actor.Session, line[2..].Trim(), ct) : "The market is not available on this server.";
             if (line.StartsWith("bot", StringComparison.OrdinalIgnoreCase) && (line.Length == 3 || char.IsWhiteSpace(line[3])))
                 return await BotAsync(actor.Session, line[3..].Trim(), ct);
+            // //stigma (docs/STIGMAS.md): every player sees its Stigma Shards, slots and stigmas.
+            if (line.Equals("stigma", StringComparison.OrdinalIgnoreCase) || line.Equals("stigmas", StringComparison.OrdinalIgnoreCase))
+                return actor.Session.StigmaSummary();   // read-only, like //ah's reads
             if (line.Length == 0 || line.Equals("help", StringComparison.OrdinalIgnoreCase))
                 return await builder.AllowedAsync(actor.Session, ct)
                     ? "Builder commands (in chat: //<command>; console: s <command>): " + string.Join(", ", BuilderCommands.Supported)
                         + (Bots is { Options.Enabled: true } ? "; //bot add <character> for playerbots" : "")
-                    : "Commands: //report <text> sends a report to the staff."
+                    : "Commands: //report <text> sends a report to the staff. //stigma shows your Stigma Shards and slots."
                         + (Bots is { Options: { Enabled: true, PlayersMayUse: true } } ? " //bot add <character> summons one of your characters as a bot." : "");
             return await actor.Session.InvokeAsync(async now =>
             {
