@@ -91,6 +91,9 @@ Aion.World.GameData.BrawlerOwnModel = rules.BrawlerOwnModel;
 // GlobalLevel, GlobalDailyLevel, KoreaOnly, KoreaOnlyLevel, Command (/dungeon), HardModeRevives.
 var dungeonRules = (builder.Configuration.GetSection("Aion:Dungeons").Get<Aion.World.DungeonOptions>() ?? Aion.World.DungeonOptions.Default)
     .Validated(Aion.World.DungeonOptions.KnownDungeon);
+// Aion:Bosses (OURS, docs/friends-server/BOSSES.md): Phases, Frenzy, FrenzySeconds, DamageScale.
+var bossRules = (builder.Configuration.GetSection("Aion:Bosses").Get<Aion.World.BossOptions>() ?? Aion.World.BossOptions.Default).Validated();
+builder.Services.AddSingleton(bossRules);
 builder.Services.AddSingleton(rates);
 builder.Services.AddSingleton(rules);
 // Playerbots (OURS, docs/PLAYERBOTS.md): Aion:Bots (Enabled, PlayersMayUse, MaxPerAccount, MaxTotal, JoinParty, TeleportBeyond).
@@ -116,6 +119,10 @@ builder.Services.AddSingleton(unlocks);
 // Aion:Boost (OURS): /boost raises an alt to Level (45) for Price Kinah (10000000) once the account has a character at RequiredLevel (45).
 var boost = (builder.Configuration.GetSection("Aion:Boost").Get<Aion.World.BoostOptions>() ?? Aion.World.BoostOptions.Default).Validated(Aion.World.GameData.Embedded.MaxLevel);
 builder.Services.AddSingleton(boost);
+// Aion:Stigmas (docs/STIGMAS.md): Enabled (default on, global's stigma rules), Slots (4 global, 6 Korea), ShardRate, MaxLevel,
+// RequireSlot.
+var stigmaOptions = (builder.Configuration.GetSection("Aion:Stigmas").Get<Aion.World.StigmaOptions>() ?? Aion.World.StigmaOptions.Default).Validated();
+builder.Services.AddSingleton(stigmaOptions);
 // Aion:Daevanion (OURS, docs/DAEVANION.md): PointRate, ExtraPoints, FreeReset, MaxBoardLevel, DisabledBoards, LevelPoints.
 builder.Services.AddSingleton((builder.Configuration.GetSection("Aion:Daevanion").Get<Aion.World.DaevanionOptions>() ?? Aion.World.DaevanionOptions.Default).Validated());
 if (native.LoginPort is not null || native.GamePort is not null)
@@ -303,6 +310,8 @@ var app = builder.Build();
 if (native.LoginPort is not null || native.GamePort is not null)
     app.Logger.LogInformation("World rates: {Rates} (scheduled events multiply on top, each 0.1-10). Rules: {Rules}. Players: {Players}. Dungeons: {Dungeons}. Time gates: {TimeGates}. Unlocks: {Unlocks}. Boost: {Boost}.",
         rates, rules, native.MaxPlayers is > 0 and var maxPlayers ? $"at most {maxPlayers}" : $"no cap beyond {native.MaxConnections} connections per port", dungeonRules, timeGates, unlocks, boost);
+    app.Logger.LogInformation("World rates: {Rates} (scheduled events multiply on top, each 0.1-10). Rules: {Rules}. Players: {Players}. Dungeons: {Dungeons}. Bosses: {Bosses}. Stigmas: {Stigmas}.",
+        rates, rules, native.MaxPlayers is > 0 and var maxPlayers ? $"at most {maxPlayers}" : $"no cap beyond {native.MaxConnections} connections per port", dungeonRules, bossRules, stigmaOptions);
 // Chat mutes and the chat log go through the staff tools when both exist.
 if (app.Services.GetService<Aion.Host.Authentication.ServerControl>() is { } serverControl && app.Services.GetService<ChatRelay>() is { } chatRelay)
     chatRelay.Moderation = serverControl;

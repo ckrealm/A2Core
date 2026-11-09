@@ -45,6 +45,10 @@ public sealed record GameSessionOptions
     public UnlockOptions Unlocks { get; init; } = UnlockOptions.Official;
     /// <summary>Aion:Boost (the /boost alt boost); off unless the host passes its own.</summary>
     public BoostOptions Boost { get; init; } = BoostOptions.Off;
+    /// <summary>Aion:Stigmas: stigma slots, shard rate and level cap (docs/STIGMAS.md); on by default, as on global (Brandon's choice).</summary>
+    public StigmaOptions Stigmas { get; init; } = StigmaOptions.Default;
+    /// <summary>Aion:Bosses: boss phases, slams, adds and the hard modes' frenzy (all on by default).</summary>
+    public BossOptions Bosses { get; init; } = BossOptions.Default;
     /// <summary>Heal/buff/debuff effects of class skills; null: the embedded tools/data/skill-effects.json (OURS values).</summary>
     public SkillEffectTable? SkillEffects { get; init; }
     /// <summary>Aion:Fun (field bosses, //buff, //hub, duel restore); null: none of them (retail-style respawns are off too).</summary>
@@ -1651,6 +1655,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
                 registeredWings.UnionWith(await store.WingsAsync(state.Summary.CharacterId, ct));
                 var extras = await store.ExtrasAsync(state.Summary.CharacterId, ct);
                 LoadSkillLevels(await store.SkillsAsync(state.Summary.CharacterId, ct));
+                LoadStigmas(await store.StigmasAsync(state.Summary.CharacterId, ct));
                 LoadAchievements(await store.AchievementsAsync(state.Summary.CharacterId, ct), await store.GroupRewardsTakenAsync(state.Summary.CharacterId, ct), now);
                 LoadCollections(await store.CollectionsAsync(state.Summary.CharacterId, ct));
                 LoadBossChallenges(await store.BossChallengesAsync(state.Summary.CharacterId, ct));
@@ -1674,6 +1679,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
                 await LoadSocialAsync(ct);
                 character = new Choice(state.Summary.Name, state.Gender, state.CreationId, state.Appearance, state.VoiceType);
                 level = data.ClampLevel(state.Progress.Level);
+                await TrimStigmasAsync(store, state.Summary.CharacterId, ct);   // a GM level-down can leave stigmas without the shards
                 var savedMap = state.Progress.MapId.Value;
                 // Logged out inside an instance layer: back at its exit on the field map (the copy is gone).
                 if (Instances.Of(savedMap) is { } left)
@@ -1725,9 +1731,10 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         var gender = character?.Gender ?? 1;
         var profile = data.Profile(character?.CreationId ?? 1, gender);
         // Skills follow the character level (tools/class_skills.py), not a grant list.
-        var kit = profile is null ? [] : data.LearnedSkills(profile.Class, level);
-        learned = kit.Select(k => k.SkillId).ToHashSet();
         className = profile?.Class;
+        var kit = profile is null ? [] : LevelKit(profile.Class, level);
+        learned = kit.Select(k => k.SkillId).ToHashSet();
+        ChooseBotStigmas();
         OpenFixedNodes();   // before the pools, the stat sheet and the passives are worked out
         var (mapId, at) = spawn ?? (GamePackets.SpawnMapId, GamePackets.SpawnPosition);
         worldMap = mapId;
@@ -1874,7 +1881,9 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
             if (profile is not null)
             {
                 // Owned skills before the hotbar (0x5100 then 0x5600; not the usmap ordinals).
-                replies.Add(GamePackets.SkillList(WithLevels(kit)));
+                // Learned stigmas follow the level kit with their stigma levels (docs/STIGMAS.md). No shard count is sent: as for skill
+                // points, the official entry sends no SkillPointUpdate (the client reads its Exp.dat); it goes out after a purchase.
+                replies.Add(GamePackets.SkillList([.. WithLevels(kit), .. StigmaEntries()]));
                 replies.Add(GamePackets.SkillOptionSlots(learned.Where(id => id >= 11_000_000 && id != CombatDodge && data.Skill(id)?.Type == "Active").Order().ToList()));
                 replies.AddRange(GamePackets.EmptyEntryLists());
                 replies.AddRange(SettingsAtEntry(now));
@@ -1984,7 +1993,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         var weapons = (definition?.Weapons ?? []).Where(w => w != "None").ToList();
         var accepted = definition is not null && resources is not null && !dead
             && resources.Mp >= cost.Mp && resources.Sp >= cost.Sp && resources.Hp > cost.Hp
-            && (learned.Contains(skill) || normalDodge)
+            && (learned.Contains(skill) || normalDodge || StigmaCastable(skill))
             && (weapons.Count == 0 || weapons.Contains(data.WeaponType(equippedWeapon) ?? ""))
             && (noCool || now >= cooldowns.GetValueOrDefault(cooldownKey))
             && (dodging || SkillTargetAllowed(skill, request.TargetKey));
@@ -2089,8 +2098,8 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
             }
             if (now < due) continue;
             respawnAt.Remove(target.Key);
-            // In a scripted layer or dungeon the dead stay dead for the run (official dungeon mobs do not respawn).
-            if (RunsMapEvents) continue;
+            // In a scripted layer or dungeon the dead stay dead for the run (official dungeon mobs do not respawn); so do summoned adds.
+            if (RunsMapEvents || Summons.IsSummon(target.Key)) continue;
             target.Hp = target.HpMax;
             target.CorpseRemoved = false;
             target.KilledAtMs = 0;
@@ -2250,8 +2259,8 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
     /// <summary>OURS: a dodge (CombatDodge / NormalDodge) evades every monster hit that lands within this long of its start.</summary>
     public const int DodgeEvadeMs = DodgeAbnormalMs + DodgeAbnormalOffMs;
     long dodgingUntil;
-    /// <summary>A class's own Dodge (Skill.dat "Dodge", class base + 100: 11000100 Gladiator ... 18000100 Chanter) or NormalDodge.</summary>
-    public static bool IsDodge(int skill) => skill == NormalDodge || skill % 1_000_000 == 100 && skill / 1_000_000 is >= 11 and <= 18;
+    /// <summary>A class's own Dodge (Skill.dat "Dodge", class base + 100: 11000100 Gladiator ... 18000100 Chanter, 19000100 Brawler) or NormalDodge.</summary>
+    public static bool IsDodge(int skill) => skill == NormalDodge || skill % 1_000_000 == 100 && skill / 1_000_000 is >= 11 and <= 19;
     /// <summary>When this player last blocked, evaded or dodged (the bots' after-block/evasion/dodge skills).</summary>
     public long LastBlockAt { get; private set; } = long.MinValue / 2;
     public long LastEvadeAt { get; private set; } = long.MinValue / 2;
@@ -2263,11 +2272,12 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
     /// The player's guard against a monster's hit (NpcAi.Guard): a dodge in progress or the evasion roll takes none of it, a block
     /// half; returns the damage taken.
     /// </summary>
-    internal int GuardHit(int damage, long now)
+    internal int GuardHit(int damage, long now, Random roll)
     {
         if (resources is null || dead || damage <= 0) return damage;
-        // Random.Shared: the shared map's AI tick calls this from another player's loop, so this session's rng is not safe here.
-        if (now < dodgingUntil || Random.Shared.NextDouble() < EvasionChance(className))
+        // The rolls use the calling AI's rng: the shared map's AI tick calls this from another player's loop, so this session's
+        // own rng is not safe here (and a seeded map AI keeps the checks deterministic).
+        if (now < dodgingUntil || roll.NextDouble() < EvasionChance(className))
         {
             LastEvadeAt = now;
             Evasions++;
@@ -2276,7 +2286,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         // The equipped gear's Block, plus the starter weapon a development login holds outside the inventory.
         var starter = inventory.Values.Any(i => i.Container == InventoryItem.Equipped && i.Slot == 1) ? 0 : data.Item(equippedWeapon)?.Stat("Block") ?? 0;
         var block = Math.Min(BlockCap, (EquippedItems().Sum(i => i.Stat("Block")) + starter) / 1000.0);
-        if (block > 0 && Random.Shared.NextDouble() < block)
+        if (block > 0 && roll.NextDouble() < block)
         {
             LastBlockAt = now;
             Blocks++;
@@ -3088,22 +3098,26 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
             {
                 aiMap.AiTickAt = now + 50;
                 aiMap.Ai.DefenseOf ??= key => aiMap.Players.TryGetValue(key, out var p) ? p.Session.Defense : 0;
-                aiMap.Ai.Guard ??= (key, damage, at) => aiMap.Players.TryGetValue(key, out var p) ? p.Session.GuardHit(damage, at) : damage;
+                aiMap.Ai.BossRules = options.Bosses;
+                aiMap.Ai.Guard ??= (key, damage, at, roll) => aiMap.Players.TryGetValue(key, out var p) ? p.Session.GuardHit(damage, at, roll) : damage;
                 aiMap.BroadcastAll(aiMap.Ai.Tick(aiMap.Targets, aiMap.NpcVictims(), now, (key, damage) =>
                 {
                     if (aiMap.Players.TryGetValue(key, out var victim)) victim.Send(victim.Session.NpcHitsPlayer(damage, now, aiMap.Ai.LastAttacker));
                     return [];
                 }));
                 var npcKills = NpcKillsByNpcs(aiMap.Ai, now);
+                npcKills.AddRange(BossSummons(aiMap.Ai, aiMap.Targets, now));
                 aiMap.BroadcastAll(npcKills, worldPlayer);
                 replies.AddRange(npcKills);
             }
         }
         else if (targets is not null && (ai.DefenseOf ??= _ => Defense) is not null)
         {
-            ai.Guard ??= (_, damage, at) => GuardHit(damage, at);
+            ai.BossRules = options.Bosses;
+            ai.Guard ??= (_, damage, at, roll) => GuardHit(damage, at, roll);
             replies.AddRange(Visible(ai.Tick(targets, invisible || dead || FriendlyToAll ? null : position, now, damage => NpcHitsPlayer(damage, now, ai.LastAttacker))));
             replies.AddRange(NpcKillsByNpcs(ai, now));
+            replies.AddRange(BossSummons(ai, targets, now));
         }
         PartyTick(now);
         DuelTick(now);

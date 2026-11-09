@@ -226,6 +226,27 @@ public sealed class PostgresGameplayStore(NpgsqlDataSource source) : IGameplaySt
         await t.CommitAsync(ct); return set;
     }
 
+    public async Task<IReadOnlyList<StigmaState>?> StigmasAsync(VerifiedAccount account, Guid character, CancellationToken ct=default)
+    {
+        await using var c=await source.OpenConnectionAsync(ct); await using var t=await c.BeginTransactionAsync(ct);
+        if(!await Own(c,t,account.AccountId,character,ct)) return null;
+        var stigmas=new List<StigmaState>();
+        await using(var q=Query(c,t,"SELECT skill_id,level FROM game.character_stigmas WHERE character_id=$1 ORDER BY skill_id",character))
+        await using(var r=await q.ExecuteReaderAsync(ct))
+            while(await r.ReadAsync(ct)) stigmas.Add(new StigmaState(r.GetInt32(0),r.GetInt32(1)));
+        await t.CommitAsync(ct); return stigmas;
+    }
+
+    public async Task<bool> SetStigmaAsync(VerifiedAccount account, Guid character, int skillId, int level, CancellationToken ct=default)
+    {
+        if(skillId<=0 || level is <0 or >40) throw new GameplayException("invalid_stigma_level");
+        await using var c=await source.OpenConnectionAsync(ct); await using var t=await c.BeginTransactionAsync(ct);
+        if(!await Own(c,t,account.AccountId,character,ct)) return false;
+        if(level==0) await Execute(c,t,"DELETE FROM game.character_stigmas WHERE character_id=$1 AND skill_id=$2",ct,character,skillId);
+        else await Execute(c,t,"INSERT INTO game.character_stigmas(character_id,skill_id,level) VALUES($1,$2,$3) ON CONFLICT (character_id,skill_id) DO UPDATE SET level=EXCLUDED.level",ct,character,skillId,level);
+        await t.CommitAsync(ct); return true;
+    }
+
     public async Task<bool> SaveMasteryAsync(VerifiedAccount account, Guid character, string kind, int category, int level, long exp, CancellationToken ct=default)
     {
         if(kind is not ("craft" or "gather") || category is <0 or >5 || level is <1 or >100 || exp<0) throw new GameplayException("invalid_mastery");

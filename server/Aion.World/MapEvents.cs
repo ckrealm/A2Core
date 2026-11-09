@@ -60,13 +60,14 @@ public sealed record MapEventObjective(
     /// <summary>
     /// Objectives the server cannot follow (finished after Aion:Dungeons:UntrackedObjectiveSeconds so the event goes on; each
     /// fallback is logged). Counts in map-events.json (all maps / served maps): AchieveUnifiedObjectivesScore 405/351 (the
-    /// score each kill or object gives is not in the extracted data), ClearWave 42/42 (the wave tables naming a wave's
-    /// spawns are not extracted; StartWave/EndWave are not run), ClearBoardPuzzle 25/25, UpdateEnvObjState 18/18 (counted
+    /// score each kill or object gives is not in the extracted data), ClearBoardPuzzle 25/25, UpdateEnvObjState 18/18 (counted
     /// when a directive changes the state; a player-broken object is not), CollectItem 13/13 (item names without ids),
     /// GetAbnormal 2/2, PCSocial 2/0, UseUsableItemType 1/0. KillNpcCreatureType (3/2) is tracked from server-side kills
-    /// (any hostile kill: NpcData has no creature type here, CANDIDATE) and has no timer.
+    /// (any hostile kill: NpcData has no creature type here, CANDIDATE) and has no timer. ClearWave (42/42) is tracked when the
+    /// host knows the wave's spawns (<see cref="IMapEventHost.WaveKnown"/>: spawn entries "{wave}_{n}", every wave of the
+    /// Ludra raid, or a hand-made wave of boss-phases.json); the waves of other maps keep the timer.
     /// </summary>
-    public bool Unsupported => Type is "AchieveUnifiedObjectivesScore" or "ClearWave" or "ClearBoardPuzzle" or "GetAbnormal" or "PCSocial"
+    public bool Unsupported => Type is "AchieveUnifiedObjectivesScore" or "ClearBoardPuzzle" or "GetAbnormal" or "PCSocial"
         or "UseUsableItemType" or "CollectItem" or "UpdateEnvObjState";
 }
 
@@ -207,6 +208,41 @@ public sealed class MapEventTables
     static string K(int id) => id.ToString(CultureInfo.InvariantCulture);
 
     public IReadOnlyDictionary<string, MapEventDefinition> Events => file.Events;
+
+    readonly Dictionary<int, IReadOnlySet<string>> wavesByMap = [];
+
+    /// <summary>The wave names the map's events start (StartWave directives anywhere in their scripts).</summary>
+    public IReadOnlySet<string> Waves(int mapId)
+    {
+        lock (wavesByMap)
+        {
+            if (wavesByMap.TryGetValue(mapId, out var known)) return known;
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            void Scan(IEnumerable<MapEventDirective>? list)
+            {
+                foreach (var d in list ?? []) if (d.Type == "StartWave" && d.Value(0).Length > 0) names.Add(d.Value(0));
+            }
+            foreach (var name in file.Maps.GetValueOrDefault(K(mapId)) ?? [])
+            {
+                var e = file.Events[name];
+                foreach (var rule in e.Rules ?? []) Scan(rule.Directives);
+                Scan(e.OnComplete);
+                Scan(e.OnFailure);
+                foreach (var stage in e.Stages)
+                {
+                    Scan(stage.FailDirectives);
+                    foreach (var step in stage.Steps)
+                    {
+                        Scan(step.Pre);
+                        Scan(step.Post);
+                        Scan(step.FailDirectives);
+                        foreach (var o in step.Objectives) { Scan(o.Pre); Scan(o.Post); }
+                    }
+                }
+            }
+            return wavesByMap[mapId] = names;
+        }
+    }
     public MapEventDefinition? Event(string name) => file.Events.GetValueOrDefault(name);
     /// <summary>The events of a map the server runs (served instance layers and dungeons).</summary>
     public IReadOnlyList<MapEventDefinition> EventsOn(int mapId) =>
@@ -292,6 +328,16 @@ public interface IMapEventHost
     bool SpawnerExists(string spawner);
     bool PlayerDead { get; }
     double? DistanceTo(string spawner);
+
+    /// <summary>StartWave: the wave's spawns come (in their parts) and attack; EndWave: they go.</summary>
+    void StartWave(string wave) { }
+    void EndWave(string wave) { }
+    /// <summary>The host knows the wave's spawns, so ClearWave is tracked instead of timed out.</summary>
+    bool WaveKnown(string wave) => false;
+    /// <summary>The wave was started and every one of its monsters is dead.</summary>
+    bool WaveDone(string wave) => false;
+    /// <summary>A spawner's living NPC's HP in percent (the HpRemaining condition), or null.</summary>
+    int? HpPercent(string spawner) => null;
 }
 
 /// <summary>One player's run of a map event: stage, step, objective counters, directive sequences and repeaters.</summary>
@@ -377,7 +423,7 @@ public sealed class MapEventRun
         for (var i = 0; i < step.Objectives.Length; i++)
         {
             var o = step.Objectives[i];
-            if ((o.ClientSide || o.Unsupported) && i < fallbackAt.Length) fallbackAt[i] = now + (o.Unsupported ? Host.UntrackedObjectiveMs : FallbackMs);
+            if ((o.ClientSide || Untracked(o)) && i < fallbackAt.Length) fallbackAt[i] = now + (Untracked(o) ? Host.UntrackedObjectiveMs : FallbackMs);
             // A CloseGuide objective shows its guide (the forced popup) when the step begins: OBSERVED 2026-10-19, ShowGuide (46) for
             // Tutorial_ForcedPopup_Fly_01 at the Subspace's first step and Tutorial_ForcedPopup_L1_ExitDungeon_01 with the Dream
             // Crossroad's join; the client reports CloseGuide (0x9230 kind 2) when the player closes it. Without it the player waited
@@ -386,9 +432,19 @@ public sealed class MapEventRun
             if (o.Pre is { Length: > 0 } pre) sequences.Add(new Sequence(pre, stepSerial));
         }
         sequences.Add(new Sequence(step.Pre, stepSerial));
+        // A wave already cleared before its step began (started by an earlier step) counts at once.
+        if (step.Objectives.Any(o => o.Type == "ClearWave" && Host.WaveDone(o.Value(0))))
+            Apply(o => o.Type == "ClearWave" && Host.WaveDone(o.Value(0)), now, whole: true);
         Tick(now);
         CheckStep(now);
     }
+
+    /// <summary>An objective the server cannot follow here: the untracked types, and a wave whose spawns the host does not know.</summary>
+    bool Untracked(MapEventObjective o) => o.Unsupported || o.Type == "ClearWave" && !Host.WaveKnown(o.Value(0));
+
+    /// <summary>A wave of this run's map was cleared (every monster of it dead): ClearWave objectives naming it.</summary>
+    public bool WaveCleared(string wave, long now) =>
+        Apply(o => o.Type == "ClearWave" && string.Equals(o.Value(0), wave, StringComparison.OrdinalIgnoreCase), now, whole: true);
 
     // ---------- Events from the world ----------
 
@@ -563,7 +619,7 @@ public sealed class MapEventRun
                     var late = step.Objectives[i];
                     FellBack++;
                     Host.Unsupported(this, $"objective {late.Type} {late.Value(0)} of {Name} stage {StageOrder} step {StepOrder} finished by timeout"
-                        + (late.Unsupported ? " (untracked: Aion:Dungeons:UntrackedObjectiveSeconds)" : " (the client did not report it)"));
+                        + (Untracked(late) ? " (untracked: Aion:Dungeons:UntrackedObjectiveSeconds)" : " (the client did not report it)"));
                     Apply(o => ReferenceEquals(o, step.Objectives[i]), now, whole: true);
                 }
         if (Definition.Rules is { } rules)
@@ -615,8 +671,9 @@ public sealed class MapEventRun
                 var other = (int)Number(c.Value(2));
                 return c.Value(1) switch { "Equal" => value == other, "NotEqual" => value != other, "Greater" => value > other, "Less" => value < other, "GreaterEqual" => value >= other, "LessEqual" => value <= other, _ => false };
             }
+            case "HpRemaining": return Host.HpPercent(spawner) is { } hp && hp <= Number(c.Value(1));
             case "TOD": case "DayOfWeek": return true;
-            default: return false;   // FailBoardPuzzle, RemoveFromAggroList, HpRemaining: not tracked
+            default: return false;   // FailBoardPuzzle, RemoveFromAggroList: not tracked
         }
     }
 
@@ -675,8 +732,14 @@ public sealed class MapEventRun
             case "SetValue": SetVariable(d.Int(0) - 1, d.Int(1), false); break;
             case "AddValue": SetVariable(d.Int(0) - 1, d.Int(1), true); break;
             case "StartFocusCamera": Host.FocusCamera(d.Value(0), d.Value(2)); break;
+            case "StartWave": Host.StartWave(d.Value(0)); break;
+            case "EndWave": Host.EndWave(d.Value(0)); break;
             case "CameraShake": case "PlayAct": case "ChangeBT": case "NpcMoveforSeamlessCutscene": case "SetEnvObjCanInteract": case "EnvObjChangePhase": case "NpcChangePhase":
                 break;   // client-side presentation, or NPC details the server does not model; the event goes on
+            // The Ludra raid's revival limit reset (values 0 / 2) and its boss-room abnormal volume (always switched off in the
+            // scripts): the client data has neither the limit nor the volume's abnormal, so there is nothing to apply (CANDIDATE).
+            case "ResetRebirthLimit": case "SetAbnormalVolumeState":
+                break;
             default: Host.Unsupported(this, $"directive {d.Type} {d.Value(0)}"); break;
         }
     }

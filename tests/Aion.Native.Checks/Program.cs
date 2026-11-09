@@ -249,6 +249,15 @@ var lakeBoss = Combat.MapTargets(data, 210016).Values.Single(t => t.NpcId == 270
 Check(lakeBoss.HpMax == 3000 && Combat.MapTargets(data, 210016).Values.First(t => t.NpcId == 2701033).HpMax == 50
       && Combat.HpUnit("NormalMonster", 2) == 75 && Combat.HpForLevel(6) == 532,
       "NPC HP as recorded 2026-10-19: the lake cave boss (hero, grade 5, level 5) 3000, its grade-1 level-1 helper 50, grade 2 at 75 per level unit");
+// From 31 to 44 the HP curve (and the NPC hits it drives) follows the observed 16-30 growth, not a straight line to the level-45
+// endgame point: level 40 ~17.1k (was ~50.5k), so a level-40 monster still needs ~15 hits to kill a level-40 player in level-40
+// gear, as at 30 (it was ~5). The observed points (30, 45) are unchanged.
+{
+    var climbs = Enumerable.Range(16, 30).Select(Combat.HpForLevel).ToList();
+    Check(Combat.HpForLevel(30) == 9975 && Combat.HpForLevel(45) == 70756 && Combat.HpForLevel(40) is > 16_500 and < 18_000
+          && Combat.HpForLevel(44) < 21_000 && climbs.Zip(climbs.Skip(1)).All(p => p.Second > p.First),
+          "monster HP from 31 to 44 follows the observed growth (40 ~17.1k, not ~50.5k) and rises every level to the level-45 point");
+}
 var game = new GameSession(data, new GameSessionOptions { TrainingDummy = true }, new Random(7));   // the combat checks still hit the dummy
 var reply = (await game.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now)).Single();
 Check(reply[0] == 0xff && reply[1] == 0xff, "game login answers with the compressed 0x3615");
@@ -302,6 +311,91 @@ var levelReset = await pointed.HandleAsync(new PacketWriter().U16(GameSession.Sk
 Check(levelReset[0][0] == 0x44 && levelReset[0][1] == 0x38 && BitConverter.ToUInt16(levelReset[0], 2) == 0 && pointed.SkillLevel(11010000) == 1 && pointed.SkillPointsLeft == 16
       && levelReset.Any(b => Op(b) == 0x3813 && b[^1] == 5), "SkillLevelReset_RQ with skill 0: every bought level back to 1 (0x3844), all points back");
 Check((await pointed.HandleAsync(new PacketWriter().U16(GameSession.SkillLevelDownRq).I32(11010000).ToArray(), Now))[0][2] == 1, "a level-1 skill cannot go down (result 1)");
+// Stigmas (docs/STIGMAS.md, tools/data/stigmas.json): global's 4 slots at 22/27/32/37, shards from levelling, 1/2/4/8 per level.
+{
+    var stigmaData = data.Stigmas;
+    var gladStigmas = stigmaData.ClassStigmas("Gladiator");
+    Check(gladStigmas.Count >= 11 && stigmaData.ClassStigmas("Fighter").Count > 0 && stigmaData.SlotsAt(21, 4) == 0 && stigmaData.SlotsAt(22, 4) == 1
+          && stigmaData.SlotsAt(37, 4) == 4 && stigmaData.SlotsAt(50, 4) == 4 && stigmaData.SlotsAt(50, 6) == 6
+          && stigmaData.ShardsAt(22) == 1 && stigmaData.ShardsAt(45) == 30 && stigmaData.Spent(20) == 75 && stigmaData.Cost(21) is null,
+          "stigma table: Gladiator and Brawler stigmas, slots open at 22..37 (6 with Korea's count), 30 shards by 45, 75 to reach level 20");
+    var low = new GameSession(data, new GameSessionOptions { CharacterLevel = 10 }, new Random(12));
+    await low.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+    await low.HandleAsync(create, Now);
+    await low.HandleAsync(select, Now);
+    await low.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    Check((await low.HandleAsync(new PacketWriter().U16(0x383f).I32(gladStigmas[0]).ToArray(), Now))[0][2] == 2 && low.Stigmas.Count == 0,
+          "below level 22 a stigma cannot be learned (result 2)");
+    var stigmaStore = new FakeStore();
+    var stigmaSession = new GameSession(data, new GameSessionOptions(), new Random(13)) { Store = stigmaStore };
+    await stigmaSession.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+    await stigmaSession.HandleAsync(create, Now);
+    stigmaStore.States[0] = stigmaStore.States[0] with { Summary = stigmaStore.States[0].Summary with { Level = 37 }, Progress = stigmaStore.States[0].Progress with { Level = 37 } };
+    await stigmaSession.HandleAsync(new PacketWriter().U16(0x361f).Varint(stigmaStore.States[0].WireId << 16).I32(0).Vec3(Vector3d.Zero).ToArray(), Now);
+    var stigmaEntry = await stigmaSession.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    var entryList = stigmaEntry.First(b => Op(b) == 0x5100);
+    Check(stigmaSession.Level == 37 && stigmaSession.StigmaShardsTotal == 16 && stigmaSession.StigmaSlotsOpen == 4
+          && !gladStigmas.Any(id => entryList.AsSpan().IndexOf(BitConverter.GetBytes(id)) >= 0)
+          && !stigmaEntry.Any(b => Op(b) == 0x5105),
+          "a level-37 Gladiator has 16 shards and 4 slots; its stigmas are not in the level kit; world entry sends no shard count (as for skill points)");
+    Check(new StigmaOptions().ShardRateOr(ServerRates.Official) == 1 && new StigmaOptions().ShardRateOr(ServerRates.Accelerated) == 3
+          && new StigmaOptions { ShardRate = 2 }.ShardRateOr(ServerRates.Accelerated) == 2,
+          "ShardRate unset follows the rates profile (official 1, accelerated 3); a setting wins");
+    var learnStigma = await stigmaSession.HandleAsync(new PacketWriter().U16(0x383f).I32(gladStigmas[0]).ToArray(), Now);
+    Check(learnStigma.Count == 3 && learnStigma[0].SequenceEqual(new PacketWriter().U16(0x3840).U16(0).I32(gladStigmas[0]).ToArray())
+          && Op(learnStigma[1]) == 0x5101 && learnStigma[1][^1] == 3 && learnStigma[2].SequenceEqual(Convert.FromHexString("0551" + "0101" + "02" + "0F"))
+          && stigmaSession.Stigmas[gladStigmas[0]] == 1 && stigmaStore.StigmaRows[gladStigmas[0]] == 1,
+          "SkillLevelUp_RQ on a stigma learns it for 1 shard: 0x3840, AddSkillList (reason SkillPointLevelUp), 15 shards left; stored");
+    for (var i = 0; i < 5; i++) await stigmaSession.HandleAsync(new PacketWriter().U16(0x383f).I32(gladStigmas[0]).ToArray(), Now);
+    Check(stigmaSession.Stigmas[gladStigmas[0]] == 6 && stigmaSession.StigmaShardsLeft == 16 - 7,
+          "levels 2-5 cost 1 shard and level 6 costs 2 (7 spent at level 6)");
+    Check(stigmaSession.SkillLevel(gladStigmas[0]) == 1 + (int)Math.Round(5 * 0.05 / 0.1), "a stigma's level scales damage at its own step (+5% a level)");
+    // Slots: a learned stigma takes a stigma slot (EQuickSlotType 4); an unlearned one, or a fifth stigma, is refused.
+    byte[] StigmaSlot(int slot, int skill) => new PacketWriter().U16(0x5601).U8(0).U8((byte)slot).U8(4).I64(0).I32(0).I32(skill).U8(0).I32(0).U8(0).ToArray();
+    Check(!stigmaSession.Knows(gladStigmas[0]) && (await stigmaSession.HandleAsync(StigmaSlot(40, gladStigmas[1]), Now)).Single()[2] == 1,
+          "an unslotted stigma cannot be cast; an unlearned stigma cannot take a slot");
+    Check((await stigmaSession.HandleAsync(StigmaSlot(40, gladStigmas[0]), Now)).Single()[2] == 0 && stigmaSession.Knows(gladStigmas[0])
+          && stigmaSession.EquippedStigmas.SequenceEqual([gladStigmas[0]]), "a learned stigma on a stigma slot casts");
+    for (var i = 1; i <= 4; i++) await stigmaSession.HandleAsync(new PacketWriter().U16(0x383f).I32(gladStigmas[i]).ToArray(), Now);
+    for (var i = 1; i <= 3; i++) await stigmaSession.HandleAsync(StigmaSlot(40 + i, gladStigmas[i]), Now);
+    Check(stigmaSession.Stigmas.Count == 5 && stigmaSession.EquippedStigmas.Count == 4 && (await stigmaSession.HandleAsync(StigmaSlot(44, gladStigmas[4]), Now)).Single()[2] == 1
+          && (await stigmaSession.HandleAsync(StigmaSlot(43, gladStigmas[4]), Now)).Single()[2] == 0,
+          "a fifth stigma is refused with 4 slots open; it may replace one on its slot");
+    Check((await stigmaSession.HandleAsync(new PacketWriter().U16(GameSession.SkillLevelDownRq).I32(gladStigmas[0]).ToArray(), Now))[0][2] == 0
+          && stigmaSession.Stigmas[gladStigmas[0]] == 5, "SkillLevelDown_RQ takes one stigma level back");
+    var stigmaReset = await stigmaSession.HandleAsync(new PacketWriter().U16(GameSession.SkillLevelResetRq).U8(2).I32(0).ToArray(), Now);
+    Check(Op(stigmaReset[0]) == 0x3844 && BitConverter.ToUInt16(stigmaReset[0], 2) == 0 && stigmaReset.Any(b => Op(b) == GameSession.RemoveSkillListNt)
+          && stigmaSession.Stigmas.Count == 0 && stigmaSession.StigmaShardsLeft == 16 && stigmaStore.StigmaRows.Count == 0
+          && !stigmaStore.QuickSlotRows.Values.Any(s => gladStigmas.Contains(s.SkillId)),
+          "SkillLevelReset_RQ type Stigma, skill 0: every stigma forgotten, all 16 shards back, the stigma slots cleared");
+    // A GM level-down (applied at the next entry) leaves stigmas worth more than the level's shards: they are refunded at load.
+    for (var i = 0; i < 8; i++) await stigmaSession.HandleAsync(new PacketWriter().U16(0x383f).I32(gladStigmas[0]).ToArray(), Now);
+    Check(stigmaStore.StigmaRows[gladStigmas[0]] == 8, "stigma at level 8 before the level-down");
+    stigmaStore.States[0] = stigmaStore.States[0] with { Progress = stigmaStore.States[0].Progress with { Level = 25 } };
+    var relog = new GameSession(data, new GameSessionOptions(), new Random(16)) { Store = stigmaStore };
+    await relog.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+    await relog.HandleAsync(new PacketWriter().U16(0x361f).Varint(stigmaStore.States[0].WireId << 16).I32(0).Vec3(Vector3d.Zero).ToArray(), Now);
+    await relog.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    Check(relog.Level == 25 && relog.Stigmas.Count == 0 && stigmaStore.StigmaRows.Count == 0 && relog.StigmaShardsLeft == 4,
+          "after a level-down to 25 the stigmas over its 4 shards are forgotten and refunded");
+    var stigmaBot = new GameSession(data, new GameSessionOptions { CharacterLevel = 45 }, new Random(15)) { Bot = true };
+    await stigmaBot.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+    await stigmaBot.HandleAsync(create, Now);
+    await stigmaBot.HandleAsync(select, Now);
+    await stigmaBot.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    Check(stigmaBot.EquippedStigmas.Count == 4 && stigmaBot.EquippedStigmas.All(stigmaBot.Knows) && stigmaBot.StigmaShardsLeft < 8
+          && stigmaBot.Stigmas.Values.Max() - stigmaBot.Stigmas.Values.Min() <= 1,
+          "a level-45 playerbot buys 4 stigmas with its 30 shards, raised evenly, and may cast them");
+    var stigmasOff = new GameSession(data, new GameSessionOptions { CharacterLevel = 45, Stigmas = new StigmaOptions { Enabled = false } }, new Random(14));
+    await stigmasOff.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+    await stigmasOff.HandleAsync(create, Now);
+    await stigmasOff.HandleAsync(select, Now);
+    await stigmasOff.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    Check(stigmasOff.Knows(gladStigmas[0]) && !stigmasOff.StigmasOn, "Aion:Stigmas:Enabled false: the old level unlocks give the stigma skills");
+    static bool StigmaRefused(StigmaOptions o) { try { o.Validated(); return false; } catch (InvalidOperationException) { return true; } }
+    Check(StigmaOptions.Default.Validated() == StigmaOptions.Default && StigmaRefused(new StigmaOptions { Slots = 7 })
+          && StigmaRefused(new StigmaOptions { MaxLevel = 25 }), "Aion:Stigmas settings are checked (Slots 0..6, MaxLevel 1..20)");
+}
 // Sprint (Shift): 0x3704 → 0x8d03 + 0x3741; SP drains 500 per 100 ms on 0x8d00; 0x3705 → 0x3722 + 0x3742.
 var sprintOn = new PacketWriter().U16(0x3704).I64(1).ToArray();
 var sprintOff = new PacketWriter().U16(0x3705).I64(1).ToArray();
@@ -2457,7 +2551,7 @@ presence.Enter("Player1", game, null);
 presence.Enter("Visitor", stored, null);
 Check((await gm.HandleAsync(chatter, "player1", "//help", default)).StartsWith("Builder commands"), "configured development GM");
 Check((await gm.HandleAsync(chatter, "[GM] Player1", "//help", default)).StartsWith("Builder commands"), "chat under the displayed name finds the character");
-Check(await gm.HandleAsync(chatter, "Visitor", "//help", default) == "Commands: /report <text> sends a report to the staff. " + GameSession.DungeonHelp, "players get the report and dungeon commands as help");
+Check(await gm.HandleAsync(chatter, "Visitor", "//help", default) == "Commands: /report <text> sends a report to the staff. /stigma shows your Stigma Shards and slots. " + GameSession.DungeonHelp, "players get the report, stigma and dungeon commands as help");
 async Task<string> ChatOnLoop(GameSession loop, string name, string line)
 {
     var pending = gm.HandleAsync(chatter, name, line, default);
@@ -2466,6 +2560,8 @@ async Task<string> ChatOnLoop(GameSession loop, string name, string line)
 }
 Check((await ChatOnLoop(stored, "Visitor", "/dungeon")).StartsWith("Dungeons (/dungeon") && await ChatOnLoop(stored, "Visitor", "//dungeon help") == GameSession.DungeonHelp,
       "/dungeon (and //dungeon) reach the player's dungeon command on its game loop");
+Check((await gm.HandleAsync(chatter, "Visitor", "/stigma", default)).StartsWith("Stigma Shards: 0 of 0. Slots: 0/0."), "/stigma (one slash, a player command) shows a player its shards and slots");
+Check((await gm.HandleAsync(chatter, "Visitor", "//stigma", default)).StartsWith("Stigma Shards: 0 of 0."), "//stigma answers too");
 Check(await gm.HandleAsync(chatter, "Visitor", "//report the bridge is broken", default) == "Reports are not available on this server.", "no reports without staff tools");
 var reports = new List<string>();
 var reporting = new GmCommands(presence, builder) { Report = (_, name, text, _) => { reports.Add(name + ":" + text); return Task.FromResult("sent"); } };
@@ -2475,7 +2571,7 @@ Check((await reporting.HandleAsync(chatter, "Visitor", "//report x", default)).S
 Check((await Gm(stored, "Visitor", "//SetInvisible true")).Reply == "GM permission required.", "others are denied commands");
 Check(await gm.HandleAsync(chatter, "Player1", "/dance", default) == "Unknown command. Use /help." && await gm.HandleAsync(chatter, "Player1", "/gm help", default) == "Unknown command. Use /help."
       && await gm.HandleAsync(chatter, "Player1", "/SetInvisible true", default) == "Unknown command. Use /help.", "only // reaches the builder commands");
-Check(await gm.HandleAsync(chatter, "Visitor", "/help", default) == "Commands: /report <text> sends a report to the staff. " + GameSession.DungeonHelp
+Check(await gm.HandleAsync(chatter, "Visitor", "/help", default) == "Commands: /report <text> sends a report to the staff. /stigma shows your Stigma Shards and slots. " + GameSession.DungeonHelp
       && await gm.HandleAsync(chatter, "Visitor", "/report the bridge is broken", default) == "Reports are not available on this server.", "player commands work with one slash");
 var (singleBoost, _) = await Gm(stored, "Visitor", "/boost");
 var (doubleBoost, _) = await Gm(stored, "Visitor", "//boost");
@@ -3305,6 +3401,181 @@ checks = 0;
 }
 Console.WriteLine($"{checks} dungeon checks passed (entry limits, entry levels, /dungeon, hard-mode revives, untracked objectives, boss area attacks).");
 
+// ---------- Boss phases and scripted waves (tools/data/bpBoss-phases.json, Aion:Bosses, OURS) ----------
+checks = 0;
+{
+    // The embedded bpTable: every Season 1 Expedition mode, the Transcendence dungeons and Ludra; bosses placed on their dungeon's map.
+    var bpTable = BossPhases.Embedded;
+    Check(bpTable.Count >= 60 && bpTable.Of(2320171) is { Role: "final", Frenzy.AfterMs: 240_000, Telegraph: { Skill: 1800140, WindUpMs: 8000 } }
+          && bpTable.Of(2300171) is { Role: "final", Frenzy: null } && bpTable.Of(2310171) is { Frenzy: null }
+          && bpTable.Of(2301014) is { Role: "raid_final", Telegraph.Radius: 900 } && bpTable.Of(2301006) is { Role: "raid" } && bpTable.Of(2301008) is null,
+          "Krao Cave Hard's boss slams with its own 8 s skill and frenzies at 4 minutes; Normal and Easy do not frenzy; Durbati and Lagta are scripted, the Orcus Gem is left to its script");
+    var misplaced = bpTable.All.Where(b => MapEventTables.Embedded.DungeonNamed(b.Script.Dungeon) is not { } room || data.NpcPlaced(b.NpcId, room.Map) is null
+        || !MapEventTables.Embedded.Serves(room.Map)).Select(b => b.NpcId).ToList();
+    Check(misplaced.Count == 0, $"every scripted boss stands in its served dungeon ({string.Join(',', misplaced)})");
+    Check(bpTable.All.All(b => b.Script.Ordered.Select(p => p.At).SequenceEqual(b.Script.Ordered.Select(p => p.At).OrderByDescending(a => a)))
+          && bpTable.All.Where(b => b.Script.Role == "final").All(b => b.Script.Ordered.Any(p => p.Adds is not null)),
+          "phases run from high HP to low; every final boss calls adds");
+    Check(bpTable.Wave(600092, "FierceHornCave_Wave_01") is { Around: "M_PD_FierceHornCave_LycanTotem_01_001", Count: 3 } && bpTable.Wave(600091, "FierceHornCave_Wave_01") is null,
+          "Fierce Horn Den's totem wave is hand-made per map");
+    foreach (var bad in new[] { new BossOptions { FrenzySeconds = -1 }, new BossOptions { DamageScale = 0 } })
+    {
+        var bpRefused = false;
+        try { bad.Validated(); } catch (InvalidOperationException) { bpRefused = true; }
+        Check(bpRefused, "an invalid Aion:Bosses value stops the host at startup");
+    }
+
+    // A bpFight against a scripted bpBoss (NpcAi alone): the slam winds up, then bpHits everyone inside its radius, the victim too;
+    // stepping out dodges it; phases call bpAdds and raise damage; the frenzy comes on time; the bpAdds go when the bpBoss dies.
+    var slamSkill = 1220560;
+    var bpScript = new BossScript("Test_Boss", "KraoCave_Easy", "final", new BossTelegraph(slamSkill, 10_000, 2000, 500, 2.0, "slam!"),
+        [new BossPhase(70, "call", Adds: new BossAdds(2310102, 2), Notice: "help!"), new BossPhase(40, "enrage", Damage: 2.0, Haste: 0.5)],
+        new BossFrenzy(60_000, 3.0, 0.5, "frenzy!"));
+    var bpAggro = new AggroShape("Circle", 1000, 0, 0, 1000, "Upper");
+    var bpBoss = new Target { Key = 3001, Name = "Test_Boss", NpcId = 999, Hp = 10_000, HpMax = 10_000, Level = 7, Position = Vector3d.Zero, Aggressive = true,
+        WalkSpeed = 100, RunSpeed = 200, Radius = 120, Aggro = bpAggro, Skills = [slamSkill], SubType = "HeroMonster" };
+    var bpFightAi = new NpcAi(new Random(3), data) { Bosses = new BossPhases(new Dictionary<int, BossScript> { [999] = bpScript }), DefenseOf = _ => 0 };
+    var bpArena = new Dictionary<int, Target> { [bpBoss.Key] = bpBoss };
+    var bpPlayers = new List<(int Key, Vector3d Position)> { (100_001, new Vector3d(200, 0, 0)), (100_002, new Vector3d(300, 200, 0)), (100_003, new Vector3d(2500, 0, 0)) };
+    var bpHits = new List<(int Key, int Damage, long At)>();
+    var bpFightPackets = new List<byte[]>();
+    long bpClock = 0;
+    void Step(long until)
+    {
+        for (; bpClock <= until; bpClock += 50)
+            bpFightPackets.AddRange(bpFightAi.Tick(bpArena, bpPlayers, bpClock, (key, damage) => { bpHits.Add((key, damage, bpClock)); return []; }));
+    }
+    Step(100);
+    var bpFight = bpFightAi.FightOf(bpBoss);
+    Check(bpFight is { Reached: 0, Damage: 1.0 } && bpFight.NextSlamMs is > 0 and <= 5_100, "the pull starts the boss's fight; its first slam comes half an interval in");
+    Step(5_000);
+    var windingAt = bpClock;
+    while (bpFightAi.TelegraphArea(bpBoss) is null && bpClock < 8_000) Step(bpClock);
+    var bpDue = bpFightAi.TelegraphDueAt(bpBoss);
+    Check(bpFightAi.TelegraphArea(bpBoss) == 620 && bpDue is { } d && d - bpClock is > 2_000 and <= 2_650
+          && bpFightPackets.Any(b => b.SequenceEqual(GameSession.Notice("slam!", 22, "FF8040"))),
+          "the slam winds up (2 s wind-up plus the hit delay): its area is 5 m plus the boss's radius, the warning goes out");
+    Check(bpFightAi.WindingArea(bpBoss) == 620 && bpFightAi.SpecialDueAt(bpBoss) == bpDue && !bpFightAi.Interrupt(bpBoss, bpClock),
+          "the bots' WindingArea and SpecialDueAt report the slam; an interrupt skill does not break it");
+    bpHits.Clear();
+    Step(bpDue!.Value + 50);
+    var slamHits = bpHits.Where(h => h.At >= bpDue).ToList();
+    Check(slamHits.Select(h => h.Key).OrderBy(k => k).SequenceEqual([100_001, 100_002]) && slamHits.All(h => h.Damage is >= 90 and <= 110)
+          && bpFightAi.SlamsLanded == 1 && bpFight!.Slams == 1,
+          "the slam lands on the victim and the player 3.6 m away at twice a normal hit; the player 25 m away is not touched");
+    // Dodge: the victim steps 15 m away during the next wind-up.
+    while (bpFightAi.TelegraphArea(bpBoss) is null && bpClock < 30_000) Step(bpClock);
+    bpPlayers[0] = (100_001, new Vector3d(1500, 0, 0));
+    bpHits.Clear();
+    Step(bpFightAi.TelegraphDueAt(bpBoss)!.Value + 50);
+    Check(bpFight!.Slams == 2 && bpHits.Where(h => h.Key == 100_001).All(h => h.At < bpClock - 700) && bpHits.Any(h => h.Key == 100_002),
+          "a player who walked out of the radius during the wind-up is not hit; the one who stayed is");
+    // The Guard hook (blocks, a Dodge's i-frames) applies to slams: the player 100_002 evades this one.
+    bpFightAi.Guard = (key, damage, _, _) => key == 100_002 ? 0 : damage;
+    while (bpFightAi.TelegraphArea(bpBoss) is null && bpClock < 60_000) Step(bpClock);
+    bpHits.Clear();
+    Step(bpFightAi.TelegraphDueAt(bpBoss)!.Value + 50);
+    Check(bpHits.Any(h => h.Key == 100_001 && h.Damage > 0) && bpHits.Where(h => h.Key == 100_002).All(h => h.Damage == 0), "a guarded (dodged) slam does no damage");
+    bpFightAi.Guard = null;
+    // A stun during the wind-up breaks the slam; it comes again 4 s later instead of a whole interval.
+    while (bpFightAi.TelegraphArea(bpBoss) is null && bpClock < 80_000) Step(bpClock);
+    bpBoss.StunnedUntil = bpClock + 500;
+    Step(bpClock + 100);
+    Check(bpFightAi.TelegraphArea(bpBoss) is null && bpFight!.NextSlamMs - bpClock is > 3_000 and <= NpcAi.SlamRetryMs, "a stun breaks the wind-up and the slam is retried soon after");
+    bpBoss.StunnedUntil = 0;
+    bpPlayers[0] = (100_001, new Vector3d(200, 0, 0));
+    // Phases: 70 % bpCalls the bpAdds (the host places them), 40 % doubles the damage and halves the cooldowns.
+    bpBoss.Hp = 6_900;
+    Step(bpClock + 100);
+    var bpCalls = bpFightAi.TakeSummons();
+    Check(bpFight.Reached == 1 && bpCalls.Count == 1 && bpCalls[0].Adds is { Npc: 2310102, Count: 2 } && bpCalls[0].Fight == bpFight
+          && bpFightPackets.Any(b => b.SequenceEqual(GameSession.Notice("help!", 22, "FFB040"))), "70 %: the boss calls two adds and says so");
+    var bpAdds = Summons.Spawn(data, bpArena, 600002, 2310102, bpBoss.Position, 2, 500);
+    Check(bpAdds.Count == 2 && bpAdds.All(a => Summons.IsSummon(a.Key) && a.NpcId == 2310102 && a.Name.EndsWith(Summons.NameSuffix, StringComparison.Ordinal) && a.Hostile && !a.Dead && bpArena.ContainsKey(a.Key))
+          && bpAdds[0].Key + 1 == bpAdds[1].Key && Math.Abs(bpAdds[0].Position.X - bpBoss.Position.X - 500) < 1,
+          "Summons.Spawn copies the dungeon's monster (its placed spawn's template) around the boss with keys of their own");
+    bpFight.Adds.AddRange(bpAdds.Select(a => a.Key));
+    bpBoss.Hp = 3_000;
+    Step(bpClock + 100);
+    Check(bpFight.Reached == 2 && bpFight.Damage == 2.0 && bpFight.Haste == 0.5 && !bpFight.Frenzied, "40 %: double damage, half cooldowns");
+    Step(61_000);
+    Check(bpFight.Frenzied && bpFight.Damage == 6.0 && bpFight.Haste == 0.25 && bpFightPackets.Any(b => b.SequenceEqual(GameSession.Notice("frenzy!", 24, "FF4040"))),
+          "a minute in the frenzy triples the damage again, announced");
+    bpBoss.Hp = 0;
+    var bpDeath = bpFightAi.Tick(bpArena, bpPlayers, bpClock += 50, (_, _) => []);
+    Check(bpFightAi.FightOf(bpBoss) is null && bpAdds.All(a => a.Dead && a.CorpseRemoved) && bpAdds.All(a => bpDeath.Any(b => b.SequenceEqual(GamePackets.Death(a.Key, 7)))),
+          "the boss dies: its adds vanish (0x3642 flag 7) and the fight is over");
+    // Aion:Bosses:Phases false: no bpFight, the slam skill is an ordinary special again.
+    var bpCalm = new Target { Key = 3002, Name = "Test_Boss", NpcId = 999, Hp = 10_000, HpMax = 10_000, Level = 7, Position = Vector3d.Zero, Aggressive = true,
+        WalkSpeed = 100, RunSpeed = 200, Radius = 120, Aggro = bpAggro, Skills = [slamSkill], SubType = "HeroMonster" };
+    var offAi = new NpcAi(new Random(3), data) { Bosses = bpFightAi.Bosses, BossRules = new BossOptions { Phases = false }, DefenseOf = _ => 0 };
+    var calmMap = new Dictionary<int, Target> { [bpCalm.Key] = bpCalm };
+    for (long ms = 0; ms < 20_000; ms += 50) offAi.Tick(calmMap, bpPlayers, ms, (_, _) => []);
+    Check(offAi.FightOf(bpCalm) is null && offAi.TelegraphArea(bpCalm) is null && offAi.SlamsLanded == 0, "Aion:Bosses:Phases false: the boss fights as before");
+
+    // Scripted waves in the Ludra raid copy: the parts wait dormant from the load, come in order, and the clear reaches ClearWave.
+    var raider = new GameSession(data, new GameSessionOptions(), new Random(23));
+    await raider.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+    await raider.HandleAsync(new PacketWriter().U16(0x361b).String("Raider").U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
+    await raider.HandleAsync(select, Now);
+    await raider.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    var t0 = Now + 10_000;
+    Check(raider.EnterDungeonById(600082, t0).Count > 0, "the raid copy opens");
+    await raider.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t0 + 10);
+    IEnumerable<Target> Part(string name) => raider.Targets.Values.Where(x => x.Name == name);
+    const string W1 = "ReforgedAbyss_1PartyWave_01", W2 = "ReforgedAbyss_1PartyWave_02";
+    var raidHost = (IMapEventHost)raider;
+    Check(raider.MapId == 600082 && Part(W1 + "_1").Count() == 7 && Part(W1 + "_1").Concat(Part(W1 + "_2")).All(x => x.Dead && x.CorpseRemoved)
+          && Part("ReforgedAbyss_01_Wave_03_3").All(x => x.Dead) && raidHost.WaveKnown(W1) && !raidHost.WaveKnown("FierceHornCave_Wave_01"),
+          "Ludra's wave spawns wait dormant from the load (no 300 monsters standing in the raid); the waves are known");
+    var gateRun = raider.MapEventRuns.First(r => r.Name == "ReforgedAbyss_Normal_1PartyWave_MapEvent");
+    raidHost.StartWave(W1);
+    await raider.TickAsync(t0 + 100);
+    Check(Part(W1 + "_1").All(x => !x.Dead) && Part(W1 + "_2").All(x => x.Dead) && raider.RunningWaves.Contains(W1), "StartWave brings the first part only");
+    foreach (var x in Part(W1 + "_1")) x.Hp = 0;
+    await raider.TickAsync(t0 + 200);
+    Check(Part(W1 + "_2").All(x => !x.Dead) && !raider.ClearedWaves.Contains(W1), "the first part dead: the second comes");
+    foreach (var x in Part(W1 + "_2")) x.Hp = 0;
+    await raider.TickAsync(t0 + 300);
+    Check(raider.ClearedWaves.Contains(W1) && gateRun.Goals.Length > 1 && gateRun.Goals[1] == 1 && gateRun.FellBack == 0
+          && raider.MapEventNotes.Any(n => n == $"wave {W1} cleared"), "the last part dead: the wave is clear and the script's ClearWave objective counts, no timer");
+    raidHost.StartWave(W2);
+    await raider.TickAsync(t0 + 400);
+    await raider.TickAsync(t0 + 400 + GameSession.WavePartMs);
+    Check(Part(W2 + "_1").All(x => !x.Dead) && Part(W2 + "_2").All(x => !x.Dead) && Part(W2 + "_3").All(x => x.Dead),
+          $"a part still fighting after {GameSession.WavePartMs / 1000} s does not hold up the next");
+    raidHost.EndWave(W2);
+    await raider.TickAsync(t0 + 500 + GameSession.WavePartMs);
+    Check(Part(W2 + "_1").Concat(Part(W2 + "_2")).All(x => x.Dead && x.CorpseRemoved) && !raider.RunningWaves.Contains(W2), "EndWave takes the wave away");
+
+    // Fierce Horn Den's hand-made bpTotem wave: Lycans come around the bpTotem while it lives; dead bpTotem and bpAdds clear it.
+    var hunter = new GameSession(data, new GameSessionOptions(), new Random(24));
+    await hunter.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+    await hunter.HandleAsync(new PacketWriter().U16(0x361b).String("Hunter").U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
+    await hunter.HandleAsync(select, Now);
+    await hunter.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    Check(hunter.EnterDungeonById(600092, t0).Count > 0, "Ferocious Horn Den (Normal) opens");
+    await hunter.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t0 + 10);
+    var huntHost = (IMapEventHost)hunter;
+    const string Totem = "M_PD_FierceHornCave_LycanTotem_01_001";
+    huntHost.Spawn(Totem, 0);
+    Check(huntHost.WaveKnown("FierceHornCave_Wave_01"), "the totem wave is known (hand-made)");
+    huntHost.StartWave("FierceHornCave_Wave_01");
+    await hunter.TickAsync(t0 + 100);
+    var bpLycans = hunter.Targets.Values.Where(x => Summons.IsSummon(x.Key)).ToList();
+    var bpTotem = hunter.Targets.Values.First(x => x.Name == Totem);
+    Check(bpLycans.Count == 3 && bpLycans.All(x => !x.Dead && x.NpcId == 2300902 && Math.Sqrt(x.Position.DistanceSquared(bpTotem.Position)) is > 590 and < 610),
+          "three Lycans come around the totem");
+    await hunter.TickAsync(t0 + 100 + 15_000);
+    Check(hunter.Targets.Values.Count(x => Summons.IsSummon(x.Key)) == 6, "15 s later three more");
+    foreach (var x in hunter.Targets.Values.Where(x => Summons.IsSummon(x.Key) || x.Name == Totem)) x.Hp = 0;
+    await hunter.TickAsync(t0 + 100 + 15_100);
+    Check(hunter.ClearedWaves.Contains("FierceHornCave_Wave_01"), "totem and Lycans dead: the wave is clear");
+    await hunter.TickAsync(t0 + 100 + 15_100 + 600_000);
+    Check(hunter.Targets.Values.Where(x => Summons.IsSummon(x.Key)).All(x => x.Dead), "summoned monsters never respawn");
+}
+Console.WriteLine($"{checks} boss checks passed (phases, slams, adds, frenzy, waves).");
+
 // ---------- Playerbots (docs/PLAYERBOTS.md): sessions without a connection, driven by BotBrain ----------
 checks = 0;
 {
@@ -3336,7 +3607,7 @@ checks = 0;
     var botPresence = new WorldPresence();
     var bots = new PlayerBots(data, botOptions, botWorld, presence: botPresence);
     Check(BotRotations.Embedded.For("Gladiator") is { Range: > 0, Rotation.Length: > 2 } glad && glad.Rotation[^1].Skill == 11020000
-          && BotRotations.Embedded.Classes.Count == 8, "bot-rotations.json is embedded: every playable class, the filler last");
+          && BotRotations.Embedded.Classes.Count == 9, "bot-rotations.json is embedded: every playable class, the filler last");
     Check((await bots.CommandAsync(leader, "add Leader", t, default)).Contains("yourself") && (await bots.CommandAsync(leader, "add Nobody", t, default)).Contains("not one of your characters"),
           "a bot is one of the summoner's other characters");
     Check(await bots.CommandAsync(leader, "add Alt", t, default) == "Summoning Alt." && bots.All.Single().State == PlayerBot.Phase.Pending, "//bot add queues the character");
@@ -3667,8 +3938,11 @@ checks = 0;
           && rots.For("Assassin")!.Position == "behind" && rots.For("Templar")!.Position == "front"
           && rots.For("Cleric")!.RangeFor("heal") == 1500 && rots.For("Cleric")!.RangeFor("dps") == 1800,
           "bot-rotations.json: every class but the Cleric has an interrupt; positions and role ranges load");
-    var rotWorld = new SharedWorld(data);
-    var rotOptions = new GameSessionOptions { World = rotWorld, TrainingDummy = true, CharacterLevel = 20 };
+    Check(GameSession.IsDodge(19000100) && GameSession.IsDodge(11000100) && !GameSession.IsDodge(19010000) && rots.For("Fighter") is { Range: 250 },
+          "the Brawler's own Dodge counts as a dodge; its rotation loads");
+    var rotWorld = new SharedWorld(data, seed: 41);
+    // Stigmas off: these checks follow the class rotations cast for cast (bot stigmas have their own check, docs/STIGMAS.md).
+    var rotOptions = new GameSessionOptions { World = rotWorld, TrainingDummy = true, CharacterLevel = 20, Stigmas = new StigmaOptions { Enabled = false } };
     long t = Now + 5_000_000;
     var lead = new GameSession(data, rotOptions, new Random(41));
     await lead.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), t);
@@ -3862,7 +4136,8 @@ checks = 0;
     var evadeBase = guard.Session.Evasions;
     guard.Session.SetResource('S', guard.Session.Resource.SpMax);
     Check(await guard.Session.HandleAsync(Cast(guard.Brain.DodgeSkill!.Value, guard.Session.PlayerKey, guard.Session.WorldPosition!.Value), t += 1000) is [var dodgeReply, ..] && dodgeReply[3] == 0
-          && guard.Session.GuardHit(100, t + 10) == 0 && guard.Session.GuardHit(100, t + GameSession.DodgeEvadeMs - 10) == 0 && guard.Session.Evasions == evadeBase + 2,
+          && guard.Session.GuardHit(100, t + 10, new FixedRoll(0.99)) == 0 && guard.Session.GuardHit(100, t + GameSession.DodgeEvadeMs - 10, new FixedRoll(0.99)) == 0
+          && guard.Session.GuardHit(100, t + GameSession.DodgeEvadeMs + 10, new FixedRoll(0.99)) == 100 && guard.Session.Evasions == evadeBase + 2,
           "a Dodge evades every monster hit for its first half second");
     rai.Brains[blast.Key].Pending = null;
     rai.AreaSkills = BossAreaSkills.Embedded;
@@ -3885,17 +4160,30 @@ checks = 0;
         .OrderBy(x => Apart3(x.a.Position, lead.WorldPosition!.Value)).First();
     await Go(pair.a);
     await Run(60);
+    // Both sturdy and side by side, so the pack lasts and stays inside one area whatever ran before this check.
+    (pair.a.Hp, pair.b.Hp) = (Sturdy, Sturdy);
+    pair.b.Position = pair.a.Position with { X = pair.a.Position.X + 100 };
     rai.ForceAggro(pair.a, lead.PlayerKey, t);
     rai.ForceAggro(pair.b, lead.PlayerKey, t);
     await Run(600, () => team.All.Any(b => b.Brain!.AreaCasts > 0));
+    (pair.a.Hp, pair.b.Hp) = (Math.Min(pair.a.Hp, pair.a.HpMax), Math.Min(pair.b.Hp, pair.b.HpMax));
     Check(team.All.Any(b => b.Brain!.AreaCasts > 0), "with two monsters on the group a melee bot casts an area skill around itself");
+    // Blocks and evasions (GameSession.GuardHit) with fixed rolls: under the class's evasion chance evades, under the gear's
+    // block chance blocks (half), above both lands whole; a block opens the after-block skill (Debilitating Smash).
+    var blocksBefore = guard.Session.Blocks;
+    var evadedBefore = guard.Session.Evasions;
+    Check(guard.Session.GuardHit(100, t, new FixedRoll(0.01)) == 0 && guard.Session.Evasions == evadedBefore + 1
+          && guard.Session.GuardHit(100, t, new FixedRoll(0.99)) == 100,
+          "a roll under the evasion chance evades the hit; a high roll lands it whole");
+    await Run(400, () => t >= guard.Session.CooldownUntil(12270000));
+    Check(guard.Session.GuardHit(100, t, new FixedRoll(0.1)) == (int)Math.Round(100 * GameSession.BlockTaken) && guard.Session.Blocks == blocksBefore + 1
+          && guard.Session.LastBlockAt == t, "the tank's sword blocks a roll under its block chance (half damage)");
+    var blockedAt = t;
+    await Run(60, () => guard.Brain!.CastLog.Any(c => c.Skill == 12270000 && c.At >= blockedAt));
+    Check(guard.Brain!.CastLog.Any(c => c.Skill == 12270000 && c.At >= blockedAt && c.At - blockedAt <= BotBrain.ComboWindowMs),
+          "then Debilitating Smash, its after-block skill (after_block)");
     await Run(2000, () => pair.a.Dead && pair.b.Dead);
     Check(pair.a.Dead && pair.b.Dead, "the party kills both");
-    // Blocks and evasions (GameSession.GuardHit): over these fights the tank blocked hits and someone evaded one; a blocked or
-    // evaded hit opens the after-block skill (Debilitating Smash for the Templar).
-    Check(guard.Session.Blocks > 0 && team.All.Sum(b => b.Session.Evasions) > 0,
-          $"monster hits are blocked ({guard.Session.Blocks}) and evaded ({team.All.Sum(b => b.Session.Evasions)})");
-    Check(guard.Brain!.CastLog.Any(c => c.Skill == 12270000), "the tank uses Debilitating Smash, its after-block skill (after_block)");
     lead.ExitSharedWorld();
     await team.OwnerLeftAsync(lead);
 }
@@ -3905,9 +4193,11 @@ Console.WriteLine($"{checks} playerbot checks passed (Aion:Bots).");
 checks = 0;
 {
     var progressionWorld = new SharedWorld(data);
-    async Task<GameSession> LevelSession(uint creation, int level, string name)
+    // Stigmas off where a check casts an OURS unlock that is a stigma (docs/STIGMAS.md): with them on it needs shards and a slot.
+    async Task<GameSession> LevelSession(uint creation, int level, string name, bool stigmas = true)
     {
-        var session = new GameSession(data, new GameSessionOptions { World = progressionWorld, TrainingDummy = true, CharacterLevel = level }, new Random(5));
+        var session = new GameSession(data, new GameSessionOptions { World = progressionWorld, TrainingDummy = true, CharacterLevel = level,
+            Stigmas = new StigmaOptions { Enabled = stigmas } }, new Random(5));
         await session.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
         await session.HandleAsync(new PacketWriter().U16(0x361b).String(name).U8(1).U32(creation).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
         await session.HandleAsync(select, Now);
@@ -3928,12 +4218,16 @@ checks = 0;
     var fallbackActive = progression.Unlocks("Gladiator").Select(u => u[0]).First(id => data.Skill(id) is { Type: "Active", Damage.Length: > 0 });
     Check(data.FallbackDamage(fallbackActive) && data.FallbackDamage(17150000) && data.Skill(17150000)!.Name == "Divine Aura"
           && data.Skill(17150000)!.Damage.Length > 0 && !data.FallbackDamage(11010000), "fallback damage rows: OURS definitions and Divine Aura; recovered rows stay");
-    var gladiator30 = await LevelSession(1, 30, "Glad");
+    var gladiator30 = await LevelSession(1, 30, "Glad", stigmas: false);
     var progressionDummy = gladiator30.Targets[Combat.TrainingDummyKey];
     var progressionHpBefore = progressionDummy.Hp;
     var fallbackCast = await gladiator30.HandleAsync(Cast(fallbackActive, Combat.TrainingDummyKey, progressionDummy.Position), Now + 1_000);
     Check(fallbackCast[0][3] == 0 && progressionDummy.Hp < progressionHpBefore && fallbackCast.Any(b => Op(b) == 0x3804 && b.AsSpan().IndexOf(BitConverter.GetBytes(fallbackActive * 100 + 11)) > 0),
           "a level-30 Gladiator casts an OURS unlock: its fallback row hits the progressionDummy (0x3804, effect skill x 100 + 11)");
+    var stigmaGladiator = await LevelSession(1, 30, "Stig");
+    Check(data.Stigmas.IsStigmaOf("Gladiator", fallbackActive) && !stigmaGladiator.Knows(fallbackActive)
+          && (await stigmaGladiator.HandleAsync(Cast(fallbackActive, Combat.TrainingDummyKey, progressionDummy.Position), Now + 2_000))[0][3] != 0,
+          "with stigmas on (the default) that skill is a stigma: not cast until it is bought and slotted");
     // Skill levels raise damage (same rolls) and heals use the same scale.
     var weapon = data.StarterWeapon(data.Profile(1, 1)!);
     var level1 = Combat.SkillHits(data, 11010000, "Gladiator", 30, weapon, 0, new Random(9)).Sum(h => h.Amount);
@@ -4317,6 +4611,14 @@ sealed class FakeStore : INativeCharacterStore
     {
         Skills.RemoveAll(s => s.SkillId == skillId);
         Skills.Add(new SkillState(skillId, level, null));
+        return Task.FromResult(true);
+    }
+    public Dictionary<int, int> StigmaRows { get; } = [];
+    public Task<IReadOnlyList<StigmaState>> StigmasAsync(Guid character, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<StigmaState>>(StigmaRows.Select(p => new StigmaState(p.Key, p.Value)).ToList());
+    public Task<bool> SetStigmaAsync(Guid character, int skillId, int level, CancellationToken ct)
+    {
+        if (level == 0) StigmaRows.Remove(skillId); else StigmaRows[skillId] = level;
         return Task.FromResult(true);
     }
     // Titles, skins and masteries (migration 029) in memory.
@@ -4803,3 +5105,10 @@ sealed class FakeStore : INativeCharacterStore
 }
 
 sealed class FakeDbException() : System.Data.Common.DbException("constraint violated");
+
+/// <summary>A Random whose every NextDouble is one value (fixed block/evasion rolls in the checks).</summary>
+sealed class FixedRoll(double value) : Random
+{
+    public override double NextDouble() => value;
+    protected override double Sample() => value;
+}

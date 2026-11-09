@@ -236,8 +236,11 @@ public sealed partial class GameSession : IMapEventHost
         pendingSpawns.Clear();
         pendingExit = null;
         npcBuffs.Clear();
+        waveRuns.Clear();
+        waveParts.Clear();
         if (!RunsMapEvents || targets is null) return;
         dormantSpawners.UnionWith(MapEventData.Deferred(worldMap));
+        PrepareWaves();   // the named waves' spawn entries wait for their StartWave too
         foreach (var t in targets.Values)
             if (dormantSpawners.Contains(t.Name))
             {
@@ -299,7 +302,9 @@ public sealed partial class GameSession : IMapEventHost
         if (mapEventRuns.Count == 0) return DrainMapEvents();
         mapEventNow = now;
         var alive = targets?.Values.Any(t => string.Equals(t.Name, target.Name, StringComparison.OrdinalIgnoreCase) && !t.Dead) == true;
-        foreach (var run in mapEventRuns.ToList()) run.Killed(target.NpcId, target.Name, target.Hostile, alive, now);
+        // Summoned adds and wave helpers are ours: they never count toward the script's kill objectives.
+        if (!Summons.IsSummon(target.Key))
+            foreach (var run in mapEventRuns.ToList()) run.Killed(target.NpcId, target.Name, target.Hostile, alive, now);
         return DrainMapEvents();
     }
 
@@ -409,6 +414,7 @@ public sealed partial class GameSession : IMapEventHost
         foreach (var (key, route) in ai.TakeArrivals())
             if (targets?.GetValueOrDefault(key) is { } npc)
                 foreach (var run in mapEventRuns.ToList()) run.NpcArrived(npc.Name, route, now);
+        WaveTick(now);
         foreach (var run in mapEventRuns.ToList()) run.Tick(now);
         var replies = DrainMapEvents();
         if (pendingExit is { } exit && now >= exit.DueMs && !reloading)

@@ -126,6 +126,10 @@ public interface INativeCharacterStore : IAsyncDisposable
     /// <summary>The stored skills with their levels (skill levels bought with skill points).</summary>
     Task<IReadOnlyList<SkillState>> SkillsAsync(Guid character, CancellationToken ct) => Task.FromResult<IReadOnlyList<SkillState>>([]);
     Task<bool> SetSkillLevelAsync(Guid character, int skillId, int level, CancellationToken ct) => Task.FromResult(false);
+    /// <summary>Learned stigmas with their stigma levels (docs/STIGMAS.md).</summary>
+    Task<IReadOnlyList<StigmaState>> StigmasAsync(Guid character, CancellationToken ct) => Task.FromResult<IReadOnlyList<StigmaState>>([]);
+    /// <summary>A stigma's level; 0 forgets it.</summary>
+    Task<bool> SetStigmaAsync(Guid character, int skillId, int level, CancellationToken ct) => Task.FromResult(false);
     /// <summary>Titles, skins and masteries (read at character selection).</summary>
     Task<CharacterExtras> ExtrasAsync(Guid character, CancellationToken ct) => Task.FromResult(CharacterExtras.None);
     Task<bool> GrantTitleAsync(Guid character, int titleId, CancellationToken ct) => Task.FromResult(false);

@@ -1,0 +1,6938 @@
+{
+ "source": "Global Aion 2 stigma rules. The stigma skills and their cost ladder are recovered data: the client catalogue's SkillAcquireData Stigma rows (game-catalog-v2 in the server data bundle, read on 2026-11-09). Shards and slots per level are CANDIDATE (from global guides; Exp.dat is not in the bundle). OURS values fill what neither gives; docs/STIGMAS.md. 'params' is hand-edited; 'generated' is written by `python tools/stigmas.py` from params, tools/data/class-skills.json, tools/data/progression.json and tools/data/dev-menu.json.",
+ "params": {
+  "unlock_level": 22,
+  "slot_levels": [
+   22,
+   27,
+   32,
+   37,
+   42,
+   45
+  ],
+  "slot_levels_about": "CANDIDATE: global's 4 slots open at levels 22, 27, 32 and 37. Korea has 6; its levels for slots 5 and 6 are not published (OURS 42 and 45). Aion:Stigmas:Slots picks how many are used (4 = global).",
+  "max_skill_level": 20,
+  "max_skill_level_about": "Recovered data: the Stigma rows stop at skill level 20.",
+  "costs": [
+   {
+    "from": 1,
+    "to": 5,
+    "shards": 1
+   },
+   {
+    "from": 6,
+    "to": 10,
+    "shards": 2
+   },
+   {
+    "from": 11,
+    "to": 15,
+    "shards": 4
+   },
+   {
+    "from": 16,
+    "to": 20,
+    "shards": 8
+   }
+  ],
+  "costs_about": "Recovered data: SkillAcquireData Stigma rows, one ladder for all 117 stigma skills: levels 1-5 cost 1 CostStigmaPoint, 6-10 cost 2, 11-15 cost 4, 16-20 cost 8 (75 for 20). Every level needs character level 22; level 1 also needs AscensionGrade_3 (not enforced: OURS). CostStigmaSuperiorPoint and GainStigmaSuperiorPoint are 0 on every row.",
+  "ascension_shards": 1,
+  "shards_per_level": [
+   {
+    "from": 23,
+    "to": 39,
+    "shards": 1
+   },
+   {
+    "from": 40,
+    "to": 45,
+    "shards": 2
+   }
+  ],
+  "shards_about": "CANDIDATE: 1 shard per level from 23 to 39 and 2 per level from 40 to 45 (29 from levelling at 45), plus the Ascension quest's shard at 22 (given at level 22: the quest gate is not modelled). Global's other sources (Abyss, Nightmare and Shugo Festival shops, achievements) are not modelled: Aion:Stigmas:ShardRate stands in for them.",
+  "skill_level_damage": {
+   "per_level": 500
+  },
+  "skill_level_damage_about": "OURS: a stigma's damage and heals grow by per_level (1/10000) for each stigma level above 1 (+95% at 20). Global's per-level values and the specialties at 5/10/15/20 are not exported.",
+  "recovered": {
+   "Assassin": [
+    [
+     13020000,
+     "Throw Shadowblade",
+     30000
+    ],
+    [
+     13080000,
+     "Evasion Stance",
+     20000
+    ],
+    [
+     13140000,
+     "Shadowstep",
+     45000
+    ],
+    [
+     13180000,
+     "Shadow Walk",
+     120000
+    ],
+    [
+     13230000,
+     "Aerial Bind",
+     120000
+    ],
+    [
+     13250000,
+     "Smoke Bomb",
+     30000
+    ],
+    [
+     13270000,
+     "Savage Fang",
+     60000
+    ],
+    [
+     13280000,
+     "Spiral Slice",
+     90000
+    ],
+    [
+     13300000,
+     "Triniel's Dagger",
+     45000
+    ],
+    [
+     13310000,
+     "Illusive Clone",
+     90000
+    ],
+    [
+     13370000,
+     "Evasion Contract",
+     90000
+    ],
+    [
+     13390000,
+     "Swift Contract",
+     60000
+    ],
+    [
+     13700000,
+     "Assault Ambush",
+     120000
+    ]
+   ],
+   "Chanter": [
+    [
+     18130000,
+     "Fracturing Blow",
+     45000
+    ],
+    [
+     18140000,
+     "Focused Defense",
+     20000
+    ],
+    [
+     18160000,
+     "Sprint Mantra",
+     5000
+    ],
+    [
+     18170000,
+     "Healing Touch",
+     30000
+    ],
+    [
+     18190000,
+     "Undefeated Mantra",
+     5000
+    ],
+    [
+     18220000,
+     "Obliterate",
+     60000
+    ],
+    [
+     18230000,
+     "Ensnaring Mark",
+     60000
+    ],
+    [
+     18240000,
+     "Impeding Authority",
+     90000
+    ],
+    [
+     18250000,
+     "Power of the Storm",
+     120000
+    ],
+    [
+     18330000,
+     "Marchutan's Wrath",
+     30000
+    ],
+    [
+     18420000,
+     "Guardian Blessing",
+     120000
+    ],
+    [
+     18440000,
+     "Barrier Spell",
+     180000
+    ],
+    [
+     18700000,
+     "Assault Shock",
+     120000
+    ]
+   ],
+   "Cleric": [
+    [
+     17160000,
+     "Benevolence",
+     90000
+    ],
+    [
+     17190000,
+     "Root",
+     60000
+    ],
+    [
+     17270000,
+     "Salvation",
+     150000
+    ],
+    [
+     17280000,
+     "Power Burst",
+     60000
+    ],
+    [
+     17290000,
+     "Absolution",
+     90000
+    ],
+    [
+     17300000,
+     "Voice of Doom",
+     60000
+    ],
+    [
+     17390000,
+     "Summon Resurrection",
+     120000
+    ],
+    [
+     17400000,
+     "Earth Punishment",
+     30000
+    ],
+    [
+     17410000,
+     "Light of Protection",
+     5000
+    ],
+    [
+     17420000,
+     "Yustiel's Power",
+     60000
+    ],
+    [
+     17430000,
+     "Prayer of Amplification",
+     60000
+    ],
+    [
+     17440000,
+     "Noble Aura",
+     60000
+    ],
+    [
+     17700000,
+     "Assault Mark",
+     120000
+    ]
+   ],
+   "Elementalist": [
+    [
+     16060000,
+     "Siphon",
+     30000
+    ],
+    [
+     16080000,
+     "Cry of Terror",
+     90000
+    ],
+    [
+     16150000,
+     "Jointstrike: Corrode",
+     45000
+    ],
+    [
+     16170000,
+     "Command: Proxy",
+     60000
+    ],
+    [
+     16190000,
+     "Enhance: Spirit's Benediction",
+     60000
+    ],
+    [
+     16220000,
+     "Cursed Cloud",
+     90000
+    ],
+    [
+     16230000,
+     "Seize Magic",
+     90000
+    ],
+    [
+     16240000,
+     "Jointstrike: Destructive Attack",
+     60000
+    ],
+    [
+     16250000,
+     "Summon: Ancient Spirit",
+     90000
+    ],
+    [
+     16260000,
+     "Magic Block",
+     60000
+    ],
+    [
+     16360000,
+     "Kaisinel's Power",
+     60000
+    ],
+    [
+     16370000,
+     "Flame Blessing",
+     60000
+    ],
+    [
+     16700000,
+     "Assault Terror",
+     120000
+    ]
+   ],
+   "Fighter": [
+    [
+     19280000,
+     null,
+     90000
+    ],
+    [
+     19290000,
+     null,
+     60000
+    ],
+    [
+     19300000,
+     null,
+     30000
+    ],
+    [
+     19310000,
+     null,
+     60000
+    ],
+    [
+     19320000,
+     null,
+     30000
+    ],
+    [
+     19330000,
+     null,
+     90000
+    ],
+    [
+     19350000,
+     null,
+     20000
+    ],
+    [
+     19360000,
+     null,
+     180000
+    ],
+    [
+     19370000,
+     null,
+     90000
+    ],
+    [
+     19380000,
+     null,
+     120000
+    ],
+    [
+     19390000,
+     null,
+     45000
+    ],
+    [
+     19400000,
+     null,
+     45000
+    ],
+    [
+     19460000,
+     null,
+     30000
+    ]
+   ],
+   "Gladiator": [
+    [
+     11080000,
+     "Blade Toss",
+     20000
+    ],
+    [
+     11110000,
+     "Focused Block",
+     20000
+    ],
+    [
+     11130000,
+     "Armor of Balance",
+     90000
+    ],
+    [
+     11240000,
+     "Wrath Wave",
+     60000
+    ],
+    [
+     11250000,
+     "Zikel's Blessing",
+     120000
+    ],
+    [
+     11340000,
+     "Lifestealing Blade",
+     90000
+    ],
+    [
+     11380000,
+     "Tenaciousness",
+     150000
+    ],
+    [
+     11390000,
+     "Rage Burst",
+     45000
+    ],
+    [
+     11400000,
+     "Lunge Stance",
+     60000
+    ],
+    [
+     11410000,
+     "Wave Armor",
+     60000
+    ],
+    [
+     11430000,
+     "Forced Restraint",
+     60000
+    ],
+    [
+     11450000,
+     "Fracturing Rush",
+     90000
+    ],
+    [
+     11700000,
+     "Assault Strike",
+     120000
+    ]
+   ],
+   "Ranger": [
+    [
+     14060000,
+     "Griffon Arrow",
+     45000
+    ],
+    [
+     14120000,
+     "Ambush Kick",
+     30000
+    ],
+    [
+     14150000,
+     "Illusory Arrow",
+     30000
+    ],
+    [
+     14160000,
+     "Sealing Arrow",
+     60000
+    ],
+    [
+     14180000,
+     "Ensnaring Trap",
+     90000
+    ],
+    [
+     14190000,
+     "Stealth",
+     120000
+    ],
+    [
+     14220000,
+     "Bow of Blessing",
+     120000
+    ],
+    [
+     14270000,
+     "Arrow Storm",
+     60000
+    ],
+    [
+     14310000,
+     "Vaizel's Authority",
+     60000
+    ],
+    [
+     14350000,
+     "Mother Nature's Breath",
+     90000
+    ],
+    [
+     14360000,
+     "Explosive Arrow",
+     45000
+    ],
+    [
+     14380000,
+     "Supporting Fire",
+     90000
+    ],
+    [
+     14700000,
+     "Assault Smite",
+     120000
+    ]
+   ],
+   "Sorcerer": [
+    [
+     15120000,
+     "Glacial Smite",
+     90000
+    ],
+    [
+     15130000,
+     "Soul Freeze",
+     60000
+    ],
+    [
+     15140000,
+     "Curse: Tree",
+     90000
+    ],
+    [
+     15160000,
+     "Steel Barrier",
+     60000
+    ],
+    [
+     15200000,
+     "Cold Storm",
+     60000
+    ],
+    [
+     15230000,
+     "Arctic Armor",
+     90000
+    ],
+    [
+     15300000,
+     "Lumiel's Space",
+     90000
+    ],
+    [
+     15320000,
+     "Delayed Explosion",
+     30000
+    ],
+    [
+     15360000,
+     "Divine Burst",
+     60000
+    ],
+    [
+     15390000,
+     "Fire Wall",
+     60000
+    ],
+    [
+     15400000,
+     "Element Enhancement",
+     60000
+    ],
+    [
+     15410000,
+     "Hibernation",
+     180000
+    ],
+    [
+     15700000,
+     "Assault Bombardment",
+     120000
+    ]
+   ],
+   "Templar": [
+    [
+     12070000,
+     "Doom Shield",
+     30000
+    ],
+    [
+     12110000,
+     "Shield of Protection",
+     20000
+    ],
+    [
+     12120000,
+     "Taunt",
+     30000
+    ],
+    [
+     12190000,
+     "Second Skin",
+     90000
+    ],
+    [
+     12200000,
+     "Armor of Balance",
+     90000
+    ],
+    [
+     12220000,
+     "Grapple",
+     90000
+    ],
+    [
+     12230000,
+     "Noble Armor",
+     120000
+    ],
+    [
+     12250000,
+     "Comrade in Arms",
+     120000
+    ],
+    [
+     12310000,
+     "Empyrean Lord's Punishment",
+     60000
+    ],
+    [
+     12320000,
+     "Nezekan's Shield",
+     60000
+    ],
+    [
+     12410000,
+     "Executing Blade",
+     45000
+    ],
+    [
+     12450000,
+     "Battlefield Banner",
+     90000
+    ],
+    [
+     12700000,
+     "Assault Fury",
+     120000
+    ]
+   ]
+  },
+  "recovered_about": "Recovered data: each class's 13 stigma skills [id, name, NeedCoolTime ms] from SkillAcquireData Stigma rows (all Active, bIsStigmaSkill). The x700000 skill is the class's 120 s Assault stigma. The Brawler's (Fighter) names are '???' in the client. These replace the developer-kit candidates (tools/stigmas.py class_stigmas)."
+ },
+ "generated": {
+  "classes": {
+   "Gladiator": [
+    11080000,
+    11110000,
+    11130000,
+    11240000,
+    11250000,
+    11340000,
+    11380000,
+    11390000,
+    11400000,
+    11410000,
+    11430000,
+    11450000,
+    11700000
+   ],
+   "Templar": [
+    12070000,
+    12110000,
+    12120000,
+    12190000,
+    12200000,
+    12220000,
+    12230000,
+    12250000,
+    12310000,
+    12320000,
+    12410000,
+    12450000,
+    12700000
+   ],
+   "Assassin": [
+    13020000,
+    13080000,
+    13140000,
+    13180000,
+    13230000,
+    13250000,
+    13270000,
+    13280000,
+    13300000,
+    13310000,
+    13370000,
+    13390000,
+    13700000
+   ],
+   "Ranger": [
+    14060000,
+    14120000,
+    14150000,
+    14160000,
+    14180000,
+    14190000,
+    14220000,
+    14270000,
+    14310000,
+    14350000,
+    14360000,
+    14380000,
+    14700000
+   ],
+   "Sorcerer": [
+    15120000,
+    15130000,
+    15140000,
+    15160000,
+    15200000,
+    15230000,
+    15300000,
+    15320000,
+    15360000,
+    15390000,
+    15400000,
+    15410000,
+    15700000
+   ],
+   "Elementalist": [
+    16060000,
+    16080000,
+    16150000,
+    16170000,
+    16190000,
+    16220000,
+    16230000,
+    16240000,
+    16250000,
+    16260000,
+    16360000,
+    16370000,
+    16700000
+   ],
+   "Cleric": [
+    17160000,
+    17190000,
+    17270000,
+    17280000,
+    17290000,
+    17300000,
+    17390000,
+    17400000,
+    17410000,
+    17420000,
+    17430000,
+    17440000,
+    17700000
+   ],
+   "Chanter": [
+    18130000,
+    18140000,
+    18160000,
+    18170000,
+    18190000,
+    18220000,
+    18230000,
+    18240000,
+    18250000,
+    18330000,
+    18420000,
+    18440000,
+    18700000
+   ],
+   "Fighter": [
+    19280000,
+    19290000,
+    19300000,
+    19310000,
+    19320000,
+    19330000,
+    19350000,
+    19360000,
+    19370000,
+    19380000,
+    19390000,
+    19400000,
+    19460000
+   ]
+  },
+  "skills": {
+   "13020000": {
+    "name": "Throw Shadowblade",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Dagger"
+    ],
+    "cooldown_ms": 30000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 50,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       239,
+       239
+      ],
+      "ratio": [
+       10500,
+       10500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        234,
+        234
+       ],
+       "ratio": [
+        10290,
+        10290
+       ]
+      },
+      "effect_id": 1302000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     13070000,
+     13220000,
+     13360000
+    ]
+   },
+   "13080000": {
+    "name": "Evasion Stance",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Dagger"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       239,
+       239
+      ],
+      "ratio": [
+       10500,
+       10500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        234,
+        234
+       ],
+       "ratio": [
+        10290,
+        10290
+       ]
+      },
+      "effect_id": 1308000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     13070000,
+     13220000,
+     13360000
+    ]
+   },
+   "13140000": {
+    "name": "Shadowstep",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Dagger"
+    ],
+    "cooldown_ms": 45000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       239,
+       239
+      ],
+      "ratio": [
+       10500,
+       10500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        234,
+        234
+       ],
+       "ratio": [
+        10290,
+        10290
+       ]
+      },
+      "effect_id": 1314000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     13070000,
+     13220000,
+     13360000
+    ]
+   },
+   "13180000": {
+    "name": "Shadow Walk",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Dagger"
+    ],
+    "cooldown_ms": 120000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       239,
+       239
+      ],
+      "ratio": [
+       10500,
+       10500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        234,
+        234
+       ],
+       "ratio": [
+        10290,
+        10290
+       ]
+      },
+      "effect_id": 1318000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     13070000,
+     13220000,
+     13360000
+    ]
+   },
+   "13230000": {
+    "name": "Aerial Bind",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Dagger"
+    ],
+    "cooldown_ms": 120000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 50,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       239,
+       239
+      ],
+      "ratio": [
+       10500,
+       10500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        234,
+        234
+       ],
+       "ratio": [
+        10290,
+        10290
+       ]
+      },
+      "effect_id": 1323000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     13070000,
+     13220000,
+     13360000
+    ]
+   },
+   "13250000": {
+    "name": "Smoke Bomb",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Dagger"
+    ],
+    "cooldown_ms": 30000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       239,
+       239
+      ],
+      "ratio": [
+       10500,
+       10500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        234,
+        234
+       ],
+       "ratio": [
+        10290,
+        10290
+       ]
+      },
+      "effect_id": 1325000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     13070000,
+     13220000,
+     13360000
+    ]
+   },
+   "13270000": {
+    "name": "Savage Fang",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Dagger"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       239,
+       239
+      ],
+      "ratio": [
+       10500,
+       10500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        234,
+        234
+       ],
+       "ratio": [
+        10290,
+        10290
+       ]
+      },
+      "effect_id": 1327000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     13070000,
+     13220000,
+     13360000
+    ]
+   },
+   "13280000": {
+    "name": "Spiral Slice",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Dagger"
+    ],
+    "cooldown_ms": 90000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 50,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       239,
+       239
+      ],
+      "ratio": [
+       10500,
+       10500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        234,
+        234
+       ],
+       "ratio": [
+        10290,
+        10290
+       ]
+      },
+      "effect_id": 1328000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     13070000,
+     13220000,
+     13360000
+    ]
+   },
+   "13300000": {
+    "name": "Triniel's Dagger",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Dagger"
+    ],
+    "cooldown_ms": 45000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       239,
+       239
+      ],
+      "ratio": [
+       10500,
+       10500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        234,
+        234
+       ],
+       "ratio": [
+        10290,
+        10290
+       ]
+      },
+      "effect_id": 1330000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     13070000,
+     13220000,
+     13360000
+    ]
+   },
+   "13310000": {
+    "name": "Illusive Clone",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Dagger"
+    ],
+    "cooldown_ms": 90000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       239,
+       239
+      ],
+      "ratio": [
+       10500,
+       10500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        234,
+        234
+       ],
+       "ratio": [
+        10290,
+        10290
+       ]
+      },
+      "effect_id": 1331000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     13070000,
+     13220000,
+     13360000
+    ]
+   },
+   "13370000": {
+    "name": "Evasion Contract",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Dagger"
+    ],
+    "cooldown_ms": 90000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 50,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       239,
+       239
+      ],
+      "ratio": [
+       10500,
+       10500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        234,
+        234
+       ],
+       "ratio": [
+        10290,
+        10290
+       ]
+      },
+      "effect_id": 1337000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     13070000,
+     13220000,
+     13360000
+    ]
+   },
+   "13390000": {
+    "name": "Swift Contract",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Dagger"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       239,
+       239
+      ],
+      "ratio": [
+       10500,
+       10500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        234,
+        234
+       ],
+       "ratio": [
+        10290,
+        10290
+       ]
+      },
+      "effect_id": 1339000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     13070000,
+     13220000,
+     13360000
+    ]
+   },
+   "13700000": {
+    "name": "Assault Ambush",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Dagger"
+    ],
+    "cooldown_ms": 120000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       239,
+       239
+      ],
+      "ratio": [
+       10500,
+       10500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        234,
+        234
+       ],
+       "ratio": [
+        10290,
+        10290
+       ]
+      },
+      "effect_id": 1370000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     13070000,
+     13220000,
+     13360000
+    ]
+   },
+   "18130000": {
+    "name": "Fracturing Blow",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Staff"
+    ],
+    "cooldown_ms": 45000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       538,
+       538
+      ],
+      "ratio": [
+       21120,
+       21120
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        384,
+        384
+       ],
+       "ratio": [
+        15060,
+        15060
+       ]
+      },
+      "effect_id": 1813000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     18060000,
+     18080000,
+     18090000,
+     18210000,
+     18290000
+    ]
+   },
+   "18140000": {
+    "name": "Focused Defense",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Staff"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       538,
+       538
+      ],
+      "ratio": [
+       21120,
+       21120
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        384,
+        384
+       ],
+       "ratio": [
+        15060,
+        15060
+       ]
+      },
+      "effect_id": 1814000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     18060000,
+     18080000,
+     18090000,
+     18210000,
+     18290000
+    ]
+   },
+   "18160000": {
+    "name": "Sprint Mantra",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Staff"
+    ],
+    "cooldown_ms": 5000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       280,
+       280
+      ],
+      "ratio": [
+       19609,
+       19609
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        176,
+        176
+       ],
+       "ratio": [
+        11834,
+        11834
+       ]
+      },
+      "effect_id": 1816000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     18100000,
+     18150000
+    ]
+   },
+   "18170000": {
+    "name": "Healing Touch",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Staff"
+    ],
+    "cooldown_ms": 30000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       538,
+       538
+      ],
+      "ratio": [
+       21120,
+       21120
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        384,
+        384
+       ],
+       "ratio": [
+        15060,
+        15060
+       ]
+      },
+      "effect_id": 1817000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     18060000,
+     18080000,
+     18090000,
+     18210000,
+     18290000
+    ]
+   },
+   "18190000": {
+    "name": "Undefeated Mantra",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Staff"
+    ],
+    "cooldown_ms": 5000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       280,
+       280
+      ],
+      "ratio": [
+       19609,
+       19609
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        176,
+        176
+       ],
+       "ratio": [
+        11834,
+        11834
+       ]
+      },
+      "effect_id": 1819000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     18100000,
+     18150000
+    ]
+   },
+   "18220000": {
+    "name": "Obliterate",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Staff"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       538,
+       538
+      ],
+      "ratio": [
+       21120,
+       21120
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        384,
+        384
+       ],
+       "ratio": [
+        15060,
+        15060
+       ]
+      },
+      "effect_id": 1822000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     18060000,
+     18080000,
+     18090000,
+     18210000,
+     18290000
+    ]
+   },
+   "18230000": {
+    "name": "Ensnaring Mark",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Staff"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       538,
+       538
+      ],
+      "ratio": [
+       21120,
+       21120
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        384,
+        384
+       ],
+       "ratio": [
+        15060,
+        15060
+       ]
+      },
+      "effect_id": 1823000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     18060000,
+     18080000,
+     18090000,
+     18210000,
+     18290000
+    ]
+   },
+   "18240000": {
+    "name": "Impeding Authority",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Staff"
+    ],
+    "cooldown_ms": 90000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       538,
+       538
+      ],
+      "ratio": [
+       21120,
+       21120
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        384,
+        384
+       ],
+       "ratio": [
+        15060,
+        15060
+       ]
+      },
+      "effect_id": 1824000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     18060000,
+     18080000,
+     18090000,
+     18210000,
+     18290000
+    ]
+   },
+   "18250000": {
+    "name": "Power of the Storm",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Staff"
+    ],
+    "cooldown_ms": 120000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       538,
+       538
+      ],
+      "ratio": [
+       21120,
+       21120
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        384,
+        384
+       ],
+       "ratio": [
+        15060,
+        15060
+       ]
+      },
+      "effect_id": 1825000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     18060000,
+     18080000,
+     18090000,
+     18210000,
+     18290000
+    ]
+   },
+   "18330000": {
+    "name": "Marchutan's Wrath",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Staff"
+    ],
+    "cooldown_ms": 30000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       538,
+       538
+      ],
+      "ratio": [
+       21120,
+       21120
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        384,
+        384
+       ],
+       "ratio": [
+        15060,
+        15060
+       ]
+      },
+      "effect_id": 1833000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     18060000,
+     18080000,
+     18090000,
+     18210000,
+     18290000
+    ]
+   },
+   "18420000": {
+    "name": "Guardian Blessing",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Staff"
+    ],
+    "cooldown_ms": 120000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       538,
+       538
+      ],
+      "ratio": [
+       21120,
+       21120
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        384,
+        384
+       ],
+       "ratio": [
+        15060,
+        15060
+       ]
+      },
+      "effect_id": 1842000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     18060000,
+     18080000,
+     18090000,
+     18210000,
+     18290000
+    ]
+   },
+   "18440000": {
+    "name": "Barrier Spell",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Staff"
+    ],
+    "cooldown_ms": 180000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       538,
+       538
+      ],
+      "ratio": [
+       21120,
+       21120
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        384,
+        384
+       ],
+       "ratio": [
+        15060,
+        15060
+       ]
+      },
+      "effect_id": 1844000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     18060000,
+     18080000,
+     18090000,
+     18210000,
+     18290000
+    ]
+   },
+   "18700000": {
+    "name": "Assault Shock",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Staff"
+    ],
+    "cooldown_ms": 120000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       538,
+       538
+      ],
+      "ratio": [
+       21120,
+       21120
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        384,
+        384
+       ],
+       "ratio": [
+        15060,
+        15060
+       ]
+      },
+      "effect_id": 1870000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     18060000,
+     18080000,
+     18090000,
+     18210000,
+     18290000
+    ]
+   },
+   "17160000": {
+    "name": "Benevolence",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Mace"
+    ],
+    "cooldown_ms": 90000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 50,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1716000011
+     },
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1716000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     17060000
+    ]
+   },
+   "17190000": {
+    "name": "Root",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Mace"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1719000011
+     },
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1719000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     17060000
+    ]
+   },
+   "17270000": {
+    "name": "Salvation",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Mace"
+    ],
+    "cooldown_ms": 150000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 300,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1727000011
+     },
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1727000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     17060000
+    ]
+   },
+   "17280000": {
+    "name": "Power Burst",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Mace"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 50,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1728000011
+     },
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1728000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     17060000
+    ]
+   },
+   "17290000": {
+    "name": "Absolution",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Mace"
+    ],
+    "cooldown_ms": 90000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1729000011
+     },
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1729000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     17060000
+    ]
+   },
+   "17300000": {
+    "name": "Voice of Doom",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Mace"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 300,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1730000011
+     },
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1730000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     17060000
+    ]
+   },
+   "17390000": {
+    "name": "Summon Resurrection",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Mace"
+    ],
+    "cooldown_ms": 120000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 50,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1739000011
+     },
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1739000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     17060000
+    ]
+   },
+   "17400000": {
+    "name": "Earth Punishment",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Mace"
+    ],
+    "cooldown_ms": 30000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       138,
+       138
+      ],
+      "ratio": [
+       15180,
+       15180
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        112,
+        112
+       ],
+       "ratio": [
+        12309,
+        12309
+       ]
+      },
+      "effect_id": 1740000011
+     },
+     {
+      "flat": [
+       138,
+       138
+      ],
+      "ratio": [
+       15180,
+       15180
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        112,
+        112
+       ],
+       "ratio": [
+        12309,
+        12309
+       ]
+      },
+      "effect_id": 1740000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     17070000
+    ]
+   },
+   "17410000": {
+    "name": "Light of Protection",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Mace"
+    ],
+    "cooldown_ms": 5000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 300,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       325,
+       325
+      ],
+      "ratio": [
+       19205,
+       19205
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        221,
+        221
+       ],
+       "ratio": [
+        13065,
+        13065
+       ]
+      },
+      "effect_id": 1741000011
+     },
+     {
+      "flat": [
+       325,
+       325
+      ],
+      "ratio": [
+       19205,
+       19205
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        221,
+        221
+       ],
+       "ratio": [
+        13065,
+        13065
+       ]
+      },
+      "effect_id": 1741000011
+     },
+     {
+      "flat": [
+       325,
+       325
+      ],
+      "ratio": [
+       19205,
+       19205
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        221,
+        221
+       ],
+       "ratio": [
+        13065,
+        13065
+       ]
+      },
+      "effect_id": 1741000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     17080000,
+     17350000
+    ]
+   },
+   "17420000": {
+    "name": "Yustiel's Power",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Mace"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 50,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1742000011
+     },
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1742000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     17060000
+    ]
+   },
+   "17430000": {
+    "name": "Prayer of Amplification",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Mace"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1743000011
+     },
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1743000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     17060000
+    ]
+   },
+   "17440000": {
+    "name": "Noble Aura",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Mace"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 300,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1744000011
+     },
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1744000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     17060000
+    ]
+   },
+   "17700000": {
+    "name": "Assault Mark",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Mace"
+    ],
+    "cooldown_ms": 120000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 300,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1770000011
+     },
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1770000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     17060000
+    ]
+   },
+   "16060000": {
+    "name": "Siphon",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Orb"
+    ],
+    "cooldown_ms": 30000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 80,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       74,
+       74
+      ],
+      "ratio": [
+       7500,
+       7500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        76,
+        76
+       ],
+       "ratio": [
+        7770,
+        7770
+       ]
+      },
+      "effect_id": 1606000011
+     },
+     {
+      "flat": [
+       74,
+       74
+      ],
+      "ratio": [
+       7500,
+       7500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        76,
+        76
+       ],
+       "ratio": [
+        7770,
+        7770
+       ]
+      },
+      "effect_id": 1606000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     16140000
+    ]
+   },
+   "16080000": {
+    "name": "Cry of Terror",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Orb"
+    ],
+    "cooldown_ms": 90000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 80,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       246,
+       246
+      ],
+      "ratio": [
+       10000,
+       10000
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        246,
+        246
+       ],
+       "ratio": [
+        10000,
+        10000
+       ]
+      },
+      "effect_id": 1608000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     16070000
+    ]
+   },
+   "16150000": {
+    "name": "Jointstrike: Corrode",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Orb"
+    ],
+    "cooldown_ms": 45000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       246,
+       246
+      ],
+      "ratio": [
+       10000,
+       10000
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        246,
+        246
+       ],
+       "ratio": [
+        10000,
+        10000
+       ]
+      },
+      "effect_id": 1615000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     16070000
+    ]
+   },
+   "16170000": {
+    "name": "Command: Proxy",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Orb"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       246,
+       246
+      ],
+      "ratio": [
+       10000,
+       10000
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        246,
+        246
+       ],
+       "ratio": [
+        10000,
+        10000
+       ]
+      },
+      "effect_id": 1617000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     16070000
+    ]
+   },
+   "16190000": {
+    "name": "Enhance: Spirit's Benediction",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Orb"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 80,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       246,
+       246
+      ],
+      "ratio": [
+       10000,
+       10000
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        246,
+        246
+       ],
+       "ratio": [
+        10000,
+        10000
+       ]
+      },
+      "effect_id": 1619000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     16070000
+    ]
+   },
+   "16220000": {
+    "name": "Cursed Cloud",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Orb"
+    ],
+    "cooldown_ms": 90000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 80,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       246,
+       246
+      ],
+      "ratio": [
+       10000,
+       10000
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        246,
+        246
+       ],
+       "ratio": [
+        10000,
+        10000
+       ]
+      },
+      "effect_id": 1622000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     16070000
+    ]
+   },
+   "16230000": {
+    "name": "Seize Magic",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Orb"
+    ],
+    "cooldown_ms": 90000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       246,
+       246
+      ],
+      "ratio": [
+       10000,
+       10000
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        246,
+        246
+       ],
+       "ratio": [
+        10000,
+        10000
+       ]
+      },
+      "effect_id": 1623000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     16070000
+    ]
+   },
+   "16240000": {
+    "name": "Jointstrike: Destructive Attack",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Orb"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 80,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       246,
+       246
+      ],
+      "ratio": [
+       10000,
+       10000
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        246,
+        246
+       ],
+       "ratio": [
+        10000,
+        10000
+       ]
+      },
+      "effect_id": 1624000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     16070000
+    ]
+   },
+   "16250000": {
+    "name": "Summon: Ancient Spirit",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Orb"
+    ],
+    "cooldown_ms": 90000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 80,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       246,
+       246
+      ],
+      "ratio": [
+       10000,
+       10000
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        246,
+        246
+       ],
+       "ratio": [
+        10000,
+        10000
+       ]
+      },
+      "effect_id": 1625000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     16070000
+    ]
+   },
+   "16260000": {
+    "name": "Magic Block",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Orb"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       246,
+       246
+      ],
+      "ratio": [
+       10000,
+       10000
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        246,
+        246
+       ],
+       "ratio": [
+        10000,
+        10000
+       ]
+      },
+      "effect_id": 1626000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     16070000
+    ]
+   },
+   "16360000": {
+    "name": "Kaisinel's Power",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Orb"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 80,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       246,
+       246
+      ],
+      "ratio": [
+       10000,
+       10000
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        246,
+        246
+       ],
+       "ratio": [
+        10000,
+        10000
+       ]
+      },
+      "effect_id": 1636000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     16070000
+    ]
+   },
+   "16370000": {
+    "name": "Flame Blessing",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Orb"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 80,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       246,
+       246
+      ],
+      "ratio": [
+       10000,
+       10000
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        246,
+        246
+       ],
+       "ratio": [
+        10000,
+        10000
+       ]
+      },
+      "effect_id": 1637000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     16070000
+    ]
+   },
+   "16700000": {
+    "name": "Assault Terror",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Orb"
+    ],
+    "cooldown_ms": 120000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       246,
+       246
+      ],
+      "ratio": [
+       10000,
+       10000
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        246,
+        246
+       ],
+       "ratio": [
+        10000,
+        10000
+       ]
+      },
+      "effect_id": 1670000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     16070000
+    ]
+   },
+   "19280000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Gauntlet"
+    ],
+    "cooldown_ms": 90000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       286,
+       286
+      ],
+      "ratio": [
+       12750,
+       12750
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        260,
+        260
+       ],
+       "ratio": [
+        11480,
+        11480
+       ]
+      },
+      "effect_id": 1928000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     19070000,
+     19090000,
+     19160000,
+     19230000
+    ]
+   },
+   "19290000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Gauntlet"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       286,
+       286
+      ],
+      "ratio": [
+       12750,
+       12750
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        260,
+        260
+       ],
+       "ratio": [
+        11480,
+        11480
+       ]
+      },
+      "effect_id": 1929000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     19070000,
+     19090000,
+     19160000,
+     19230000
+    ]
+   },
+   "19300000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Gauntlet"
+    ],
+    "cooldown_ms": 30000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       286,
+       286
+      ],
+      "ratio": [
+       12750,
+       12750
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        260,
+        260
+       ],
+       "ratio": [
+        11480,
+        11480
+       ]
+      },
+      "effect_id": 1930000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     19070000,
+     19090000,
+     19160000,
+     19230000
+    ]
+   },
+   "19310000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Gauntlet"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       286,
+       286
+      ],
+      "ratio": [
+       12750,
+       12750
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        260,
+        260
+       ],
+       "ratio": [
+        11480,
+        11480
+       ]
+      },
+      "effect_id": 1931000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     19070000,
+     19090000,
+     19160000,
+     19230000
+    ]
+   },
+   "19320000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Gauntlet"
+    ],
+    "cooldown_ms": 30000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       286,
+       286
+      ],
+      "ratio": [
+       12750,
+       12750
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        260,
+        260
+       ],
+       "ratio": [
+        11480,
+        11480
+       ]
+      },
+      "effect_id": 1932000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     19070000,
+     19090000,
+     19160000,
+     19230000
+    ]
+   },
+   "19330000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Gauntlet"
+    ],
+    "cooldown_ms": 90000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       286,
+       286
+      ],
+      "ratio": [
+       12750,
+       12750
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        260,
+        260
+       ],
+       "ratio": [
+        11480,
+        11480
+       ]
+      },
+      "effect_id": 1933000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     19070000,
+     19090000,
+     19160000,
+     19230000
+    ]
+   },
+   "19350000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Gauntlet"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       286,
+       286
+      ],
+      "ratio": [
+       12750,
+       12750
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        260,
+        260
+       ],
+       "ratio": [
+        11480,
+        11480
+       ]
+      },
+      "effect_id": 1935000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     19070000,
+     19090000,
+     19160000,
+     19230000
+    ]
+   },
+   "19360000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Gauntlet"
+    ],
+    "cooldown_ms": 180000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       286,
+       286
+      ],
+      "ratio": [
+       12750,
+       12750
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        260,
+        260
+       ],
+       "ratio": [
+        11480,
+        11480
+       ]
+      },
+      "effect_id": 1936000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     19070000,
+     19090000,
+     19160000,
+     19230000
+    ]
+   },
+   "19370000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Gauntlet"
+    ],
+    "cooldown_ms": 90000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       286,
+       286
+      ],
+      "ratio": [
+       12750,
+       12750
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        260,
+        260
+       ],
+       "ratio": [
+        11480,
+        11480
+       ]
+      },
+      "effect_id": 1937000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     19070000,
+     19090000,
+     19160000,
+     19230000
+    ]
+   },
+   "19380000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Gauntlet"
+    ],
+    "cooldown_ms": 120000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       286,
+       286
+      ],
+      "ratio": [
+       12750,
+       12750
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        260,
+        260
+       ],
+       "ratio": [
+        11480,
+        11480
+       ]
+      },
+      "effect_id": 1938000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     19070000,
+     19090000,
+     19160000,
+     19230000
+    ]
+   },
+   "19390000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Gauntlet"
+    ],
+    "cooldown_ms": 45000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       286,
+       286
+      ],
+      "ratio": [
+       12750,
+       12750
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        260,
+        260
+       ],
+       "ratio": [
+        11480,
+        11480
+       ]
+      },
+      "effect_id": 1939000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     19070000,
+     19090000,
+     19160000,
+     19230000
+    ]
+   },
+   "19400000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Gauntlet"
+    ],
+    "cooldown_ms": 45000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       286,
+       286
+      ],
+      "ratio": [
+       12750,
+       12750
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        260,
+        260
+       ],
+       "ratio": [
+        11480,
+        11480
+       ]
+      },
+      "effect_id": 1940000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     19070000,
+     19090000,
+     19160000,
+     19230000
+    ]
+   },
+   "19460000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Gauntlet"
+    ],
+    "cooldown_ms": 30000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       286,
+       286
+      ],
+      "ratio": [
+       12750,
+       12750
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        260,
+        260
+       ],
+       "ratio": [
+        11480,
+        11480
+       ]
+      },
+      "effect_id": 1946000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     19070000,
+     19090000,
+     19160000,
+     19230000
+    ]
+   },
+   "11080000": {
+    "name": "Blade Toss",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Greatsword"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       207,
+       207
+      ],
+      "ratio": [
+       12500,
+       12500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        138,
+        138
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1108000011
+     },
+     {
+      "flat": [
+       207,
+       207
+      ],
+      "ratio": [
+       12500,
+       12500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        138,
+        138
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1108000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     11050000,
+     11190000,
+     11290000,
+     11360000
+    ]
+   },
+   "11110000": {
+    "name": "Focused Block",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Greatsword"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       207,
+       207
+      ],
+      "ratio": [
+       12500,
+       12500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        138,
+        138
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1111000011
+     },
+     {
+      "flat": [
+       207,
+       207
+      ],
+      "ratio": [
+       12500,
+       12500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        138,
+        138
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1111000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     11050000,
+     11190000,
+     11290000,
+     11360000
+    ]
+   },
+   "11130000": {
+    "name": "Armor of Balance",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Greatsword"
+    ],
+    "cooldown_ms": 90000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       1433,
+       1433
+      ],
+      "ratio": [
+       43525,
+       43525
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        538,
+        538
+       ],
+       "ratio": [
+        17088,
+        17088
+       ]
+      },
+      "effect_id": 1113000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     11100000,
+     11300000
+    ]
+   },
+   "11240000": {
+    "name": "Wrath Wave",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Greatsword"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       1433,
+       1433
+      ],
+      "ratio": [
+       43525,
+       43525
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        538,
+        538
+       ],
+       "ratio": [
+        17088,
+        17088
+       ]
+      },
+      "effect_id": 1124000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     11100000,
+     11300000
+    ]
+   },
+   "11250000": {
+    "name": "Zikel's Blessing",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Greatsword"
+    ],
+    "cooldown_ms": 120000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       1433,
+       1433
+      ],
+      "ratio": [
+       43525,
+       43525
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        538,
+        538
+       ],
+       "ratio": [
+        17088,
+        17088
+       ]
+      },
+      "effect_id": 1125000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     11100000,
+     11300000
+    ]
+   },
+   "11340000": {
+    "name": "Lifestealing Blade",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Greatsword"
+    ],
+    "cooldown_ms": 90000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       1433,
+       1433
+      ],
+      "ratio": [
+       43525,
+       43525
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        538,
+        538
+       ],
+       "ratio": [
+        17088,
+        17088
+       ]
+      },
+      "effect_id": 1134000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     11100000,
+     11300000
+    ]
+   },
+   "11380000": {
+    "name": "Tenaciousness",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Greatsword"
+    ],
+    "cooldown_ms": 150000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       1433,
+       1433
+      ],
+      "ratio": [
+       43525,
+       43525
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        538,
+        538
+       ],
+       "ratio": [
+        17088,
+        17088
+       ]
+      },
+      "effect_id": 1138000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     11100000,
+     11300000
+    ]
+   },
+   "11390000": {
+    "name": "Rage Burst",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Greatsword"
+    ],
+    "cooldown_ms": 45000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       1433,
+       1433
+      ],
+      "ratio": [
+       43525,
+       43525
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        538,
+        538
+       ],
+       "ratio": [
+        17088,
+        17088
+       ]
+      },
+      "effect_id": 1139000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     11100000,
+     11300000
+    ]
+   },
+   "11400000": {
+    "name": "Lunge Stance",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Greatsword"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       1433,
+       1433
+      ],
+      "ratio": [
+       43525,
+       43525
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        538,
+        538
+       ],
+       "ratio": [
+        17088,
+        17088
+       ]
+      },
+      "effect_id": 1140000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     11100000,
+     11300000
+    ]
+   },
+   "11410000": {
+    "name": "Wave Armor",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Greatsword"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       1433,
+       1433
+      ],
+      "ratio": [
+       43525,
+       43525
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        538,
+        538
+       ],
+       "ratio": [
+        17088,
+        17088
+       ]
+      },
+      "effect_id": 1141000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     11100000,
+     11300000
+    ]
+   },
+   "11430000": {
+    "name": "Forced Restraint",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Greatsword"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       1433,
+       1433
+      ],
+      "ratio": [
+       43525,
+       43525
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        538,
+        538
+       ],
+       "ratio": [
+        17088,
+        17088
+       ]
+      },
+      "effect_id": 1143000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     11100000,
+     11300000
+    ]
+   },
+   "11450000": {
+    "name": "Fracturing Rush",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Greatsword"
+    ],
+    "cooldown_ms": 90000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       1433,
+       1433
+      ],
+      "ratio": [
+       43525,
+       43525
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        538,
+        538
+       ],
+       "ratio": [
+        17088,
+        17088
+       ]
+      },
+      "effect_id": 1145000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     11100000,
+     11300000
+    ]
+   },
+   "11700000": {
+    "name": "Assault Strike",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Greatsword"
+    ],
+    "cooldown_ms": 120000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       1433,
+       1433
+      ],
+      "ratio": [
+       43525,
+       43525
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        538,
+        538
+       ],
+       "ratio": [
+        17088,
+        17088
+       ]
+      },
+      "effect_id": 1170000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     11100000,
+     11300000
+    ]
+   },
+   "14060000": {
+    "name": "Griffon Arrow",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Bow"
+    ],
+    "cooldown_ms": 45000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 25,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       454,
+       454
+      ],
+      "ratio": [
+       19588,
+       19588
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        300,
+        300
+       ],
+       "ratio": [
+        12640,
+        12640
+       ]
+      },
+      "effect_id": 1406000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     14010000,
+     14070000,
+     14080000,
+     14110000,
+     14130000
+    ]
+   },
+   "14120000": {
+    "name": "Ambush Kick",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Bow"
+    ],
+    "cooldown_ms": 30000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       454,
+       454
+      ],
+      "ratio": [
+       19588,
+       19588
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        300,
+        300
+       ],
+       "ratio": [
+        12640,
+        12640
+       ]
+      },
+      "effect_id": 1412000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     14010000,
+     14070000,
+     14080000,
+     14110000,
+     14130000
+    ]
+   },
+   "14150000": {
+    "name": "Illusory Arrow",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Bow"
+    ],
+    "cooldown_ms": 30000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       454,
+       454
+      ],
+      "ratio": [
+       19588,
+       19588
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        300,
+        300
+       ],
+       "ratio": [
+        12640,
+        12640
+       ]
+      },
+      "effect_id": 1415000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     14010000,
+     14070000,
+     14080000,
+     14110000,
+     14130000
+    ]
+   },
+   "14160000": {
+    "name": "Sealing Arrow",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Bow"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 25,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       454,
+       454
+      ],
+      "ratio": [
+       19588,
+       19588
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        300,
+        300
+       ],
+       "ratio": [
+        12640,
+        12640
+       ]
+      },
+      "effect_id": 1416000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     14010000,
+     14070000,
+     14080000,
+     14110000,
+     14130000
+    ]
+   },
+   "14180000": {
+    "name": "Ensnaring Trap",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Bow"
+    ],
+    "cooldown_ms": 90000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       454,
+       454
+      ],
+      "ratio": [
+       19588,
+       19588
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        300,
+        300
+       ],
+       "ratio": [
+        12640,
+        12640
+       ]
+      },
+      "effect_id": 1418000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     14010000,
+     14070000,
+     14080000,
+     14110000,
+     14130000
+    ]
+   },
+   "14190000": {
+    "name": "Stealth",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Bow"
+    ],
+    "cooldown_ms": 120000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       454,
+       454
+      ],
+      "ratio": [
+       19588,
+       19588
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        300,
+        300
+       ],
+       "ratio": [
+        12640,
+        12640
+       ]
+      },
+      "effect_id": 1419000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     14010000,
+     14070000,
+     14080000,
+     14110000,
+     14130000
+    ]
+   },
+   "14220000": {
+    "name": "Bow of Blessing",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Bow"
+    ],
+    "cooldown_ms": 120000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 25,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       454,
+       454
+      ],
+      "ratio": [
+       19588,
+       19588
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        300,
+        300
+       ],
+       "ratio": [
+        12640,
+        12640
+       ]
+      },
+      "effect_id": 1422000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     14010000,
+     14070000,
+     14080000,
+     14110000,
+     14130000
+    ]
+   },
+   "14270000": {
+    "name": "Arrow Storm",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Bow"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       454,
+       454
+      ],
+      "ratio": [
+       19588,
+       19588
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        300,
+        300
+       ],
+       "ratio": [
+        12640,
+        12640
+       ]
+      },
+      "effect_id": 1427000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     14010000,
+     14070000,
+     14080000,
+     14110000,
+     14130000
+    ]
+   },
+   "14310000": {
+    "name": "Vaizel's Authority",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Bow"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       454,
+       454
+      ],
+      "ratio": [
+       19588,
+       19588
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        300,
+        300
+       ],
+       "ratio": [
+        12640,
+        12640
+       ]
+      },
+      "effect_id": 1431000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     14010000,
+     14070000,
+     14080000,
+     14110000,
+     14130000
+    ]
+   },
+   "14350000": {
+    "name": "Mother Nature's Breath",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Bow"
+    ],
+    "cooldown_ms": 90000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 25,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       454,
+       454
+      ],
+      "ratio": [
+       19588,
+       19588
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        300,
+        300
+       ],
+       "ratio": [
+        12640,
+        12640
+       ]
+      },
+      "effect_id": 1435000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     14010000,
+     14070000,
+     14080000,
+     14110000,
+     14130000
+    ]
+   },
+   "14360000": {
+    "name": "Explosive Arrow",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Bow"
+    ],
+    "cooldown_ms": 45000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       454,
+       454
+      ],
+      "ratio": [
+       19588,
+       19588
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        300,
+        300
+       ],
+       "ratio": [
+        12640,
+        12640
+       ]
+      },
+      "effect_id": 1436000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     14010000,
+     14070000,
+     14080000,
+     14110000,
+     14130000
+    ]
+   },
+   "14380000": {
+    "name": "Supporting Fire",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Bow"
+    ],
+    "cooldown_ms": 90000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       454,
+       454
+      ],
+      "ratio": [
+       19588,
+       19588
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        300,
+        300
+       ],
+       "ratio": [
+        12640,
+        12640
+       ]
+      },
+      "effect_id": 1438000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     14010000,
+     14070000,
+     14080000,
+     14110000,
+     14130000
+    ]
+   },
+   "14700000": {
+    "name": "Assault Smite",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Bow"
+    ],
+    "cooldown_ms": 120000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       454,
+       454
+      ],
+      "ratio": [
+       19588,
+       19588
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        300,
+        300
+       ],
+       "ratio": [
+        12640,
+        12640
+       ]
+      },
+      "effect_id": 1470000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     14010000,
+     14070000,
+     14080000,
+     14110000,
+     14130000
+    ]
+   },
+   "15120000": {
+    "name": "Glacial Smite",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Magicbook"
+    ],
+    "cooldown_ms": 90000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1512000011
+     },
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1512000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     15060000,
+     15110000
+    ]
+   },
+   "15130000": {
+    "name": "Soul Freeze",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Magicbook"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1513000011
+     },
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1513000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     15060000,
+     15110000
+    ]
+   },
+   "15140000": {
+    "name": "Curse: Tree",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Magicbook"
+    ],
+    "cooldown_ms": 90000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1514000011
+     },
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1514000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     15060000,
+     15110000
+    ]
+   },
+   "15160000": {
+    "name": "Steel Barrier",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Magicbook"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1516000011
+     },
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1516000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     15060000,
+     15110000
+    ]
+   },
+   "15200000": {
+    "name": "Cold Storm",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Magicbook"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1520000011
+     },
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1520000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     15060000,
+     15110000
+    ]
+   },
+   "15230000": {
+    "name": "Arctic Armor",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Magicbook"
+    ],
+    "cooldown_ms": 90000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1523000011
+     },
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1523000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     15060000,
+     15110000
+    ]
+   },
+   "15300000": {
+    "name": "Lumiel's Space",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Magicbook"
+    ],
+    "cooldown_ms": 90000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1530000011
+     },
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1530000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     15060000,
+     15110000
+    ]
+   },
+   "15320000": {
+    "name": "Delayed Explosion",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Magicbook"
+    ],
+    "cooldown_ms": 30000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       178,
+       178
+      ],
+      "ratio": [
+       9400,
+       9400
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        179,
+        179
+       ],
+       "ratio": [
+        9470,
+        9470
+       ]
+      },
+      "effect_id": 1532000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     15150000
+    ]
+   },
+   "15360000": {
+    "name": "Divine Burst",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Magicbook"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1536000011
+     },
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1536000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     15060000,
+     15110000
+    ]
+   },
+   "15390000": {
+    "name": "Fire Wall",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Magicbook"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1539000011
+     },
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1539000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     15060000,
+     15110000
+    ]
+   },
+   "15400000": {
+    "name": "Element Enhancement",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Magicbook"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1540000011
+     },
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1540000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     15060000,
+     15110000
+    ]
+   },
+   "15410000": {
+    "name": "Hibernation",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Magicbook"
+    ],
+    "cooldown_ms": 180000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1541000011
+     },
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1541000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     15060000,
+     15110000
+    ]
+   },
+   "15700000": {
+    "name": "Assault Bombardment",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Magicbook"
+    ],
+    "cooldown_ms": 120000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1570000011
+     },
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1570000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     15060000,
+     15110000
+    ]
+   },
+   "12070000": {
+    "name": "Doom Shield",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Sword"
+    ],
+    "cooldown_ms": 30000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       388,
+       388
+      ],
+      "ratio": [
+       21250,
+       21250
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        250,
+        250
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1207000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     12090000,
+     12130000,
+     12300000,
+     12350000,
+     12430000
+    ]
+   },
+   "12110000": {
+    "name": "Shield of Protection",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Sword"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       388,
+       388
+      ],
+      "ratio": [
+       21250,
+       21250
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        250,
+        250
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1211000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     12090000,
+     12130000,
+     12300000,
+     12350000,
+     12430000
+    ]
+   },
+   "12120000": {
+    "name": "Taunt",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Sword"
+    ],
+    "cooldown_ms": 30000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       388,
+       388
+      ],
+      "ratio": [
+       21250,
+       21250
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        250,
+        250
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1212000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     12090000,
+     12130000,
+     12300000,
+     12350000,
+     12430000
+    ]
+   },
+   "12190000": {
+    "name": "Second Skin",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Sword"
+    ],
+    "cooldown_ms": 90000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       388,
+       388
+      ],
+      "ratio": [
+       21250,
+       21250
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        250,
+        250
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1219000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     12090000,
+     12130000,
+     12300000,
+     12350000,
+     12430000
+    ]
+   },
+   "12200000": {
+    "name": "Armor of Balance",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Sword"
+    ],
+    "cooldown_ms": 90000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       388,
+       388
+      ],
+      "ratio": [
+       21250,
+       21250
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        250,
+        250
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1220000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     12090000,
+     12130000,
+     12300000,
+     12350000,
+     12430000
+    ]
+   },
+   "12220000": {
+    "name": "Grapple",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Sword"
+    ],
+    "cooldown_ms": 90000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       388,
+       388
+      ],
+      "ratio": [
+       21250,
+       21250
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        250,
+        250
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1222000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     12090000,
+     12130000,
+     12300000,
+     12350000,
+     12430000
+    ]
+   },
+   "12230000": {
+    "name": "Noble Armor",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Sword"
+    ],
+    "cooldown_ms": 120000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       388,
+       388
+      ],
+      "ratio": [
+       21250,
+       21250
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        250,
+        250
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1223000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     12090000,
+     12130000,
+     12300000,
+     12350000,
+     12430000
+    ]
+   },
+   "12250000": {
+    "name": "Comrade in Arms",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Sword"
+    ],
+    "cooldown_ms": 120000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       388,
+       388
+      ],
+      "ratio": [
+       21250,
+       21250
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        250,
+        250
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1225000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     12090000,
+     12130000,
+     12300000,
+     12350000,
+     12430000
+    ]
+   },
+   "12310000": {
+    "name": "Empyrean Lord's Punishment",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Sword"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       388,
+       388
+      ],
+      "ratio": [
+       21250,
+       21250
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        250,
+        250
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1231000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     12090000,
+     12130000,
+     12300000,
+     12350000,
+     12430000
+    ]
+   },
+   "12320000": {
+    "name": "Nezekan's Shield",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Sword"
+    ],
+    "cooldown_ms": 60000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       388,
+       388
+      ],
+      "ratio": [
+       21250,
+       21250
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        250,
+        250
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1232000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     12090000,
+     12130000,
+     12300000,
+     12350000,
+     12430000
+    ]
+   },
+   "12410000": {
+    "name": "Executing Blade",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Sword"
+    ],
+    "cooldown_ms": 45000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       388,
+       388
+      ],
+      "ratio": [
+       21250,
+       21250
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        250,
+        250
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1241000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     12090000,
+     12130000,
+     12300000,
+     12350000,
+     12430000
+    ]
+   },
+   "12450000": {
+    "name": "Battlefield Banner",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Sword"
+    ],
+    "cooldown_ms": 90000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       388,
+       388
+      ],
+      "ratio": [
+       21250,
+       21250
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        250,
+        250
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1245000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     12090000,
+     12130000,
+     12300000,
+     12350000,
+     12430000
+    ]
+   },
+   "12700000": {
+    "name": "Assault Fury",
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Sword"
+    ],
+    "cooldown_ms": 120000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       388,
+       388
+      ],
+      "ratio": [
+       21250,
+       21250
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        250,
+        250
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1270000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     12090000,
+     12130000,
+     12300000,
+     12350000,
+     12430000
+    ]
+   }
+  },
+  "shard_totals": {
+   "1": 0,
+   "2": 0,
+   "3": 0,
+   "4": 0,
+   "5": 0,
+   "6": 0,
+   "7": 0,
+   "8": 0,
+   "9": 0,
+   "10": 0,
+   "11": 0,
+   "12": 0,
+   "13": 0,
+   "14": 0,
+   "15": 0,
+   "16": 0,
+   "17": 0,
+   "18": 0,
+   "19": 0,
+   "20": 0,
+   "21": 0,
+   "22": 1,
+   "23": 2,
+   "24": 3,
+   "25": 4,
+   "26": 5,
+   "27": 6,
+   "28": 7,
+   "29": 8,
+   "30": 9,
+   "31": 10,
+   "32": 11,
+   "33": 12,
+   "34": 13,
+   "35": 14,
+   "36": 15,
+   "37": 16,
+   "38": 17,
+   "39": 18,
+   "40": 20,
+   "41": 22,
+   "42": 24,
+   "43": 26,
+   "44": 28,
+   "45": 30,
+   "46": 30,
+   "47": 30,
+   "48": 30,
+   "49": 30,
+   "50": 30,
+   "51": 30,
+   "52": 30,
+   "53": 30,
+   "54": 30,
+   "55": 30,
+   "56": 30,
+   "57": 30,
+   "58": 30,
+   "59": 30,
+   "60": 30,
+   "61": 30,
+   "62": 30,
+   "63": 30,
+   "64": 30,
+   "65": 30,
+   "66": 30,
+   "67": 30,
+   "68": 30,
+   "69": 30,
+   "70": 30,
+   "71": 30,
+   "72": 30,
+   "73": 30,
+   "74": 30,
+   "75": 30,
+   "76": 30,
+   "77": 30,
+   "78": 30,
+   "79": 30,
+   "80": 30,
+   "81": 30,
+   "82": 30,
+   "83": 30,
+   "84": 30,
+   "85": 30,
+   "86": 30,
+   "87": 30,
+   "88": 30,
+   "89": 30,
+   "90": 30,
+   "91": 30,
+   "92": 30,
+   "93": 30,
+   "94": 30,
+   "95": 30,
+   "96": 30,
+   "97": 30,
+   "98": 30,
+   "99": 30,
+   "100": 30
+  }
+ }
+}

@@ -138,7 +138,7 @@ public sealed class BotBrain(GameData data, GameSession bot, GameSession leader,
     public int Dodges { get; private set; }
     (int Npc, long Due)? dodged;
     /// <summary>The bot's class Dodge (each class has its own, GameSession.IsDodge), or null when it has not learned one.</summary>
-    public int? DodgeSkill => Enumerable.Range(11, 8).Select(c => c * 1_000_000 + 100).Where(bot.Knows).Cast<int?>().FirstOrDefault();
+    public int? DodgeSkill => Enumerable.Range(11, 9).Select(c => c * 1_000_000 + 100).Where(bot.Knows).Cast<int?>().FirstOrDefault();
 
     /// <summary>
     /// The dodge request when the bot is the victim of a monster's special landing within <see cref="DodgeLeadMs"/> and it can
@@ -436,6 +436,15 @@ public sealed class BotBrain(GameData data, GameSession bot, GameSession leader,
             }
             if (target is null || !HpHolds(when, target.HpMax > 0 ? target.Hp * 100.0 / target.HpMax : 0) || !EnemyHolds(step, when, target, now, me, threats)) continue;
             return new BotChoice(step, null, target);
+        }
+        // The bot's stigmas (GameSession.ChooseBotStigmas, docs/STIGMAS.md): its damage stigmas at the fight's target when no
+        // rotation entry fits. The rotations are built from the level kit, which has no stigmas.
+        if (target is null) return null;
+        foreach (var stigma in bot.EquippedStigmas)
+        {
+            if (now < refused.GetValueOrDefault(stigma) || now < bot.CooldownUntil(stigma)) continue;
+            if (data.Skill(stigma) is not { Damage.Length: > 0 } skill || mp < skill.Cost.Mp || sp < skill.Cost.Sp || hp <= skill.Cost.Hp) continue;
+            return new BotChoice(new BotRotationStep(stigma, null, 1), null, target);
         }
         return null;
     }

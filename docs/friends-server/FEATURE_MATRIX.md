@@ -73,7 +73,7 @@ Takeaway: the wire protocol for login, movement, combat and other players' messa
 | Skills learned by level | Partial | `GameData.LearnedSkills` `GameData.cs:272`; class-skills.json | **Unlock data stops at character level 25 for every class**, while max level is 100. |
 | Skill levels / skill points | Implemented | `GameSession.SkillLevels.cs` (OBSERVED flow) | Points from Exp.dat (CANDIDATE). **Skill level doesn't change damage**: `Combat.SkillHits` (`Combat.cs:90`) ignores it. |
 | Passives | Partial | `PassiveAbnormals` at `GameSession.Buffs.cs:242` | Passive abnormals are sent (needed for weapon equip). Only the stats the server models apply. |
-| Stigmas | Missing | No "Stigma" anywhere | (AION2 has the Daevanion board instead.) |
+| Stigmas | Partial (built, not tested in a client) | `GameSession.Stigmas.cs`, `tools/data/stigmas.json`, migration 043 | Global rules: 4 slots at 22/27/32/37, Stigma Shards from levelling, levels to 20, free reset, `/stigma`, bots slot their own. Stigma lists and costs recovered from the client; messages CANDIDATE; specialties not modelled. docs/STIGMAS.md |
 | Daevanion board | Implemented (data pending) | `GameSession.Daevanion.cs`: boards per class, node open/close/reset/open-all/route, points, stats, skill levels, passives; `docs/DAEVANION.md`. Real board data needs the client export (`tools/daevanion_data.py`) | Aion:Daevanion |
 | Creature boards | Implemented | `GameSession.Board.cs`, migration 020 | — |
 | Ascension | Implemented | `Ascend` at `GameSession.cs:1052`, migration 010 | — |
