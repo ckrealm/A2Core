@@ -1,0 +1,10036 @@
+{
+ "source": "OURS: our own progression choices where the client tables we have stop (docs/PROGRESSION.md). 'params' is hand-edited; 'generated' is written by `python tools/progression.py` from params, tools/data/class-skills.json and tools/data/dev-menu.json. Nothing here is retail data.",
+ "params": {
+  "unlock": {
+   "about": "OURS. SkillAcquireData auto-learn rows end at level 25. The skills the client's developer kit Class_<class> (DevTeleportDataTable, dev-menu.json) lists for a class but no recovered unlock gives it are spread evenly over first_level..last_level (null = the level cap).",
+   "first_level": 26,
+   "last_level": null
+  },
+  "skill_level_damage": {
+   "about": "OURS. Damage, heals and damage over time grow by per_level (1/10000) for each skill level above 1 (skill levels are bought with skill points, GameSession.SkillLevels.cs). No SkillEffect rows per skill level were exported.",
+   "per_level": 1000
+  },
+  "cooldown_bands_ms": [
+   10000,
+   30000
+  ],
+  "damage_fallbacks": {
+   "14170000": "Explosion Trap (Ranger): an MP-costing 20 s attack with no Damage row in the export",
+   "17150000": "Divine Aura (Cleric): a MainTarget 30 s skill with no Damage row and no skill-effects.json entry"
+  },
+  "mastery": {
+   "about": "OURS. Skill levels 2-10 for fallback skills: the recovered SkillAcquireData Mastery cost ladder, one step every step_levels levels after the unlock.",
+   "costs": [
+    1,
+    1,
+    1,
+    2,
+    2,
+    2,
+    4,
+    4,
+    4
+   ],
+   "step_levels": 3
+  },
+  "mp_max": {
+   "about": "OURS. PcStatLevel holds FixingDamage, Defense and HPMax only. MPMax 1500 at level 1 is OBSERVED (the official 0x3649 sample, a level-1 character); the growth per level is ours.",
+   "default": {
+    "base": 1500,
+    "per_level": 50
+   },
+   "classes": {
+    "Cleric": {
+     "base": 1500,
+     "per_level": 60
+    },
+    "Chanter": {
+     "base": 1500,
+     "per_level": 60
+    },
+    "Sorcerer": {
+     "base": 1500,
+     "per_level": 60
+    },
+    "Elementalist": {
+     "base": 1500,
+     "per_level": 60
+    }
+   }
+  },
+  "combat_power": {
+   "about": "OURS. combat power = sum of stat x weight, attack = mean weapon damage + FixingDamage (level) + WeaponFixingDamage (gear). Every weight is positive, so better gear never lowers it.",
+   "weights": {
+    "level": 10,
+    "attack": 8,
+    "defense": 2,
+    "hp_max": 0.2,
+    "mp_max": 0.05,
+    "critical": 1,
+    "accuracy": 0.5,
+    "block": 0.5,
+    "item_level": 3
+   }
+  }
+ },
+ "generated": {
+  "unlocks": {
+   "Gladiator": [
+    [
+     11080000,
+     26,
+     1
+    ],
+    [
+     11000001,
+     32,
+     1
+    ],
+    [
+     11110000,
+     38,
+     1
+    ],
+    [
+     11130000,
+     44,
+     1
+    ],
+    [
+     11240000,
+     51,
+     1
+    ],
+    [
+     11250000,
+     57,
+     1
+    ],
+    [
+     11340000,
+     63,
+     1
+    ],
+    [
+     11700000,
+     69,
+     1
+    ],
+    [
+     11380000,
+     75,
+     1
+    ],
+    [
+     11390000,
+     82,
+     1
+    ],
+    [
+     11400000,
+     88,
+     1
+    ],
+    [
+     11410000,
+     94,
+     1
+    ],
+    [
+     11430000,
+     100,
+     1
+    ]
+   ],
+   "Templar": [
+    [
+     12070000,
+     26,
+     1
+    ],
+    [
+     12700000,
+     33,
+     1
+    ],
+    [
+     12110000,
+     39,
+     1
+    ],
+    [
+     12120000,
+     46,
+     1
+    ],
+    [
+     12190000,
+     53,
+     1
+    ],
+    [
+     12200000,
+     60,
+     1
+    ],
+    [
+     12220000,
+     66,
+     1
+    ],
+    [
+     12230000,
+     73,
+     1
+    ],
+    [
+     12250000,
+     80,
+     1
+    ],
+    [
+     12310000,
+     87,
+     1
+    ],
+    [
+     12320000,
+     93,
+     1
+    ],
+    [
+     12410000,
+     100,
+     1
+    ]
+   ],
+   "Assassin": [
+    [
+     13020000,
+     26,
+     1
+    ],
+    [
+     13700000,
+     33,
+     1
+    ],
+    [
+     13080000,
+     39,
+     1
+    ],
+    [
+     13180000,
+     46,
+     1
+    ],
+    [
+     13230000,
+     53,
+     1
+    ],
+    [
+     13250000,
+     60,
+     1
+    ],
+    [
+     13270000,
+     66,
+     1
+    ],
+    [
+     13280000,
+     73,
+     1
+    ],
+    [
+     13300000,
+     80,
+     1
+    ],
+    [
+     13310000,
+     87,
+     1
+    ],
+    [
+     13370000,
+     93,
+     1
+    ],
+    [
+     13390000,
+     100,
+     1
+    ]
+   ],
+   "Cleric": [
+    [
+     17160000,
+     26,
+     1
+    ],
+    [
+     17700000,
+     32,
+     1
+    ],
+    [
+     17190000,
+     38,
+     1
+    ],
+    [
+     17270000,
+     44,
+     1
+    ],
+    [
+     17280000,
+     51,
+     1
+    ],
+    [
+     17290000,
+     57,
+     1
+    ],
+    [
+     17300000,
+     63,
+     1
+    ],
+    [
+     17390000,
+     69,
+     1
+    ],
+    [
+     17400000,
+     75,
+     1
+    ],
+    [
+     17410000,
+     82,
+     1
+    ],
+    [
+     17420000,
+     88,
+     1
+    ],
+    [
+     17430000,
+     94,
+     1
+    ],
+    [
+     17440000,
+     100,
+     1
+    ]
+   ],
+   "Ranger": [
+    [
+     14060000,
+     26,
+     1
+    ],
+    [
+     14700000,
+     33,
+     1
+    ],
+    [
+     14120000,
+     39,
+     1
+    ],
+    [
+     14150000,
+     46,
+     1
+    ],
+    [
+     14160000,
+     53,
+     1
+    ],
+    [
+     14180000,
+     60,
+     1
+    ],
+    [
+     14190000,
+     66,
+     1
+    ],
+    [
+     14220000,
+     73,
+     1
+    ],
+    [
+     14270000,
+     80,
+     1
+    ],
+    [
+     14310000,
+     87,
+     1
+    ],
+    [
+     14350000,
+     93,
+     1
+    ],
+    [
+     14360000,
+     100,
+     1
+    ]
+   ],
+   "Elementalist": [
+    [
+     16060000,
+     26,
+     1
+    ],
+    [
+     16700000,
+     33,
+     1
+    ],
+    [
+     16080000,
+     39,
+     1
+    ],
+    [
+     16150000,
+     46,
+     1
+    ],
+    [
+     16190000,
+     53,
+     1
+    ],
+    [
+     16220000,
+     60,
+     1
+    ],
+    [
+     16230000,
+     66,
+     1
+    ],
+    [
+     16240000,
+     73,
+     1
+    ],
+    [
+     16250000,
+     80,
+     1
+    ],
+    [
+     16260000,
+     87,
+     1
+    ],
+    [
+     16360000,
+     93,
+     1
+    ],
+    [
+     16370000,
+     100,
+     1
+    ]
+   ],
+   "Sorcerer": [
+    [
+     15120000,
+     26,
+     1
+    ],
+    [
+     15700000,
+     33,
+     1
+    ],
+    [
+     15130000,
+     39,
+     1
+    ],
+    [
+     15140000,
+     46,
+     1
+    ],
+    [
+     15160000,
+     53,
+     1
+    ],
+    [
+     15200000,
+     60,
+     1
+    ],
+    [
+     15230000,
+     66,
+     1
+    ],
+    [
+     15300000,
+     73,
+     1
+    ],
+    [
+     15320000,
+     80,
+     1
+    ],
+    [
+     15360000,
+     87,
+     1
+    ],
+    [
+     15390000,
+     93,
+     1
+    ],
+    [
+     15400000,
+     100,
+     1
+    ]
+   ],
+   "Chanter": [
+    [
+     18130000,
+     26,
+     1
+    ],
+    [
+     18700000,
+     32,
+     1
+    ],
+    [
+     18140000,
+     38,
+     1
+    ],
+    [
+     18160000,
+     44,
+     1
+    ],
+    [
+     18170000,
+     51,
+     1
+    ],
+    [
+     18190000,
+     57,
+     1
+    ],
+    [
+     18220000,
+     63,
+     1
+    ],
+    [
+     18230000,
+     69,
+     1
+    ],
+    [
+     18240000,
+     75,
+     1
+    ],
+    [
+     18250000,
+     82,
+     1
+    ],
+    [
+     18330000,
+     88,
+     1
+    ],
+    [
+     18420000,
+     94,
+     1
+    ],
+    [
+     18440000,
+     100,
+     1
+    ]
+   ]
+  },
+  "skills": {
+   "11080000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Greatsword"
+    ],
+    "cooldown_ms": 7500,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       234,
+       234
+      ],
+      "ratio": [
+       15680,
+       15680
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        194,
+        194
+       ],
+       "ratio": [
+        12942,
+        12942
+       ]
+      },
+      "effect_id": 1108000011
+     },
+     {
+      "flat": [
+       234,
+       234
+      ],
+      "ratio": [
+       15680,
+       15680
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        194,
+        194
+       ],
+       "ratio": [
+        12942,
+        12942
+       ]
+      },
+      "effect_id": 1108000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     11170000,
+     11200000
+    ]
+   },
+   "11000001": {
+    "name": null,
+    "type": "Passive",
+    "target": "Self",
+    "weapons": [
+     "Greatsword"
+    ],
+    "cooldown_ms": 0,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [],
+    "ours": true
+   },
+   "11110000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Greatsword"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       207,
+       207
+      ],
+      "ratio": [
+       12500,
+       12500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        138,
+        138
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1111000011
+     },
+     {
+      "flat": [
+       207,
+       207
+      ],
+      "ratio": [
+       12500,
+       12500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        138,
+        138
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1111000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     11050000,
+     11190000,
+     11290000,
+     11360000
+    ]
+   },
+   "11130000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Greatsword"
+    ],
+    "cooldown_ms": 45000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       1433,
+       1433
+      ],
+      "ratio": [
+       43525,
+       43525
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        538,
+        538
+       ],
+       "ratio": [
+        17088,
+        17088
+       ]
+      },
+      "effect_id": 1113000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     11100000,
+     11300000
+    ]
+   },
+   "11240000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Greatsword"
+    ],
+    "cooldown_ms": 7500,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       234,
+       234
+      ],
+      "ratio": [
+       15680,
+       15680
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        194,
+        194
+       ],
+       "ratio": [
+        12942,
+        12942
+       ]
+      },
+      "effect_id": 1124000011
+     },
+     {
+      "flat": [
+       234,
+       234
+      ],
+      "ratio": [
+       15680,
+       15680
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        194,
+        194
+       ],
+       "ratio": [
+        12942,
+        12942
+       ]
+      },
+      "effect_id": 1124000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     11170000,
+     11200000
+    ]
+   },
+   "11250000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Greatsword"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       207,
+       207
+      ],
+      "ratio": [
+       12500,
+       12500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        138,
+        138
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1125000011
+     },
+     {
+      "flat": [
+       207,
+       207
+      ],
+      "ratio": [
+       12500,
+       12500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        138,
+        138
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1125000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     11050000,
+     11190000,
+     11290000,
+     11360000
+    ]
+   },
+   "11340000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Greatsword"
+    ],
+    "cooldown_ms": 45000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       1433,
+       1433
+      ],
+      "ratio": [
+       43525,
+       43525
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        538,
+        538
+       ],
+       "ratio": [
+        17088,
+        17088
+       ]
+      },
+      "effect_id": 1134000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     11100000,
+     11300000
+    ]
+   },
+   "11700000": {
+    "name": null,
+    "type": "Passive",
+    "target": "Self",
+    "weapons": [
+     "Greatsword"
+    ],
+    "cooldown_ms": 0,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [],
+    "ours": true
+   },
+   "11380000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Greatsword"
+    ],
+    "cooldown_ms": 7500,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       234,
+       234
+      ],
+      "ratio": [
+       15680,
+       15680
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        194,
+        194
+       ],
+       "ratio": [
+        12942,
+        12942
+       ]
+      },
+      "effect_id": 1138000011
+     },
+     {
+      "flat": [
+       234,
+       234
+      ],
+      "ratio": [
+       15680,
+       15680
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        194,
+        194
+       ],
+       "ratio": [
+        12942,
+        12942
+       ]
+      },
+      "effect_id": 1138000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     11170000,
+     11200000
+    ]
+   },
+   "11390000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Greatsword"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       207,
+       207
+      ],
+      "ratio": [
+       12500,
+       12500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        138,
+        138
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1139000011
+     },
+     {
+      "flat": [
+       207,
+       207
+      ],
+      "ratio": [
+       12500,
+       12500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        138,
+        138
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1139000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     11050000,
+     11190000,
+     11290000,
+     11360000
+    ]
+   },
+   "11400000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Greatsword"
+    ],
+    "cooldown_ms": 45000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       1433,
+       1433
+      ],
+      "ratio": [
+       43525,
+       43525
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        538,
+        538
+       ],
+       "ratio": [
+        17088,
+        17088
+       ]
+      },
+      "effect_id": 1140000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     11100000,
+     11300000
+    ]
+   },
+   "11410000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Greatsword"
+    ],
+    "cooldown_ms": 7500,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       234,
+       234
+      ],
+      "ratio": [
+       15680,
+       15680
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        194,
+        194
+       ],
+       "ratio": [
+        12942,
+        12942
+       ]
+      },
+      "effect_id": 1141000011
+     },
+     {
+      "flat": [
+       234,
+       234
+      ],
+      "ratio": [
+       15680,
+       15680
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        194,
+        194
+       ],
+       "ratio": [
+        12942,
+        12942
+       ]
+      },
+      "effect_id": 1141000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     11170000,
+     11200000
+    ]
+   },
+   "11430000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Greatsword"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       207,
+       207
+      ],
+      "ratio": [
+       12500,
+       12500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        138,
+        138
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1143000011
+     },
+     {
+      "flat": [
+       207,
+       207
+      ],
+      "ratio": [
+       12500,
+       12500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        138,
+        138
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1143000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     11050000,
+     11190000,
+     11290000,
+     11360000
+    ]
+   },
+   "12070000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Sword"
+    ],
+    "cooldown_ms": 10000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       200,
+       200
+      ],
+      "ratio": [
+       17988,
+       17988
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        115,
+        115
+       ],
+       "ratio": [
+        11640,
+        11640
+       ]
+      },
+      "effect_id": 1207000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     12100000,
+     12240000,
+     12270000
+    ]
+   },
+   "12700000": {
+    "name": null,
+    "type": "Passive",
+    "target": "Self",
+    "weapons": [
+     "Sword"
+    ],
+    "cooldown_ms": 0,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [],
+    "ours": true
+   },
+   "12110000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Sword"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       388,
+       388
+      ],
+      "ratio": [
+       21250,
+       21250
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        250,
+        250
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1211000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     12090000,
+     12130000,
+     12300000,
+     12350000,
+     12430000
+    ]
+   },
+   "12120000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Sword"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       388,
+       388
+      ],
+      "ratio": [
+       21250,
+       21250
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        250,
+        250
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1212000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     12090000,
+     12130000,
+     12300000,
+     12350000,
+     12430000
+    ]
+   },
+   "12190000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Sword"
+    ],
+    "cooldown_ms": 10000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       200,
+       200
+      ],
+      "ratio": [
+       17988,
+       17988
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        115,
+        115
+       ],
+       "ratio": [
+        11640,
+        11640
+       ]
+      },
+      "effect_id": 1219000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     12100000,
+     12240000,
+     12270000
+    ]
+   },
+   "12200000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Sword"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       388,
+       388
+      ],
+      "ratio": [
+       21250,
+       21250
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        250,
+        250
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1220000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     12090000,
+     12130000,
+     12300000,
+     12350000,
+     12430000
+    ]
+   },
+   "12220000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Sword"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       388,
+       388
+      ],
+      "ratio": [
+       21250,
+       21250
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        250,
+        250
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1222000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     12090000,
+     12130000,
+     12300000,
+     12350000,
+     12430000
+    ]
+   },
+   "12230000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Sword"
+    ],
+    "cooldown_ms": 10000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       200,
+       200
+      ],
+      "ratio": [
+       17988,
+       17988
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        115,
+        115
+       ],
+       "ratio": [
+        11640,
+        11640
+       ]
+      },
+      "effect_id": 1223000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     12100000,
+     12240000,
+     12270000
+    ]
+   },
+   "12250000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Sword"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       388,
+       388
+      ],
+      "ratio": [
+       21250,
+       21250
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        250,
+        250
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1225000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     12090000,
+     12130000,
+     12300000,
+     12350000,
+     12430000
+    ]
+   },
+   "12310000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Sword"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       388,
+       388
+      ],
+      "ratio": [
+       21250,
+       21250
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        250,
+        250
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1231000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     12090000,
+     12130000,
+     12300000,
+     12350000,
+     12430000
+    ]
+   },
+   "12320000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Sword"
+    ],
+    "cooldown_ms": 10000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       200,
+       200
+      ],
+      "ratio": [
+       17988,
+       17988
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        115,
+        115
+       ],
+       "ratio": [
+        11640,
+        11640
+       ]
+      },
+      "effect_id": 1232000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     12100000,
+     12240000,
+     12270000
+    ]
+   },
+   "12410000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Sword"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       388,
+       388
+      ],
+      "ratio": [
+       21250,
+       21250
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        250,
+        250
+       ],
+       "ratio": [
+        11260,
+        11260
+       ]
+      },
+      "effect_id": 1241000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     12090000,
+     12130000,
+     12300000,
+     12350000,
+     12430000
+    ]
+   },
+   "13020000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Dagger"
+    ],
+    "cooldown_ms": 10000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 50,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       742,
+       742
+      ],
+      "ratio": [
+       24640,
+       24640
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        429,
+        429
+       ],
+       "ratio": [
+        14700,
+        14700
+       ]
+      },
+      "effect_id": 1302000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     13050000,
+     13060000,
+     13130000,
+     13210000,
+     13350000
+    ]
+   },
+   "13700000": {
+    "name": null,
+    "type": "Passive",
+    "target": "Self",
+    "weapons": [
+     "Dagger"
+    ],
+    "cooldown_ms": 0,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [],
+    "ours": true
+   },
+   "13080000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Dagger"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       239,
+       239
+      ],
+      "ratio": [
+       10500,
+       10500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        234,
+        234
+       ],
+       "ratio": [
+        10290,
+        10290
+       ]
+      },
+      "effect_id": 1308000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     13070000,
+     13220000,
+     13360000
+    ]
+   },
+   "13180000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Dagger"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       239,
+       239
+      ],
+      "ratio": [
+       10500,
+       10500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        234,
+        234
+       ],
+       "ratio": [
+        10290,
+        10290
+       ]
+      },
+      "effect_id": 1318000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     13070000,
+     13220000,
+     13360000
+    ]
+   },
+   "13230000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Dagger"
+    ],
+    "cooldown_ms": 10000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 50,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       742,
+       742
+      ],
+      "ratio": [
+       24640,
+       24640
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        429,
+        429
+       ],
+       "ratio": [
+        14700,
+        14700
+       ]
+      },
+      "effect_id": 1323000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     13050000,
+     13060000,
+     13130000,
+     13210000,
+     13350000
+    ]
+   },
+   "13250000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Dagger"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       239,
+       239
+      ],
+      "ratio": [
+       10500,
+       10500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        234,
+        234
+       ],
+       "ratio": [
+        10290,
+        10290
+       ]
+      },
+      "effect_id": 1325000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     13070000,
+     13220000,
+     13360000
+    ]
+   },
+   "13270000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Dagger"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       239,
+       239
+      ],
+      "ratio": [
+       10500,
+       10500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        234,
+        234
+       ],
+       "ratio": [
+        10290,
+        10290
+       ]
+      },
+      "effect_id": 1327000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     13070000,
+     13220000,
+     13360000
+    ]
+   },
+   "13280000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Dagger"
+    ],
+    "cooldown_ms": 10000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 50,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       742,
+       742
+      ],
+      "ratio": [
+       24640,
+       24640
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        429,
+        429
+       ],
+       "ratio": [
+        14700,
+        14700
+       ]
+      },
+      "effect_id": 1328000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     13050000,
+     13060000,
+     13130000,
+     13210000,
+     13350000
+    ]
+   },
+   "13300000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Dagger"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       239,
+       239
+      ],
+      "ratio": [
+       10500,
+       10500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        234,
+        234
+       ],
+       "ratio": [
+        10290,
+        10290
+       ]
+      },
+      "effect_id": 1330000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     13070000,
+     13220000,
+     13360000
+    ]
+   },
+   "13310000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Dagger"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       239,
+       239
+      ],
+      "ratio": [
+       10500,
+       10500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        234,
+        234
+       ],
+       "ratio": [
+        10290,
+        10290
+       ]
+      },
+      "effect_id": 1331000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     13070000,
+     13220000,
+     13360000
+    ]
+   },
+   "13370000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Dagger"
+    ],
+    "cooldown_ms": 10000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 50,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       742,
+       742
+      ],
+      "ratio": [
+       24640,
+       24640
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        429,
+        429
+       ],
+       "ratio": [
+        14700,
+        14700
+       ]
+      },
+      "effect_id": 1337000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     13050000,
+     13060000,
+     13130000,
+     13210000,
+     13350000
+    ]
+   },
+   "13390000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Dagger"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       239,
+       239
+      ],
+      "ratio": [
+       10500,
+       10500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        234,
+        234
+       ],
+       "ratio": [
+        10290,
+        10290
+       ]
+      },
+      "effect_id": 1339000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     13070000,
+     13220000,
+     13360000
+    ]
+   },
+   "17160000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Mace"
+    ],
+    "cooldown_ms": 6500,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 50,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       325,
+       325
+      ],
+      "ratio": [
+       19205,
+       19205
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        221,
+        221
+       ],
+       "ratio": [
+        13065,
+        13065
+       ]
+      },
+      "effect_id": 1716000011
+     },
+     {
+      "flat": [
+       325,
+       325
+      ],
+      "ratio": [
+       19205,
+       19205
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        221,
+        221
+       ],
+       "ratio": [
+        13065,
+        13065
+       ]
+      },
+      "effect_id": 1716000011
+     },
+     {
+      "flat": [
+       325,
+       325
+      ],
+      "ratio": [
+       19205,
+       19205
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        221,
+        221
+       ],
+       "ratio": [
+        13065,
+        13065
+       ]
+      },
+      "effect_id": 1716000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     17080000,
+     17350000
+    ]
+   },
+   "17700000": {
+    "name": null,
+    "type": "Passive",
+    "target": "Self",
+    "weapons": [
+     "Mace"
+    ],
+    "cooldown_ms": 0,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [],
+    "ours": true
+   },
+   "17190000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Mace"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       138,
+       138
+      ],
+      "ratio": [
+       15180,
+       15180
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        112,
+        112
+       ],
+       "ratio": [
+        12309,
+        12309
+       ]
+      },
+      "effect_id": 1719000011
+     },
+     {
+      "flat": [
+       138,
+       138
+      ],
+      "ratio": [
+       15180,
+       15180
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        112,
+        112
+       ],
+       "ratio": [
+        12309,
+        12309
+       ]
+      },
+      "effect_id": 1719000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     17070000
+    ]
+   },
+   "17270000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Mace"
+    ],
+    "cooldown_ms": 45000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 300,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1727000011
+     },
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1727000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     17060000
+    ]
+   },
+   "17280000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Mace"
+    ],
+    "cooldown_ms": 6500,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 50,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       325,
+       325
+      ],
+      "ratio": [
+       19205,
+       19205
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        221,
+        221
+       ],
+       "ratio": [
+        13065,
+        13065
+       ]
+      },
+      "effect_id": 1728000011
+     },
+     {
+      "flat": [
+       325,
+       325
+      ],
+      "ratio": [
+       19205,
+       19205
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        221,
+        221
+       ],
+       "ratio": [
+        13065,
+        13065
+       ]
+      },
+      "effect_id": 1728000011
+     },
+     {
+      "flat": [
+       325,
+       325
+      ],
+      "ratio": [
+       19205,
+       19205
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        221,
+        221
+       ],
+       "ratio": [
+        13065,
+        13065
+       ]
+      },
+      "effect_id": 1728000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     17080000,
+     17350000
+    ]
+   },
+   "17290000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Mace"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       138,
+       138
+      ],
+      "ratio": [
+       15180,
+       15180
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        112,
+        112
+       ],
+       "ratio": [
+        12309,
+        12309
+       ]
+      },
+      "effect_id": 1729000011
+     },
+     {
+      "flat": [
+       138,
+       138
+      ],
+      "ratio": [
+       15180,
+       15180
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        112,
+        112
+       ],
+       "ratio": [
+        12309,
+        12309
+       ]
+      },
+      "effect_id": 1729000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     17070000
+    ]
+   },
+   "17300000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Mace"
+    ],
+    "cooldown_ms": 45000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 300,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1730000011
+     },
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1730000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     17060000
+    ]
+   },
+   "17390000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Mace"
+    ],
+    "cooldown_ms": 6500,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 50,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       325,
+       325
+      ],
+      "ratio": [
+       19205,
+       19205
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        221,
+        221
+       ],
+       "ratio": [
+        13065,
+        13065
+       ]
+      },
+      "effect_id": 1739000011
+     },
+     {
+      "flat": [
+       325,
+       325
+      ],
+      "ratio": [
+       19205,
+       19205
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        221,
+        221
+       ],
+       "ratio": [
+        13065,
+        13065
+       ]
+      },
+      "effect_id": 1739000011
+     },
+     {
+      "flat": [
+       325,
+       325
+      ],
+      "ratio": [
+       19205,
+       19205
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        221,
+        221
+       ],
+       "ratio": [
+        13065,
+        13065
+       ]
+      },
+      "effect_id": 1739000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     17080000,
+     17350000
+    ]
+   },
+   "17400000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Mace"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       138,
+       138
+      ],
+      "ratio": [
+       15180,
+       15180
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        112,
+        112
+       ],
+       "ratio": [
+        12309,
+        12309
+       ]
+      },
+      "effect_id": 1740000011
+     },
+     {
+      "flat": [
+       138,
+       138
+      ],
+      "ratio": [
+       15180,
+       15180
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        112,
+        112
+       ],
+       "ratio": [
+        12309,
+        12309
+       ]
+      },
+      "effect_id": 1740000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     17070000
+    ]
+   },
+   "17410000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Mace"
+    ],
+    "cooldown_ms": 45000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 300,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1741000011
+     },
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1741000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     17060000
+    ]
+   },
+   "17420000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Mace"
+    ],
+    "cooldown_ms": 6500,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 50,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       325,
+       325
+      ],
+      "ratio": [
+       19205,
+       19205
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        221,
+        221
+       ],
+       "ratio": [
+        13065,
+        13065
+       ]
+      },
+      "effect_id": 1742000011
+     },
+     {
+      "flat": [
+       325,
+       325
+      ],
+      "ratio": [
+       19205,
+       19205
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        221,
+        221
+       ],
+       "ratio": [
+        13065,
+        13065
+       ]
+      },
+      "effect_id": 1742000011
+     },
+     {
+      "flat": [
+       325,
+       325
+      ],
+      "ratio": [
+       19205,
+       19205
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        221,
+        221
+       ],
+       "ratio": [
+        13065,
+        13065
+       ]
+      },
+      "effect_id": 1742000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     17080000,
+     17350000
+    ]
+   },
+   "17430000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Mace"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       138,
+       138
+      ],
+      "ratio": [
+       15180,
+       15180
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        112,
+        112
+       ],
+       "ratio": [
+        12309,
+        12309
+       ]
+      },
+      "effect_id": 1743000011
+     },
+     {
+      "flat": [
+       138,
+       138
+      ],
+      "ratio": [
+       15180,
+       15180
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        112,
+        112
+       ],
+       "ratio": [
+        12309,
+        12309
+       ]
+      },
+      "effect_id": 1743000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     17070000
+    ]
+   },
+   "17440000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Mace"
+    ],
+    "cooldown_ms": 45000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 300,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1744000011
+     },
+     {
+      "flat": [
+       987,
+       987
+      ],
+      "ratio": [
+       32760,
+       32760
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        428,
+        428
+       ],
+       "ratio": [
+        14210,
+        14210
+       ]
+      },
+      "effect_id": 1744000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     17060000
+    ]
+   },
+   "14060000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Bow"
+    ],
+    "cooldown_ms": 7500,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 25,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       127,
+       127
+      ],
+      "ratio": [
+       13088,
+       13088
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        107,
+        107
+       ],
+       "ratio": [
+        11050,
+        11050
+       ]
+      },
+      "effect_id": 1406000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     14050000,
+     14090000
+    ]
+   },
+   "14700000": {
+    "name": null,
+    "type": "Passive",
+    "target": "Self",
+    "weapons": [
+     "Bow"
+    ],
+    "cooldown_ms": 0,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [],
+    "ours": true
+   },
+   "14120000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Bow"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       454,
+       454
+      ],
+      "ratio": [
+       19588,
+       19588
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        300,
+        300
+       ],
+       "ratio": [
+        12640,
+        12640
+       ]
+      },
+      "effect_id": 1412000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     14010000,
+     14070000,
+     14080000,
+     14110000,
+     14130000
+    ]
+   },
+   "14150000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Bow"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       454,
+       454
+      ],
+      "ratio": [
+       19588,
+       19588
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        300,
+        300
+       ],
+       "ratio": [
+        12640,
+        12640
+       ]
+      },
+      "effect_id": 1415000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     14010000,
+     14070000,
+     14080000,
+     14110000,
+     14130000
+    ]
+   },
+   "14160000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Bow"
+    ],
+    "cooldown_ms": 7500,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 25,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       127,
+       127
+      ],
+      "ratio": [
+       13088,
+       13088
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        107,
+        107
+       ],
+       "ratio": [
+        11050,
+        11050
+       ]
+      },
+      "effect_id": 1416000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     14050000,
+     14090000
+    ]
+   },
+   "14180000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Bow"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       454,
+       454
+      ],
+      "ratio": [
+       19588,
+       19588
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        300,
+        300
+       ],
+       "ratio": [
+        12640,
+        12640
+       ]
+      },
+      "effect_id": 1418000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     14010000,
+     14070000,
+     14080000,
+     14110000,
+     14130000
+    ]
+   },
+   "14190000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Bow"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       454,
+       454
+      ],
+      "ratio": [
+       19588,
+       19588
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        300,
+        300
+       ],
+       "ratio": [
+        12640,
+        12640
+       ]
+      },
+      "effect_id": 1419000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     14010000,
+     14070000,
+     14080000,
+     14110000,
+     14130000
+    ]
+   },
+   "14220000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Bow"
+    ],
+    "cooldown_ms": 7500,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 25,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       127,
+       127
+      ],
+      "ratio": [
+       13088,
+       13088
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        107,
+        107
+       ],
+       "ratio": [
+        11050,
+        11050
+       ]
+      },
+      "effect_id": 1422000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     14050000,
+     14090000
+    ]
+   },
+   "14270000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Bow"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       454,
+       454
+      ],
+      "ratio": [
+       19588,
+       19588
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        300,
+        300
+       ],
+       "ratio": [
+        12640,
+        12640
+       ]
+      },
+      "effect_id": 1427000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     14010000,
+     14070000,
+     14080000,
+     14110000,
+     14130000
+    ]
+   },
+   "14310000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Bow"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       454,
+       454
+      ],
+      "ratio": [
+       19588,
+       19588
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        300,
+        300
+       ],
+       "ratio": [
+        12640,
+        12640
+       ]
+      },
+      "effect_id": 1431000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     14010000,
+     14070000,
+     14080000,
+     14110000,
+     14130000
+    ]
+   },
+   "14350000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Bow"
+    ],
+    "cooldown_ms": 7500,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 25,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       127,
+       127
+      ],
+      "ratio": [
+       13088,
+       13088
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        107,
+        107
+       ],
+       "ratio": [
+        11050,
+        11050
+       ]
+      },
+      "effect_id": 1435000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     14050000,
+     14090000
+    ]
+   },
+   "14360000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Bow"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       454,
+       454
+      ],
+      "ratio": [
+       19588,
+       19588
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        300,
+        300
+       ],
+       "ratio": [
+        12640,
+        12640
+       ]
+      },
+      "effect_id": 1436000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     14010000,
+     14070000,
+     14080000,
+     14110000,
+     14130000
+    ]
+   },
+   "16060000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Orb"
+    ],
+    "cooldown_ms": 10000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 80,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       74,
+       74
+      ],
+      "ratio": [
+       7500,
+       7500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        76,
+        76
+       ],
+       "ratio": [
+        7770,
+        7770
+       ]
+      },
+      "effect_id": 1606000011
+     },
+     {
+      "flat": [
+       74,
+       74
+      ],
+      "ratio": [
+       7500,
+       7500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        76,
+        76
+       ],
+       "ratio": [
+        7770,
+        7770
+       ]
+      },
+      "effect_id": 1606000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     16140000
+    ]
+   },
+   "16700000": {
+    "name": null,
+    "type": "Passive",
+    "target": "Self",
+    "weapons": [
+     "Orb"
+    ],
+    "cooldown_ms": 0,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [],
+    "ours": true
+   },
+   "16080000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Orb"
+    ],
+    "cooldown_ms": 10000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 80,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       74,
+       74
+      ],
+      "ratio": [
+       7500,
+       7500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        76,
+        76
+       ],
+       "ratio": [
+        7770,
+        7770
+       ]
+      },
+      "effect_id": 1608000011
+     },
+     {
+      "flat": [
+       74,
+       74
+      ],
+      "ratio": [
+       7500,
+       7500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        76,
+        76
+       ],
+       "ratio": [
+        7770,
+        7770
+       ]
+      },
+      "effect_id": 1608000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     16140000
+    ]
+   },
+   "16150000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Orb"
+    ],
+    "cooldown_ms": 45000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       246,
+       246
+      ],
+      "ratio": [
+       10000,
+       10000
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        246,
+        246
+       ],
+       "ratio": [
+        10000,
+        10000
+       ]
+      },
+      "effect_id": 1615000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     16070000
+    ]
+   },
+   "16190000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Orb"
+    ],
+    "cooldown_ms": 10000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 80,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       74,
+       74
+      ],
+      "ratio": [
+       7500,
+       7500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        76,
+        76
+       ],
+       "ratio": [
+        7770,
+        7770
+       ]
+      },
+      "effect_id": 1619000011
+     },
+     {
+      "flat": [
+       74,
+       74
+      ],
+      "ratio": [
+       7500,
+       7500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        76,
+        76
+       ],
+       "ratio": [
+        7770,
+        7770
+       ]
+      },
+      "effect_id": 1619000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     16140000
+    ]
+   },
+   "16220000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Orb"
+    ],
+    "cooldown_ms": 10000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 80,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       74,
+       74
+      ],
+      "ratio": [
+       7500,
+       7500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        76,
+        76
+       ],
+       "ratio": [
+        7770,
+        7770
+       ]
+      },
+      "effect_id": 1622000011
+     },
+     {
+      "flat": [
+       74,
+       74
+      ],
+      "ratio": [
+       7500,
+       7500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        76,
+        76
+       ],
+       "ratio": [
+        7770,
+        7770
+       ]
+      },
+      "effect_id": 1622000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     16140000
+    ]
+   },
+   "16230000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Orb"
+    ],
+    "cooldown_ms": 45000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       246,
+       246
+      ],
+      "ratio": [
+       10000,
+       10000
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        246,
+        246
+       ],
+       "ratio": [
+        10000,
+        10000
+       ]
+      },
+      "effect_id": 1623000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     16070000
+    ]
+   },
+   "16240000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Orb"
+    ],
+    "cooldown_ms": 10000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 80,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       74,
+       74
+      ],
+      "ratio": [
+       7500,
+       7500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        76,
+        76
+       ],
+       "ratio": [
+        7770,
+        7770
+       ]
+      },
+      "effect_id": 1624000011
+     },
+     {
+      "flat": [
+       74,
+       74
+      ],
+      "ratio": [
+       7500,
+       7500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        76,
+        76
+       ],
+       "ratio": [
+        7770,
+        7770
+       ]
+      },
+      "effect_id": 1624000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     16140000
+    ]
+   },
+   "16250000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Orb"
+    ],
+    "cooldown_ms": 10000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 80,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       74,
+       74
+      ],
+      "ratio": [
+       7500,
+       7500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        76,
+        76
+       ],
+       "ratio": [
+        7770,
+        7770
+       ]
+      },
+      "effect_id": 1625000011
+     },
+     {
+      "flat": [
+       74,
+       74
+      ],
+      "ratio": [
+       7500,
+       7500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        76,
+        76
+       ],
+       "ratio": [
+        7770,
+        7770
+       ]
+      },
+      "effect_id": 1625000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     16140000
+    ]
+   },
+   "16260000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Orb"
+    ],
+    "cooldown_ms": 45000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 150,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       246,
+       246
+      ],
+      "ratio": [
+       10000,
+       10000
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        246,
+        246
+       ],
+       "ratio": [
+        10000,
+        10000
+       ]
+      },
+      "effect_id": 1626000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     16070000
+    ]
+   },
+   "16360000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Orb"
+    ],
+    "cooldown_ms": 10000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 80,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       74,
+       74
+      ],
+      "ratio": [
+       7500,
+       7500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        76,
+        76
+       ],
+       "ratio": [
+        7770,
+        7770
+       ]
+      },
+      "effect_id": 1636000011
+     },
+     {
+      "flat": [
+       74,
+       74
+      ],
+      "ratio": [
+       7500,
+       7500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        76,
+        76
+       ],
+       "ratio": [
+        7770,
+        7770
+       ]
+      },
+      "effect_id": 1636000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     16140000
+    ]
+   },
+   "16370000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Orb"
+    ],
+    "cooldown_ms": 10000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 80,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       74,
+       74
+      ],
+      "ratio": [
+       7500,
+       7500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        76,
+        76
+       ],
+       "ratio": [
+        7770,
+        7770
+       ]
+      },
+      "effect_id": 1637000011
+     },
+     {
+      "flat": [
+       74,
+       74
+      ],
+      "ratio": [
+       7500,
+       7500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        76,
+        76
+       ],
+       "ratio": [
+        7770,
+        7770
+       ]
+      },
+      "effect_id": 1637000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     16140000
+    ]
+   },
+   "15120000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Magicbook"
+    ],
+    "cooldown_ms": 5000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       114,
+       114
+      ],
+      "ratio": [
+       19250,
+       19250
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        101,
+        101
+       ],
+       "ratio": [
+        17150,
+        17150
+       ]
+      },
+      "effect_id": 1512000011
+     },
+     {
+      "flat": [
+       114,
+       114
+      ],
+      "ratio": [
+       19250,
+       19250
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        101,
+        101
+       ],
+       "ratio": [
+        17150,
+        17150
+       ]
+      },
+      "effect_id": 1512000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     15040000,
+     15050000,
+     15220000
+    ]
+   },
+   "15700000": {
+    "name": null,
+    "type": "Passive",
+    "target": "Self",
+    "weapons": [
+     "Magicbook"
+    ],
+    "cooldown_ms": 0,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [],
+    "ours": true
+   },
+   "15130000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Magicbook"
+    ],
+    "cooldown_ms": 30000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       178,
+       178
+      ],
+      "ratio": [
+       9400,
+       9400
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        179,
+        179
+       ],
+       "ratio": [
+        9470,
+        9470
+       ]
+      },
+      "effect_id": 1513000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     15150000
+    ]
+   },
+   "15140000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Magicbook"
+    ],
+    "cooldown_ms": 45000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1514000011
+     },
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1514000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     15060000,
+     15110000
+    ]
+   },
+   "15160000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Magicbook"
+    ],
+    "cooldown_ms": 5000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       114,
+       114
+      ],
+      "ratio": [
+       19250,
+       19250
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        101,
+        101
+       ],
+       "ratio": [
+        17150,
+        17150
+       ]
+      },
+      "effect_id": 1516000011
+     },
+     {
+      "flat": [
+       114,
+       114
+      ],
+      "ratio": [
+       19250,
+       19250
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        101,
+        101
+       ],
+       "ratio": [
+        17150,
+        17150
+       ]
+      },
+      "effect_id": 1516000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     15040000,
+     15050000,
+     15220000
+    ]
+   },
+   "15200000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Magicbook"
+    ],
+    "cooldown_ms": 30000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       178,
+       178
+      ],
+      "ratio": [
+       9400,
+       9400
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        179,
+        179
+       ],
+       "ratio": [
+        9470,
+        9470
+       ]
+      },
+      "effect_id": 1520000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     15150000
+    ]
+   },
+   "15230000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Magicbook"
+    ],
+    "cooldown_ms": 45000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1523000011
+     },
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1523000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     15060000,
+     15110000
+    ]
+   },
+   "15300000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Magicbook"
+    ],
+    "cooldown_ms": 5000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       114,
+       114
+      ],
+      "ratio": [
+       19250,
+       19250
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        101,
+        101
+       ],
+       "ratio": [
+        17150,
+        17150
+       ]
+      },
+      "effect_id": 1530000011
+     },
+     {
+      "flat": [
+       114,
+       114
+      ],
+      "ratio": [
+       19250,
+       19250
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        101,
+        101
+       ],
+       "ratio": [
+        17150,
+        17150
+       ]
+      },
+      "effect_id": 1530000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     15040000,
+     15050000,
+     15220000
+    ]
+   },
+   "15320000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Magicbook"
+    ],
+    "cooldown_ms": 30000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       178,
+       178
+      ],
+      "ratio": [
+       9400,
+       9400
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        179,
+        179
+       ],
+       "ratio": [
+        9470,
+        9470
+       ]
+      },
+      "effect_id": 1532000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     15150000
+    ]
+   },
+   "15360000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Magicbook"
+    ],
+    "cooldown_ms": 45000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 200,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1536000011
+     },
+     {
+      "flat": [
+       275,
+       275
+      ],
+      "ratio": [
+       14500,
+       14500
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        340,
+        340
+       ],
+       "ratio": [
+        17950,
+        17950
+       ]
+      },
+      "effect_id": 1536000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     15060000,
+     15110000
+    ]
+   },
+   "15390000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Magicbook"
+    ],
+    "cooldown_ms": 5000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       114,
+       114
+      ],
+      "ratio": [
+       19250,
+       19250
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        101,
+        101
+       ],
+       "ratio": [
+        17150,
+        17150
+       ]
+      },
+      "effect_id": 1539000011
+     },
+     {
+      "flat": [
+       114,
+       114
+      ],
+      "ratio": [
+       19250,
+       19250
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        101,
+        101
+       ],
+       "ratio": [
+        17150,
+        17150
+       ]
+      },
+      "effect_id": 1539000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     15040000,
+     15050000,
+     15220000
+    ]
+   },
+   "15400000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Magicbook"
+    ],
+    "cooldown_ms": 30000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 100,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       178,
+       178
+      ],
+      "ratio": [
+       9400,
+       9400
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        179,
+        179
+       ],
+       "ratio": [
+        9470,
+        9470
+       ]
+      },
+      "effect_id": 1540000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     15150000
+    ]
+   },
+   "18130000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Staff"
+    ],
+    "cooldown_ms": 7500,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       280,
+       280
+      ],
+      "ratio": [
+       19609,
+       19609
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        176,
+        176
+       ],
+       "ratio": [
+        11834,
+        11834
+       ]
+      },
+      "effect_id": 1813000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     18100000,
+     18150000
+    ]
+   },
+   "18700000": {
+    "name": null,
+    "type": "Passive",
+    "target": "Self",
+    "weapons": [
+     "Staff"
+    ],
+    "cooldown_ms": 0,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [],
+    "ours": true
+   },
+   "18140000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Staff"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       538,
+       538
+      ],
+      "ratio": [
+       21120,
+       21120
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        384,
+        384
+       ],
+       "ratio": [
+        15060,
+        15060
+       ]
+      },
+      "effect_id": 1814000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     18060000,
+     18080000,
+     18090000,
+     18210000,
+     18290000
+    ]
+   },
+   "18160000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Staff"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       538,
+       538
+      ],
+      "ratio": [
+       21120,
+       21120
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        384,
+        384
+       ],
+       "ratio": [
+        15060,
+        15060
+       ]
+      },
+      "effect_id": 1816000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     18060000,
+     18080000,
+     18090000,
+     18210000,
+     18290000
+    ]
+   },
+   "18170000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Staff"
+    ],
+    "cooldown_ms": 7500,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       280,
+       280
+      ],
+      "ratio": [
+       19609,
+       19609
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        176,
+        176
+       ],
+       "ratio": [
+        11834,
+        11834
+       ]
+      },
+      "effect_id": 1817000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     18100000,
+     18150000
+    ]
+   },
+   "18190000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Staff"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       538,
+       538
+      ],
+      "ratio": [
+       21120,
+       21120
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        384,
+        384
+       ],
+       "ratio": [
+        15060,
+        15060
+       ]
+      },
+      "effect_id": 1819000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     18060000,
+     18080000,
+     18090000,
+     18210000,
+     18290000
+    ]
+   },
+   "18220000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Staff"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       538,
+       538
+      ],
+      "ratio": [
+       21120,
+       21120
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        384,
+        384
+       ],
+       "ratio": [
+        15060,
+        15060
+       ]
+      },
+      "effect_id": 1822000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     18060000,
+     18080000,
+     18090000,
+     18210000,
+     18290000
+    ]
+   },
+   "18230000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Staff"
+    ],
+    "cooldown_ms": 7500,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       280,
+       280
+      ],
+      "ratio": [
+       19609,
+       19609
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        176,
+        176
+       ],
+       "ratio": [
+        11834,
+        11834
+       ]
+      },
+      "effect_id": 1823000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     18100000,
+     18150000
+    ]
+   },
+   "18240000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Staff"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       538,
+       538
+      ],
+      "ratio": [
+       21120,
+       21120
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        384,
+        384
+       ],
+       "ratio": [
+        15060,
+        15060
+       ]
+      },
+      "effect_id": 1824000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     18060000,
+     18080000,
+     18090000,
+     18210000,
+     18290000
+    ]
+   },
+   "18250000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Staff"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       538,
+       538
+      ],
+      "ratio": [
+       21120,
+       21120
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        384,
+        384
+       ],
+       "ratio": [
+        15060,
+        15060
+       ]
+      },
+      "effect_id": 1825000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     18060000,
+     18080000,
+     18090000,
+     18210000,
+     18290000
+    ]
+   },
+   "18330000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Staff"
+    ],
+    "cooldown_ms": 7500,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       280,
+       280
+      ],
+      "ratio": [
+       19609,
+       19609
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        176,
+        176
+       ],
+       "ratio": [
+        11834,
+        11834
+       ]
+      },
+      "effect_id": 1833000011
+     }
+    ],
+    "ours": true,
+    "band": "short",
+    "comparable": [
+     18100000,
+     18150000
+    ]
+   },
+   "18420000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Staff"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       538,
+       538
+      ],
+      "ratio": [
+       21120,
+       21120
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        384,
+        384
+       ],
+       "ratio": [
+        15060,
+        15060
+       ]
+      },
+      "effect_id": 1842000011
+     }
+    ],
+    "ours": true,
+    "band": "mid",
+    "comparable": [
+     18060000,
+     18080000,
+     18090000,
+     18210000,
+     18290000
+    ]
+   },
+   "18440000": {
+    "name": null,
+    "type": "Active",
+    "target": "MainTarget",
+    "weapons": [
+     "Staff"
+    ],
+    "cooldown_ms": 20000,
+    "casting_ms": 0,
+    "cost": {
+     "mp": 0,
+     "hp": 0,
+     "sp": 0
+    },
+    "damage": [
+     {
+      "flat": [
+       538,
+       538
+      ],
+      "ratio": [
+       21120,
+       21120
+      ],
+      "value4": null,
+      "pvp": {
+       "flat": [
+        384,
+        384
+       ],
+       "ratio": [
+        15060,
+        15060
+       ]
+      },
+      "effect_id": 1844000011
+     }
+    ],
+    "ours": true,
+    "band": "long",
+    "comparable": [
+     18060000,
+     18080000,
+     18090000,
+     18210000,
+     18290000
+    ]
+   }
+  },
+  "levels": {
+   "11080000": [
+    [
+     2,
+     1,
+     29
+    ],
+    [
+     3,
+     1,
+     32
+    ],
+    [
+     4,
+     1,
+     35
+    ],
+    [
+     5,
+     2,
+     38
+    ],
+    [
+     6,
+     2,
+     41
+    ],
+    [
+     7,
+     2,
+     44
+    ],
+    [
+     8,
+     4,
+     47
+    ],
+    [
+     9,
+     4,
+     50
+    ],
+    [
+     10,
+     4,
+     53
+    ]
+   ],
+   "11110000": [
+    [
+     2,
+     1,
+     41
+    ],
+    [
+     3,
+     1,
+     44
+    ],
+    [
+     4,
+     1,
+     47
+    ],
+    [
+     5,
+     2,
+     50
+    ],
+    [
+     6,
+     2,
+     53
+    ],
+    [
+     7,
+     2,
+     56
+    ],
+    [
+     8,
+     4,
+     59
+    ],
+    [
+     9,
+     4,
+     62
+    ],
+    [
+     10,
+     4,
+     65
+    ]
+   ],
+   "11130000": [
+    [
+     2,
+     1,
+     47
+    ],
+    [
+     3,
+     1,
+     50
+    ],
+    [
+     4,
+     1,
+     53
+    ],
+    [
+     5,
+     2,
+     56
+    ],
+    [
+     6,
+     2,
+     59
+    ],
+    [
+     7,
+     2,
+     62
+    ],
+    [
+     8,
+     4,
+     65
+    ],
+    [
+     9,
+     4,
+     68
+    ],
+    [
+     10,
+     4,
+     71
+    ]
+   ],
+   "11240000": [
+    [
+     2,
+     1,
+     54
+    ],
+    [
+     3,
+     1,
+     57
+    ],
+    [
+     4,
+     1,
+     60
+    ],
+    [
+     5,
+     2,
+     63
+    ],
+    [
+     6,
+     2,
+     66
+    ],
+    [
+     7,
+     2,
+     69
+    ],
+    [
+     8,
+     4,
+     72
+    ],
+    [
+     9,
+     4,
+     75
+    ],
+    [
+     10,
+     4,
+     78
+    ]
+   ],
+   "11250000": [
+    [
+     2,
+     1,
+     60
+    ],
+    [
+     3,
+     1,
+     63
+    ],
+    [
+     4,
+     1,
+     66
+    ],
+    [
+     5,
+     2,
+     69
+    ],
+    [
+     6,
+     2,
+     72
+    ],
+    [
+     7,
+     2,
+     75
+    ],
+    [
+     8,
+     4,
+     78
+    ],
+    [
+     9,
+     4,
+     81
+    ],
+    [
+     10,
+     4,
+     84
+    ]
+   ],
+   "11340000": [
+    [
+     2,
+     1,
+     66
+    ],
+    [
+     3,
+     1,
+     69
+    ],
+    [
+     4,
+     1,
+     72
+    ],
+    [
+     5,
+     2,
+     75
+    ],
+    [
+     6,
+     2,
+     78
+    ],
+    [
+     7,
+     2,
+     81
+    ],
+    [
+     8,
+     4,
+     84
+    ],
+    [
+     9,
+     4,
+     87
+    ],
+    [
+     10,
+     4,
+     90
+    ]
+   ],
+   "11380000": [
+    [
+     2,
+     1,
+     78
+    ],
+    [
+     3,
+     1,
+     81
+    ],
+    [
+     4,
+     1,
+     84
+    ],
+    [
+     5,
+     2,
+     87
+    ],
+    [
+     6,
+     2,
+     90
+    ],
+    [
+     7,
+     2,
+     93
+    ],
+    [
+     8,
+     4,
+     96
+    ],
+    [
+     9,
+     4,
+     99
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "11390000": [
+    [
+     2,
+     1,
+     85
+    ],
+    [
+     3,
+     1,
+     88
+    ],
+    [
+     4,
+     1,
+     91
+    ],
+    [
+     5,
+     2,
+     94
+    ],
+    [
+     6,
+     2,
+     97
+    ],
+    [
+     7,
+     2,
+     100
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "11400000": [
+    [
+     2,
+     1,
+     91
+    ],
+    [
+     3,
+     1,
+     94
+    ],
+    [
+     4,
+     1,
+     97
+    ],
+    [
+     5,
+     2,
+     100
+    ],
+    [
+     6,
+     2,
+     100
+    ],
+    [
+     7,
+     2,
+     100
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "11410000": [
+    [
+     2,
+     1,
+     97
+    ],
+    [
+     3,
+     1,
+     100
+    ],
+    [
+     4,
+     1,
+     100
+    ],
+    [
+     5,
+     2,
+     100
+    ],
+    [
+     6,
+     2,
+     100
+    ],
+    [
+     7,
+     2,
+     100
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "11430000": [
+    [
+     2,
+     1,
+     100
+    ],
+    [
+     3,
+     1,
+     100
+    ],
+    [
+     4,
+     1,
+     100
+    ],
+    [
+     5,
+     2,
+     100
+    ],
+    [
+     6,
+     2,
+     100
+    ],
+    [
+     7,
+     2,
+     100
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "12070000": [
+    [
+     2,
+     1,
+     29
+    ],
+    [
+     3,
+     1,
+     32
+    ],
+    [
+     4,
+     1,
+     35
+    ],
+    [
+     5,
+     2,
+     38
+    ],
+    [
+     6,
+     2,
+     41
+    ],
+    [
+     7,
+     2,
+     44
+    ],
+    [
+     8,
+     4,
+     47
+    ],
+    [
+     9,
+     4,
+     50
+    ],
+    [
+     10,
+     4,
+     53
+    ]
+   ],
+   "12110000": [
+    [
+     2,
+     1,
+     42
+    ],
+    [
+     3,
+     1,
+     45
+    ],
+    [
+     4,
+     1,
+     48
+    ],
+    [
+     5,
+     2,
+     51
+    ],
+    [
+     6,
+     2,
+     54
+    ],
+    [
+     7,
+     2,
+     57
+    ],
+    [
+     8,
+     4,
+     60
+    ],
+    [
+     9,
+     4,
+     63
+    ],
+    [
+     10,
+     4,
+     66
+    ]
+   ],
+   "12120000": [
+    [
+     2,
+     1,
+     49
+    ],
+    [
+     3,
+     1,
+     52
+    ],
+    [
+     4,
+     1,
+     55
+    ],
+    [
+     5,
+     2,
+     58
+    ],
+    [
+     6,
+     2,
+     61
+    ],
+    [
+     7,
+     2,
+     64
+    ],
+    [
+     8,
+     4,
+     67
+    ],
+    [
+     9,
+     4,
+     70
+    ],
+    [
+     10,
+     4,
+     73
+    ]
+   ],
+   "12190000": [
+    [
+     2,
+     1,
+     56
+    ],
+    [
+     3,
+     1,
+     59
+    ],
+    [
+     4,
+     1,
+     62
+    ],
+    [
+     5,
+     2,
+     65
+    ],
+    [
+     6,
+     2,
+     68
+    ],
+    [
+     7,
+     2,
+     71
+    ],
+    [
+     8,
+     4,
+     74
+    ],
+    [
+     9,
+     4,
+     77
+    ],
+    [
+     10,
+     4,
+     80
+    ]
+   ],
+   "12200000": [
+    [
+     2,
+     1,
+     63
+    ],
+    [
+     3,
+     1,
+     66
+    ],
+    [
+     4,
+     1,
+     69
+    ],
+    [
+     5,
+     2,
+     72
+    ],
+    [
+     6,
+     2,
+     75
+    ],
+    [
+     7,
+     2,
+     78
+    ],
+    [
+     8,
+     4,
+     81
+    ],
+    [
+     9,
+     4,
+     84
+    ],
+    [
+     10,
+     4,
+     87
+    ]
+   ],
+   "12220000": [
+    [
+     2,
+     1,
+     69
+    ],
+    [
+     3,
+     1,
+     72
+    ],
+    [
+     4,
+     1,
+     75
+    ],
+    [
+     5,
+     2,
+     78
+    ],
+    [
+     6,
+     2,
+     81
+    ],
+    [
+     7,
+     2,
+     84
+    ],
+    [
+     8,
+     4,
+     87
+    ],
+    [
+     9,
+     4,
+     90
+    ],
+    [
+     10,
+     4,
+     93
+    ]
+   ],
+   "12230000": [
+    [
+     2,
+     1,
+     76
+    ],
+    [
+     3,
+     1,
+     79
+    ],
+    [
+     4,
+     1,
+     82
+    ],
+    [
+     5,
+     2,
+     85
+    ],
+    [
+     6,
+     2,
+     88
+    ],
+    [
+     7,
+     2,
+     91
+    ],
+    [
+     8,
+     4,
+     94
+    ],
+    [
+     9,
+     4,
+     97
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "12250000": [
+    [
+     2,
+     1,
+     83
+    ],
+    [
+     3,
+     1,
+     86
+    ],
+    [
+     4,
+     1,
+     89
+    ],
+    [
+     5,
+     2,
+     92
+    ],
+    [
+     6,
+     2,
+     95
+    ],
+    [
+     7,
+     2,
+     98
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "12310000": [
+    [
+     2,
+     1,
+     90
+    ],
+    [
+     3,
+     1,
+     93
+    ],
+    [
+     4,
+     1,
+     96
+    ],
+    [
+     5,
+     2,
+     99
+    ],
+    [
+     6,
+     2,
+     100
+    ],
+    [
+     7,
+     2,
+     100
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "12320000": [
+    [
+     2,
+     1,
+     96
+    ],
+    [
+     3,
+     1,
+     99
+    ],
+    [
+     4,
+     1,
+     100
+    ],
+    [
+     5,
+     2,
+     100
+    ],
+    [
+     6,
+     2,
+     100
+    ],
+    [
+     7,
+     2,
+     100
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "12410000": [
+    [
+     2,
+     1,
+     100
+    ],
+    [
+     3,
+     1,
+     100
+    ],
+    [
+     4,
+     1,
+     100
+    ],
+    [
+     5,
+     2,
+     100
+    ],
+    [
+     6,
+     2,
+     100
+    ],
+    [
+     7,
+     2,
+     100
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "13020000": [
+    [
+     2,
+     1,
+     29
+    ],
+    [
+     3,
+     1,
+     32
+    ],
+    [
+     4,
+     1,
+     35
+    ],
+    [
+     5,
+     2,
+     38
+    ],
+    [
+     6,
+     2,
+     41
+    ],
+    [
+     7,
+     2,
+     44
+    ],
+    [
+     8,
+     4,
+     47
+    ],
+    [
+     9,
+     4,
+     50
+    ],
+    [
+     10,
+     4,
+     53
+    ]
+   ],
+   "13080000": [
+    [
+     2,
+     1,
+     42
+    ],
+    [
+     3,
+     1,
+     45
+    ],
+    [
+     4,
+     1,
+     48
+    ],
+    [
+     5,
+     2,
+     51
+    ],
+    [
+     6,
+     2,
+     54
+    ],
+    [
+     7,
+     2,
+     57
+    ],
+    [
+     8,
+     4,
+     60
+    ],
+    [
+     9,
+     4,
+     63
+    ],
+    [
+     10,
+     4,
+     66
+    ]
+   ],
+   "13180000": [
+    [
+     2,
+     1,
+     49
+    ],
+    [
+     3,
+     1,
+     52
+    ],
+    [
+     4,
+     1,
+     55
+    ],
+    [
+     5,
+     2,
+     58
+    ],
+    [
+     6,
+     2,
+     61
+    ],
+    [
+     7,
+     2,
+     64
+    ],
+    [
+     8,
+     4,
+     67
+    ],
+    [
+     9,
+     4,
+     70
+    ],
+    [
+     10,
+     4,
+     73
+    ]
+   ],
+   "13230000": [
+    [
+     2,
+     1,
+     56
+    ],
+    [
+     3,
+     1,
+     59
+    ],
+    [
+     4,
+     1,
+     62
+    ],
+    [
+     5,
+     2,
+     65
+    ],
+    [
+     6,
+     2,
+     68
+    ],
+    [
+     7,
+     2,
+     71
+    ],
+    [
+     8,
+     4,
+     74
+    ],
+    [
+     9,
+     4,
+     77
+    ],
+    [
+     10,
+     4,
+     80
+    ]
+   ],
+   "13250000": [
+    [
+     2,
+     1,
+     63
+    ],
+    [
+     3,
+     1,
+     66
+    ],
+    [
+     4,
+     1,
+     69
+    ],
+    [
+     5,
+     2,
+     72
+    ],
+    [
+     6,
+     2,
+     75
+    ],
+    [
+     7,
+     2,
+     78
+    ],
+    [
+     8,
+     4,
+     81
+    ],
+    [
+     9,
+     4,
+     84
+    ],
+    [
+     10,
+     4,
+     87
+    ]
+   ],
+   "13270000": [
+    [
+     2,
+     1,
+     69
+    ],
+    [
+     3,
+     1,
+     72
+    ],
+    [
+     4,
+     1,
+     75
+    ],
+    [
+     5,
+     2,
+     78
+    ],
+    [
+     6,
+     2,
+     81
+    ],
+    [
+     7,
+     2,
+     84
+    ],
+    [
+     8,
+     4,
+     87
+    ],
+    [
+     9,
+     4,
+     90
+    ],
+    [
+     10,
+     4,
+     93
+    ]
+   ],
+   "13280000": [
+    [
+     2,
+     1,
+     76
+    ],
+    [
+     3,
+     1,
+     79
+    ],
+    [
+     4,
+     1,
+     82
+    ],
+    [
+     5,
+     2,
+     85
+    ],
+    [
+     6,
+     2,
+     88
+    ],
+    [
+     7,
+     2,
+     91
+    ],
+    [
+     8,
+     4,
+     94
+    ],
+    [
+     9,
+     4,
+     97
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "13300000": [
+    [
+     2,
+     1,
+     83
+    ],
+    [
+     3,
+     1,
+     86
+    ],
+    [
+     4,
+     1,
+     89
+    ],
+    [
+     5,
+     2,
+     92
+    ],
+    [
+     6,
+     2,
+     95
+    ],
+    [
+     7,
+     2,
+     98
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "13310000": [
+    [
+     2,
+     1,
+     90
+    ],
+    [
+     3,
+     1,
+     93
+    ],
+    [
+     4,
+     1,
+     96
+    ],
+    [
+     5,
+     2,
+     99
+    ],
+    [
+     6,
+     2,
+     100
+    ],
+    [
+     7,
+     2,
+     100
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "13370000": [
+    [
+     2,
+     1,
+     96
+    ],
+    [
+     3,
+     1,
+     99
+    ],
+    [
+     4,
+     1,
+     100
+    ],
+    [
+     5,
+     2,
+     100
+    ],
+    [
+     6,
+     2,
+     100
+    ],
+    [
+     7,
+     2,
+     100
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "13390000": [
+    [
+     2,
+     1,
+     100
+    ],
+    [
+     3,
+     1,
+     100
+    ],
+    [
+     4,
+     1,
+     100
+    ],
+    [
+     5,
+     2,
+     100
+    ],
+    [
+     6,
+     2,
+     100
+    ],
+    [
+     7,
+     2,
+     100
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "17160000": [
+    [
+     2,
+     1,
+     29
+    ],
+    [
+     3,
+     1,
+     32
+    ],
+    [
+     4,
+     1,
+     35
+    ],
+    [
+     5,
+     2,
+     38
+    ],
+    [
+     6,
+     2,
+     41
+    ],
+    [
+     7,
+     2,
+     44
+    ],
+    [
+     8,
+     4,
+     47
+    ],
+    [
+     9,
+     4,
+     50
+    ],
+    [
+     10,
+     4,
+     53
+    ]
+   ],
+   "17190000": [
+    [
+     2,
+     1,
+     41
+    ],
+    [
+     3,
+     1,
+     44
+    ],
+    [
+     4,
+     1,
+     47
+    ],
+    [
+     5,
+     2,
+     50
+    ],
+    [
+     6,
+     2,
+     53
+    ],
+    [
+     7,
+     2,
+     56
+    ],
+    [
+     8,
+     4,
+     59
+    ],
+    [
+     9,
+     4,
+     62
+    ],
+    [
+     10,
+     4,
+     65
+    ]
+   ],
+   "17270000": [
+    [
+     2,
+     1,
+     47
+    ],
+    [
+     3,
+     1,
+     50
+    ],
+    [
+     4,
+     1,
+     53
+    ],
+    [
+     5,
+     2,
+     56
+    ],
+    [
+     6,
+     2,
+     59
+    ],
+    [
+     7,
+     2,
+     62
+    ],
+    [
+     8,
+     4,
+     65
+    ],
+    [
+     9,
+     4,
+     68
+    ],
+    [
+     10,
+     4,
+     71
+    ]
+   ],
+   "17280000": [
+    [
+     2,
+     1,
+     54
+    ],
+    [
+     3,
+     1,
+     57
+    ],
+    [
+     4,
+     1,
+     60
+    ],
+    [
+     5,
+     2,
+     63
+    ],
+    [
+     6,
+     2,
+     66
+    ],
+    [
+     7,
+     2,
+     69
+    ],
+    [
+     8,
+     4,
+     72
+    ],
+    [
+     9,
+     4,
+     75
+    ],
+    [
+     10,
+     4,
+     78
+    ]
+   ],
+   "17290000": [
+    [
+     2,
+     1,
+     60
+    ],
+    [
+     3,
+     1,
+     63
+    ],
+    [
+     4,
+     1,
+     66
+    ],
+    [
+     5,
+     2,
+     69
+    ],
+    [
+     6,
+     2,
+     72
+    ],
+    [
+     7,
+     2,
+     75
+    ],
+    [
+     8,
+     4,
+     78
+    ],
+    [
+     9,
+     4,
+     81
+    ],
+    [
+     10,
+     4,
+     84
+    ]
+   ],
+   "17300000": [
+    [
+     2,
+     1,
+     66
+    ],
+    [
+     3,
+     1,
+     69
+    ],
+    [
+     4,
+     1,
+     72
+    ],
+    [
+     5,
+     2,
+     75
+    ],
+    [
+     6,
+     2,
+     78
+    ],
+    [
+     7,
+     2,
+     81
+    ],
+    [
+     8,
+     4,
+     84
+    ],
+    [
+     9,
+     4,
+     87
+    ],
+    [
+     10,
+     4,
+     90
+    ]
+   ],
+   "17390000": [
+    [
+     2,
+     1,
+     72
+    ],
+    [
+     3,
+     1,
+     75
+    ],
+    [
+     4,
+     1,
+     78
+    ],
+    [
+     5,
+     2,
+     81
+    ],
+    [
+     6,
+     2,
+     84
+    ],
+    [
+     7,
+     2,
+     87
+    ],
+    [
+     8,
+     4,
+     90
+    ],
+    [
+     9,
+     4,
+     93
+    ],
+    [
+     10,
+     4,
+     96
+    ]
+   ],
+   "17400000": [
+    [
+     2,
+     1,
+     78
+    ],
+    [
+     3,
+     1,
+     81
+    ],
+    [
+     4,
+     1,
+     84
+    ],
+    [
+     5,
+     2,
+     87
+    ],
+    [
+     6,
+     2,
+     90
+    ],
+    [
+     7,
+     2,
+     93
+    ],
+    [
+     8,
+     4,
+     96
+    ],
+    [
+     9,
+     4,
+     99
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "17410000": [
+    [
+     2,
+     1,
+     85
+    ],
+    [
+     3,
+     1,
+     88
+    ],
+    [
+     4,
+     1,
+     91
+    ],
+    [
+     5,
+     2,
+     94
+    ],
+    [
+     6,
+     2,
+     97
+    ],
+    [
+     7,
+     2,
+     100
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "17420000": [
+    [
+     2,
+     1,
+     91
+    ],
+    [
+     3,
+     1,
+     94
+    ],
+    [
+     4,
+     1,
+     97
+    ],
+    [
+     5,
+     2,
+     100
+    ],
+    [
+     6,
+     2,
+     100
+    ],
+    [
+     7,
+     2,
+     100
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "17430000": [
+    [
+     2,
+     1,
+     97
+    ],
+    [
+     3,
+     1,
+     100
+    ],
+    [
+     4,
+     1,
+     100
+    ],
+    [
+     5,
+     2,
+     100
+    ],
+    [
+     6,
+     2,
+     100
+    ],
+    [
+     7,
+     2,
+     100
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "17440000": [
+    [
+     2,
+     1,
+     100
+    ],
+    [
+     3,
+     1,
+     100
+    ],
+    [
+     4,
+     1,
+     100
+    ],
+    [
+     5,
+     2,
+     100
+    ],
+    [
+     6,
+     2,
+     100
+    ],
+    [
+     7,
+     2,
+     100
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "14060000": [
+    [
+     2,
+     1,
+     29
+    ],
+    [
+     3,
+     1,
+     32
+    ],
+    [
+     4,
+     1,
+     35
+    ],
+    [
+     5,
+     2,
+     38
+    ],
+    [
+     6,
+     2,
+     41
+    ],
+    [
+     7,
+     2,
+     44
+    ],
+    [
+     8,
+     4,
+     47
+    ],
+    [
+     9,
+     4,
+     50
+    ],
+    [
+     10,
+     4,
+     53
+    ]
+   ],
+   "14120000": [
+    [
+     2,
+     1,
+     42
+    ],
+    [
+     3,
+     1,
+     45
+    ],
+    [
+     4,
+     1,
+     48
+    ],
+    [
+     5,
+     2,
+     51
+    ],
+    [
+     6,
+     2,
+     54
+    ],
+    [
+     7,
+     2,
+     57
+    ],
+    [
+     8,
+     4,
+     60
+    ],
+    [
+     9,
+     4,
+     63
+    ],
+    [
+     10,
+     4,
+     66
+    ]
+   ],
+   "14150000": [
+    [
+     2,
+     1,
+     49
+    ],
+    [
+     3,
+     1,
+     52
+    ],
+    [
+     4,
+     1,
+     55
+    ],
+    [
+     5,
+     2,
+     58
+    ],
+    [
+     6,
+     2,
+     61
+    ],
+    [
+     7,
+     2,
+     64
+    ],
+    [
+     8,
+     4,
+     67
+    ],
+    [
+     9,
+     4,
+     70
+    ],
+    [
+     10,
+     4,
+     73
+    ]
+   ],
+   "14160000": [
+    [
+     2,
+     1,
+     56
+    ],
+    [
+     3,
+     1,
+     59
+    ],
+    [
+     4,
+     1,
+     62
+    ],
+    [
+     5,
+     2,
+     65
+    ],
+    [
+     6,
+     2,
+     68
+    ],
+    [
+     7,
+     2,
+     71
+    ],
+    [
+     8,
+     4,
+     74
+    ],
+    [
+     9,
+     4,
+     77
+    ],
+    [
+     10,
+     4,
+     80
+    ]
+   ],
+   "14180000": [
+    [
+     2,
+     1,
+     63
+    ],
+    [
+     3,
+     1,
+     66
+    ],
+    [
+     4,
+     1,
+     69
+    ],
+    [
+     5,
+     2,
+     72
+    ],
+    [
+     6,
+     2,
+     75
+    ],
+    [
+     7,
+     2,
+     78
+    ],
+    [
+     8,
+     4,
+     81
+    ],
+    [
+     9,
+     4,
+     84
+    ],
+    [
+     10,
+     4,
+     87
+    ]
+   ],
+   "14190000": [
+    [
+     2,
+     1,
+     69
+    ],
+    [
+     3,
+     1,
+     72
+    ],
+    [
+     4,
+     1,
+     75
+    ],
+    [
+     5,
+     2,
+     78
+    ],
+    [
+     6,
+     2,
+     81
+    ],
+    [
+     7,
+     2,
+     84
+    ],
+    [
+     8,
+     4,
+     87
+    ],
+    [
+     9,
+     4,
+     90
+    ],
+    [
+     10,
+     4,
+     93
+    ]
+   ],
+   "14220000": [
+    [
+     2,
+     1,
+     76
+    ],
+    [
+     3,
+     1,
+     79
+    ],
+    [
+     4,
+     1,
+     82
+    ],
+    [
+     5,
+     2,
+     85
+    ],
+    [
+     6,
+     2,
+     88
+    ],
+    [
+     7,
+     2,
+     91
+    ],
+    [
+     8,
+     4,
+     94
+    ],
+    [
+     9,
+     4,
+     97
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "14270000": [
+    [
+     2,
+     1,
+     83
+    ],
+    [
+     3,
+     1,
+     86
+    ],
+    [
+     4,
+     1,
+     89
+    ],
+    [
+     5,
+     2,
+     92
+    ],
+    [
+     6,
+     2,
+     95
+    ],
+    [
+     7,
+     2,
+     98
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "14310000": [
+    [
+     2,
+     1,
+     90
+    ],
+    [
+     3,
+     1,
+     93
+    ],
+    [
+     4,
+     1,
+     96
+    ],
+    [
+     5,
+     2,
+     99
+    ],
+    [
+     6,
+     2,
+     100
+    ],
+    [
+     7,
+     2,
+     100
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "14350000": [
+    [
+     2,
+     1,
+     96
+    ],
+    [
+     3,
+     1,
+     99
+    ],
+    [
+     4,
+     1,
+     100
+    ],
+    [
+     5,
+     2,
+     100
+    ],
+    [
+     6,
+     2,
+     100
+    ],
+    [
+     7,
+     2,
+     100
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "14360000": [
+    [
+     2,
+     1,
+     100
+    ],
+    [
+     3,
+     1,
+     100
+    ],
+    [
+     4,
+     1,
+     100
+    ],
+    [
+     5,
+     2,
+     100
+    ],
+    [
+     6,
+     2,
+     100
+    ],
+    [
+     7,
+     2,
+     100
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "16060000": [
+    [
+     2,
+     1,
+     29
+    ],
+    [
+     3,
+     1,
+     32
+    ],
+    [
+     4,
+     1,
+     35
+    ],
+    [
+     5,
+     2,
+     38
+    ],
+    [
+     6,
+     2,
+     41
+    ],
+    [
+     7,
+     2,
+     44
+    ],
+    [
+     8,
+     4,
+     47
+    ],
+    [
+     9,
+     4,
+     50
+    ],
+    [
+     10,
+     4,
+     53
+    ]
+   ],
+   "16080000": [
+    [
+     2,
+     1,
+     42
+    ],
+    [
+     3,
+     1,
+     45
+    ],
+    [
+     4,
+     1,
+     48
+    ],
+    [
+     5,
+     2,
+     51
+    ],
+    [
+     6,
+     2,
+     54
+    ],
+    [
+     7,
+     2,
+     57
+    ],
+    [
+     8,
+     4,
+     60
+    ],
+    [
+     9,
+     4,
+     63
+    ],
+    [
+     10,
+     4,
+     66
+    ]
+   ],
+   "16150000": [
+    [
+     2,
+     1,
+     49
+    ],
+    [
+     3,
+     1,
+     52
+    ],
+    [
+     4,
+     1,
+     55
+    ],
+    [
+     5,
+     2,
+     58
+    ],
+    [
+     6,
+     2,
+     61
+    ],
+    [
+     7,
+     2,
+     64
+    ],
+    [
+     8,
+     4,
+     67
+    ],
+    [
+     9,
+     4,
+     70
+    ],
+    [
+     10,
+     4,
+     73
+    ]
+   ],
+   "16190000": [
+    [
+     2,
+     1,
+     56
+    ],
+    [
+     3,
+     1,
+     59
+    ],
+    [
+     4,
+     1,
+     62
+    ],
+    [
+     5,
+     2,
+     65
+    ],
+    [
+     6,
+     2,
+     68
+    ],
+    [
+     7,
+     2,
+     71
+    ],
+    [
+     8,
+     4,
+     74
+    ],
+    [
+     9,
+     4,
+     77
+    ],
+    [
+     10,
+     4,
+     80
+    ]
+   ],
+   "16220000": [
+    [
+     2,
+     1,
+     63
+    ],
+    [
+     3,
+     1,
+     66
+    ],
+    [
+     4,
+     1,
+     69
+    ],
+    [
+     5,
+     2,
+     72
+    ],
+    [
+     6,
+     2,
+     75
+    ],
+    [
+     7,
+     2,
+     78
+    ],
+    [
+     8,
+     4,
+     81
+    ],
+    [
+     9,
+     4,
+     84
+    ],
+    [
+     10,
+     4,
+     87
+    ]
+   ],
+   "16230000": [
+    [
+     2,
+     1,
+     69
+    ],
+    [
+     3,
+     1,
+     72
+    ],
+    [
+     4,
+     1,
+     75
+    ],
+    [
+     5,
+     2,
+     78
+    ],
+    [
+     6,
+     2,
+     81
+    ],
+    [
+     7,
+     2,
+     84
+    ],
+    [
+     8,
+     4,
+     87
+    ],
+    [
+     9,
+     4,
+     90
+    ],
+    [
+     10,
+     4,
+     93
+    ]
+   ],
+   "16240000": [
+    [
+     2,
+     1,
+     76
+    ],
+    [
+     3,
+     1,
+     79
+    ],
+    [
+     4,
+     1,
+     82
+    ],
+    [
+     5,
+     2,
+     85
+    ],
+    [
+     6,
+     2,
+     88
+    ],
+    [
+     7,
+     2,
+     91
+    ],
+    [
+     8,
+     4,
+     94
+    ],
+    [
+     9,
+     4,
+     97
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "16250000": [
+    [
+     2,
+     1,
+     83
+    ],
+    [
+     3,
+     1,
+     86
+    ],
+    [
+     4,
+     1,
+     89
+    ],
+    [
+     5,
+     2,
+     92
+    ],
+    [
+     6,
+     2,
+     95
+    ],
+    [
+     7,
+     2,
+     98
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "16260000": [
+    [
+     2,
+     1,
+     90
+    ],
+    [
+     3,
+     1,
+     93
+    ],
+    [
+     4,
+     1,
+     96
+    ],
+    [
+     5,
+     2,
+     99
+    ],
+    [
+     6,
+     2,
+     100
+    ],
+    [
+     7,
+     2,
+     100
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "16360000": [
+    [
+     2,
+     1,
+     96
+    ],
+    [
+     3,
+     1,
+     99
+    ],
+    [
+     4,
+     1,
+     100
+    ],
+    [
+     5,
+     2,
+     100
+    ],
+    [
+     6,
+     2,
+     100
+    ],
+    [
+     7,
+     2,
+     100
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "16370000": [
+    [
+     2,
+     1,
+     100
+    ],
+    [
+     3,
+     1,
+     100
+    ],
+    [
+     4,
+     1,
+     100
+    ],
+    [
+     5,
+     2,
+     100
+    ],
+    [
+     6,
+     2,
+     100
+    ],
+    [
+     7,
+     2,
+     100
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "15120000": [
+    [
+     2,
+     1,
+     29
+    ],
+    [
+     3,
+     1,
+     32
+    ],
+    [
+     4,
+     1,
+     35
+    ],
+    [
+     5,
+     2,
+     38
+    ],
+    [
+     6,
+     2,
+     41
+    ],
+    [
+     7,
+     2,
+     44
+    ],
+    [
+     8,
+     4,
+     47
+    ],
+    [
+     9,
+     4,
+     50
+    ],
+    [
+     10,
+     4,
+     53
+    ]
+   ],
+   "15130000": [
+    [
+     2,
+     1,
+     42
+    ],
+    [
+     3,
+     1,
+     45
+    ],
+    [
+     4,
+     1,
+     48
+    ],
+    [
+     5,
+     2,
+     51
+    ],
+    [
+     6,
+     2,
+     54
+    ],
+    [
+     7,
+     2,
+     57
+    ],
+    [
+     8,
+     4,
+     60
+    ],
+    [
+     9,
+     4,
+     63
+    ],
+    [
+     10,
+     4,
+     66
+    ]
+   ],
+   "15140000": [
+    [
+     2,
+     1,
+     49
+    ],
+    [
+     3,
+     1,
+     52
+    ],
+    [
+     4,
+     1,
+     55
+    ],
+    [
+     5,
+     2,
+     58
+    ],
+    [
+     6,
+     2,
+     61
+    ],
+    [
+     7,
+     2,
+     64
+    ],
+    [
+     8,
+     4,
+     67
+    ],
+    [
+     9,
+     4,
+     70
+    ],
+    [
+     10,
+     4,
+     73
+    ]
+   ],
+   "15160000": [
+    [
+     2,
+     1,
+     56
+    ],
+    [
+     3,
+     1,
+     59
+    ],
+    [
+     4,
+     1,
+     62
+    ],
+    [
+     5,
+     2,
+     65
+    ],
+    [
+     6,
+     2,
+     68
+    ],
+    [
+     7,
+     2,
+     71
+    ],
+    [
+     8,
+     4,
+     74
+    ],
+    [
+     9,
+     4,
+     77
+    ],
+    [
+     10,
+     4,
+     80
+    ]
+   ],
+   "15200000": [
+    [
+     2,
+     1,
+     63
+    ],
+    [
+     3,
+     1,
+     66
+    ],
+    [
+     4,
+     1,
+     69
+    ],
+    [
+     5,
+     2,
+     72
+    ],
+    [
+     6,
+     2,
+     75
+    ],
+    [
+     7,
+     2,
+     78
+    ],
+    [
+     8,
+     4,
+     81
+    ],
+    [
+     9,
+     4,
+     84
+    ],
+    [
+     10,
+     4,
+     87
+    ]
+   ],
+   "15230000": [
+    [
+     2,
+     1,
+     69
+    ],
+    [
+     3,
+     1,
+     72
+    ],
+    [
+     4,
+     1,
+     75
+    ],
+    [
+     5,
+     2,
+     78
+    ],
+    [
+     6,
+     2,
+     81
+    ],
+    [
+     7,
+     2,
+     84
+    ],
+    [
+     8,
+     4,
+     87
+    ],
+    [
+     9,
+     4,
+     90
+    ],
+    [
+     10,
+     4,
+     93
+    ]
+   ],
+   "15300000": [
+    [
+     2,
+     1,
+     76
+    ],
+    [
+     3,
+     1,
+     79
+    ],
+    [
+     4,
+     1,
+     82
+    ],
+    [
+     5,
+     2,
+     85
+    ],
+    [
+     6,
+     2,
+     88
+    ],
+    [
+     7,
+     2,
+     91
+    ],
+    [
+     8,
+     4,
+     94
+    ],
+    [
+     9,
+     4,
+     97
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "15320000": [
+    [
+     2,
+     1,
+     83
+    ],
+    [
+     3,
+     1,
+     86
+    ],
+    [
+     4,
+     1,
+     89
+    ],
+    [
+     5,
+     2,
+     92
+    ],
+    [
+     6,
+     2,
+     95
+    ],
+    [
+     7,
+     2,
+     98
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "15360000": [
+    [
+     2,
+     1,
+     90
+    ],
+    [
+     3,
+     1,
+     93
+    ],
+    [
+     4,
+     1,
+     96
+    ],
+    [
+     5,
+     2,
+     99
+    ],
+    [
+     6,
+     2,
+     100
+    ],
+    [
+     7,
+     2,
+     100
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "15390000": [
+    [
+     2,
+     1,
+     96
+    ],
+    [
+     3,
+     1,
+     99
+    ],
+    [
+     4,
+     1,
+     100
+    ],
+    [
+     5,
+     2,
+     100
+    ],
+    [
+     6,
+     2,
+     100
+    ],
+    [
+     7,
+     2,
+     100
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "15400000": [
+    [
+     2,
+     1,
+     100
+    ],
+    [
+     3,
+     1,
+     100
+    ],
+    [
+     4,
+     1,
+     100
+    ],
+    [
+     5,
+     2,
+     100
+    ],
+    [
+     6,
+     2,
+     100
+    ],
+    [
+     7,
+     2,
+     100
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "18130000": [
+    [
+     2,
+     1,
+     29
+    ],
+    [
+     3,
+     1,
+     32
+    ],
+    [
+     4,
+     1,
+     35
+    ],
+    [
+     5,
+     2,
+     38
+    ],
+    [
+     6,
+     2,
+     41
+    ],
+    [
+     7,
+     2,
+     44
+    ],
+    [
+     8,
+     4,
+     47
+    ],
+    [
+     9,
+     4,
+     50
+    ],
+    [
+     10,
+     4,
+     53
+    ]
+   ],
+   "18140000": [
+    [
+     2,
+     1,
+     41
+    ],
+    [
+     3,
+     1,
+     44
+    ],
+    [
+     4,
+     1,
+     47
+    ],
+    [
+     5,
+     2,
+     50
+    ],
+    [
+     6,
+     2,
+     53
+    ],
+    [
+     7,
+     2,
+     56
+    ],
+    [
+     8,
+     4,
+     59
+    ],
+    [
+     9,
+     4,
+     62
+    ],
+    [
+     10,
+     4,
+     65
+    ]
+   ],
+   "18160000": [
+    [
+     2,
+     1,
+     47
+    ],
+    [
+     3,
+     1,
+     50
+    ],
+    [
+     4,
+     1,
+     53
+    ],
+    [
+     5,
+     2,
+     56
+    ],
+    [
+     6,
+     2,
+     59
+    ],
+    [
+     7,
+     2,
+     62
+    ],
+    [
+     8,
+     4,
+     65
+    ],
+    [
+     9,
+     4,
+     68
+    ],
+    [
+     10,
+     4,
+     71
+    ]
+   ],
+   "18170000": [
+    [
+     2,
+     1,
+     54
+    ],
+    [
+     3,
+     1,
+     57
+    ],
+    [
+     4,
+     1,
+     60
+    ],
+    [
+     5,
+     2,
+     63
+    ],
+    [
+     6,
+     2,
+     66
+    ],
+    [
+     7,
+     2,
+     69
+    ],
+    [
+     8,
+     4,
+     72
+    ],
+    [
+     9,
+     4,
+     75
+    ],
+    [
+     10,
+     4,
+     78
+    ]
+   ],
+   "18190000": [
+    [
+     2,
+     1,
+     60
+    ],
+    [
+     3,
+     1,
+     63
+    ],
+    [
+     4,
+     1,
+     66
+    ],
+    [
+     5,
+     2,
+     69
+    ],
+    [
+     6,
+     2,
+     72
+    ],
+    [
+     7,
+     2,
+     75
+    ],
+    [
+     8,
+     4,
+     78
+    ],
+    [
+     9,
+     4,
+     81
+    ],
+    [
+     10,
+     4,
+     84
+    ]
+   ],
+   "18220000": [
+    [
+     2,
+     1,
+     66
+    ],
+    [
+     3,
+     1,
+     69
+    ],
+    [
+     4,
+     1,
+     72
+    ],
+    [
+     5,
+     2,
+     75
+    ],
+    [
+     6,
+     2,
+     78
+    ],
+    [
+     7,
+     2,
+     81
+    ],
+    [
+     8,
+     4,
+     84
+    ],
+    [
+     9,
+     4,
+     87
+    ],
+    [
+     10,
+     4,
+     90
+    ]
+   ],
+   "18230000": [
+    [
+     2,
+     1,
+     72
+    ],
+    [
+     3,
+     1,
+     75
+    ],
+    [
+     4,
+     1,
+     78
+    ],
+    [
+     5,
+     2,
+     81
+    ],
+    [
+     6,
+     2,
+     84
+    ],
+    [
+     7,
+     2,
+     87
+    ],
+    [
+     8,
+     4,
+     90
+    ],
+    [
+     9,
+     4,
+     93
+    ],
+    [
+     10,
+     4,
+     96
+    ]
+   ],
+   "18240000": [
+    [
+     2,
+     1,
+     78
+    ],
+    [
+     3,
+     1,
+     81
+    ],
+    [
+     4,
+     1,
+     84
+    ],
+    [
+     5,
+     2,
+     87
+    ],
+    [
+     6,
+     2,
+     90
+    ],
+    [
+     7,
+     2,
+     93
+    ],
+    [
+     8,
+     4,
+     96
+    ],
+    [
+     9,
+     4,
+     99
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "18250000": [
+    [
+     2,
+     1,
+     85
+    ],
+    [
+     3,
+     1,
+     88
+    ],
+    [
+     4,
+     1,
+     91
+    ],
+    [
+     5,
+     2,
+     94
+    ],
+    [
+     6,
+     2,
+     97
+    ],
+    [
+     7,
+     2,
+     100
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "18330000": [
+    [
+     2,
+     1,
+     91
+    ],
+    [
+     3,
+     1,
+     94
+    ],
+    [
+     4,
+     1,
+     97
+    ],
+    [
+     5,
+     2,
+     100
+    ],
+    [
+     6,
+     2,
+     100
+    ],
+    [
+     7,
+     2,
+     100
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "18420000": [
+    [
+     2,
+     1,
+     97
+    ],
+    [
+     3,
+     1,
+     100
+    ],
+    [
+     4,
+     1,
+     100
+    ],
+    [
+     5,
+     2,
+     100
+    ],
+    [
+     6,
+     2,
+     100
+    ],
+    [
+     7,
+     2,
+     100
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ],
+   "18440000": [
+    [
+     2,
+     1,
+     100
+    ],
+    [
+     3,
+     1,
+     100
+    ],
+    [
+     4,
+     1,
+     100
+    ],
+    [
+     5,
+     2,
+     100
+    ],
+    [
+     6,
+     2,
+     100
+    ],
+    [
+     7,
+     2,
+     100
+    ],
+    [
+     8,
+     4,
+     100
+    ],
+    [
+     9,
+     4,
+     100
+    ],
+    [
+     10,
+     4,
+     100
+    ]
+   ]
+  },
+  "damage": {
+   "14170000": [
+    {
+     "flat": [
+      454,
+      454
+     ],
+     "ratio": [
+      19588,
+      19588
+     ],
+     "value4": null,
+     "pvp": {
+      "flat": [
+       300,
+       300
+      ],
+      "ratio": [
+       12640,
+       12640
+      ]
+     },
+     "effect_id": 1417000011
+    }
+   ],
+   "17150000": [
+    {
+     "flat": [
+      138,
+      138
+     ],
+     "ratio": [
+      15180,
+      15180
+     ],
+     "value4": null,
+     "pvp": {
+      "flat": [
+       112,
+       112
+      ],
+      "ratio": [
+       12309,
+       12309
+      ]
+     },
+     "effect_id": 1715000011
+    },
+    {
+     "flat": [
+      138,
+      138
+     ],
+     "ratio": [
+      15180,
+      15180
+     ],
+     "value4": null,
+     "pvp": {
+      "flat": [
+       112,
+       112
+      ],
+      "ratio": [
+       12309,
+       12309
+      ]
+     },
+     "effect_id": 1715000011
+    }
+   ]
+  }
+ }
+}

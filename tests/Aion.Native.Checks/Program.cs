@@ -1226,6 +1226,7 @@ Check(equipReply[0].SequenceEqual(new PacketWriter().U16(0xe248).U16(0).I64(13).
       "equip request: stored in slot 5, answered on the next opcode, item update sent");
 // A non-starter weapon becomes the combat weapon at once; armour adds its Item.dat HPMax and the stats are resent.
 var hpUnarmoured = staffSession.Resource.HpMax;
+var powerStarter = staffSession.CombatPower();
 staffStore.Items.AddRange([Stored(110120003, 1, "bag", null, 14), Stored(210130001, 1, "bag", null, 15)]);
 await staffSession.InventoryChangesAsync(default);
 await staffSession.HandleAsync(new PacketWriter().U16(0xe247).I64(14).U8(1).ToArray(), Now);
@@ -1233,6 +1234,8 @@ Check(staffSession.EquippedWeapon == 110120003 && data.WeaponType(110120003) == 
       "equipping another greatsword changes the combat weapon (type and stats from Item.dat)");
 var torso = await staffSession.HandleAsync(new PacketWriter().U16(0xe247).I64(15).U8(5).ToArray(), Now);
 Check(staffSession.Resource.HpMax == hpUnarmoured + 144 && torso.Any(b => b[0] == 0x4a && b[1] == 0x36), "armour HPMax raises the pool; 0x364a carries the new stats");
+var powerArmed = staffSession.CombatPower();
+Check(powerStarter > 0 && powerArmed > powerStarter, $"combat power grows with gear (progression.json, OURS: {powerStarter} -> {powerArmed})");
 // Pet chest: 0x5646 opens it (0x5647 result 0), the chest goes (0x561b remove), the pet item it gave is
 // used at once and its ride acquired (0x9009); then mount (0x9001/0x9002), dismount, default ride.
 staffStore.Items.Add(Stored(533700117, 1, "bag", null, 16));
@@ -2880,6 +2883,65 @@ checks = 0;
     foreach (var s in new[] { cleric, ally, foe, sorcerer, priest }) s.ExitSharedWorld();
 }
 Console.WriteLine($"{checks} class skill effect checks passed (heals, buffs, debuffs, damage over time, resurrection).");
+
+// ---------- Progression past the recovered tables (progression.json, OURS; docs/PROGRESSION.md) ----------
+checks = 0;
+{
+    var progressionWorld = new SharedWorld(data);
+    async Task<GameSession> LevelSession(uint creation, int level, string name)
+    {
+        var session = new GameSession(data, new GameSessionOptions { World = progressionWorld, TrainingDummy = true, CharacterLevel = level }, new Random(5));
+        await session.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+        await session.HandleAsync(new PacketWriter().U16(0x361b).String(name).U8(1).U32(creation).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
+        await session.HandleAsync(select, Now);
+        await session.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+        return session;
+    }
+    var progression = data.Progression;
+    // Unlocks: the recovered SkillAcquireData rows end at 25; the OURS rows go on to the level cap.
+    var oursFirst = progression.Unlocks("Gladiator")[0];
+    var known25 = data.LearnedSkills("Gladiator", 25).Select(k => k.SkillId).ToHashSet();
+    Check(oursFirst[1] > 25 && !known25.Contains(oursFirst[0]) && data.LearnedSkills("Gladiator", oursFirst[1]).Any(k => k.SkillId == oursFirst[0]),
+          $"skill {oursFirst[0]} unlocks at level {oursFirst[1]} (> 25), not before");
+    foreach (var cls in new[] { "Gladiator", "Templar", "Assassin", "Cleric", "Ranger", "Elementalist", "Sorcerer", "Chanter" })
+        Check(data.LearnedSkills(cls, data.MaxLevel).Count > data.LearnedSkills(cls, 25).Count
+              && progression.Unlocks(cls).All(u => u[1] > 25 && u[1] <= data.MaxLevel && data.Skill(u[0]) is not null)
+              && data.LearnedSkills(cls, data.MaxLevel).Count <= 127, $"{cls}: unlocks continue to the level cap, every one with cast data");
+    // Fallback damage rows: an OURS definition for an unlock past 25, and rows for a recovered skill whose export has none.
+    var fallbackActive = progression.Unlocks("Gladiator").Select(u => u[0]).First(id => data.Skill(id) is { Type: "Active", Damage.Length: > 0 });
+    Check(data.FallbackDamage(fallbackActive) && data.FallbackDamage(17150000) && data.Skill(17150000)!.Name == "Divine Aura"
+          && data.Skill(17150000)!.Damage.Length > 0 && !data.FallbackDamage(11010000), "fallback damage rows: OURS definitions and Divine Aura; recovered rows stay");
+    var gladiator30 = await LevelSession(1, 30, "Glad");
+    var progressionDummy = gladiator30.Targets[Combat.TrainingDummyKey];
+    var progressionHpBefore = progressionDummy.Hp;
+    var fallbackCast = await gladiator30.HandleAsync(Cast(fallbackActive, Combat.TrainingDummyKey, progressionDummy.Position), Now + 1_000);
+    Check(fallbackCast[0][3] == 0 && progressionDummy.Hp < progressionHpBefore && fallbackCast.Any(b => Op(b) == 0x3804 && b.AsSpan().IndexOf(BitConverter.GetBytes(fallbackActive * 100 + 11)) > 0),
+          "a level-30 Gladiator casts an OURS unlock: its fallback row hits the progressionDummy (0x3804, effect skill x 100 + 11)");
+    // Skill levels raise damage (same rolls) and heals use the same scale.
+    var weapon = data.StarterWeapon(data.Profile(1, 1)!);
+    var level1 = Combat.SkillHits(data, 11010000, "Gladiator", 30, weapon, 0, new Random(9)).Sum(h => h.Amount);
+    var level5 = Combat.SkillHits(data, 11010000, "Gladiator", 30, weapon, 0, new Random(9), skillLevel: 5).Sum(h => h.Amount);
+    var level10 = Combat.SkillHits(data, 11010000, "Gladiator", 30, weapon, 0, new Random(9), skillLevel: 10).Sum(h => h.Amount);
+    Check(level1 < level5 && level5 < level10 && progression.SkillLevelScale(1) == 1.0, $"damage grows with the skill level ({level1} < {level5} < {level10})");
+    Check(data.SkillLevelCost(fallbackActive, 2) is { Cost: 1 } cost2 && cost2.NeedLevel > oursFirst[1] - 1, "fallback skills can be levelled (OURS ladder)");
+    // MPMax: 1500 at level 1 (OBSERVED), growing with the level; the stat sheet keeps its layout.
+    var gladiator1 = await LevelSession(1, 1, "Low");
+    var cleric30 = await LevelSession(4, 30, "Healer");
+    Check(gladiator1.Resource.MpMax == GameSession.MpMaxBase && gladiator30.Resource.MpMax > gladiator1.Resource.MpMax
+          && gladiator30.Resource.MpMax == progression.MpMax("Gladiator", 30) && cleric30.Resource.MpMax > gladiator30.Resource.MpMax,
+          $"MP max differs by level and class ({gladiator1.Resource.MpMax}, {gladiator30.Resource.MpMax}, Cleric {cleric30.Resource.MpMax})");
+    var sheet30 = (await gladiator30.HandleAsync([0x48, 0x36], Now + 2_000)).Single(b => Op(b) == 0x3649);
+    var mpStat = new PacketWriter().U16(199).I32(gladiator30.Resource.MpMax).ToArray();
+    Check(sheet30.Length == GamePackets.CharAllStats(GamePackets.DefaultStats, 1).Length && sheet30.AsSpan().IndexOf(mpStat) > 0,
+          "the stat sheet keeps the official layout and carries the level's MPMax (type 199)");
+    // Combat power: monotonic in every stat, and carried by the own appearance (0x3633 _combat_power, CANDIDATE).
+    var baseStats = new Dictionary<string, double> { ["level"] = 30, ["attack"] = 100, ["defense"] = 300, ["hp_max"] = 3000, ["mp_max"] = 2950, ["critical"] = 150, ["accuracy"] = 100, ["block"] = 0, ["item_level"] = 12 };
+    Check(baseStats.Keys.All(k => progression.CombatPower(new Dictionary<string, double>(baseStats) { [k] = baseStats[k] + 50 }) > progression.CombatPower(baseStats)),
+          "combat power rises with each stat (gear never lowers it)");
+    Check(gladiator30.CombatPower() > gladiator1.CombatPower() && gladiator30.Live().CombatPower == gladiator30.CombatPower(), "combat power grows with the level and is in the admin live view");
+    foreach (var s in new[] { gladiator30, gladiator1, cleric30 }) s.ExitSharedWorld();
+}
+Console.WriteLine($"{checks} progression checks passed (unlocks past 25, fallback damage, skill-level scaling, MP max, combat power).");
 
 int DarkCreation(GameData d) => Enumerable.Range(1, 64).First(c => d.Profile(c, 1) is { Race: 2 });
 

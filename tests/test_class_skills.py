@@ -36,7 +36,7 @@ class ClassSkillTests(unittest.TestCase):
                 counts = [len(class_skills.learned_skills(name, level)) for level in (1, 10, 25, 100)]
                 self.assertEqual(counts, sorted(counts))
                 self.assertLess(counts[0], counts[2])
-                unlocks = class_skills.data()['classes'][name]['unlocks'] + class_skills.data()['common_unlocks']
+                unlocks = class_skills.class_unlocks(name) + class_skills.data()['common_unlocks']
                 self.assertEqual(counts[3], len({skill for skill, _, _ in unlocks}))
                 self.assertLessEqual(counts[3], 127)   # one 0x5100 skill-list packet
 

@@ -196,7 +196,7 @@ public sealed partial class GameSession
         if (victim is null || !match.Enemies(worldPlayer, victim) || victim.Session.resources is not { } theirs || match.RespawnAt.ContainsKey(victim.Key)) return [];
         var replies = new List<byte[]>();
         var seq = 0;
-        foreach (var hit in Combat.SkillHits(data, skill, className, level, equippedWeapon, victim.Session.Defense, rng, pvp: true, fixingBonus: BuffStat("FixingDamage")))
+        foreach (var hit in Combat.SkillHits(data, skill, className, level, equippedWeapon, victim.Session.Defense, rng, pvp: true, fixingBonus: BuffStat("FixingDamage"), skillLevel: SkillLevel(skill)))
         {
             theirs.Hp = Math.Max(1, theirs.Hp - hit.Amount);
             replies.Add(GamePackets.SkillHit(victim.Key, playerKey, skill, hit.EffectId, hit.Amount, hit.Critical, ++seq));

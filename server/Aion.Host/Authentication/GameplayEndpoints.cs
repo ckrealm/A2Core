@@ -91,7 +91,7 @@ public static class GameplayEndpoints
                     v.Name, v.CharacterId, AccountName=stored?.AccountName, v.StaffRole, v.Level, v.ClassName, v.MapId, v.Area,
                     Position=v.Position is { } at ? new[]{Math.Round(at.X),Math.Round(at.Y),Math.Round(at.Z)} : null,
                     v.Hp, v.HpMax, v.Mp, v.MpMax, v.Invisible, v.PartyLeader, v.PartySize, InWorldSince=e.Since,
-                    Heading=Math.Round(v.Heading,1), v.Dead, v.SpeedRejects });
+                    Heading=Math.Round(v.Heading,1), v.Dead, v.SpeedRejects, v.CombatPower });
             }
             return Results.Ok(new {
                 ServerTime=DateTimeOffset.UtcNow,

@@ -1794,7 +1794,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
                 CustomizingData = character?.CustomizingData ?? [], VoiceType = character?.VoiceType ?? 0,
                 Ascension = selected?.Ascension ?? 1, DbId = selected?.WireId ?? 0,
                 WingId = wingId, Fp = resources.Fp, FpMax = resources.FpMax,
-                EquipItemLevel = armed, HighestTotalItemLevel = armed,
+                EquipItemLevel = armed, HighestTotalItemLevel = armed, CombatPower = CombatPower(),
             }));
         replies.Add(GamePackets.CharBarrier(playerKey));
         replies.Add(GamePackets.CharStatsUpdate(playerKey, StatSheet().Stats, resources.HpMax));
@@ -2086,7 +2086,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         foreach (var target in chosen.Where(t => t.Hostile).ToList())
         {
             if (target.Dead) continue;
-            var hits = Combat.SkillHits(data, skill, className, level, equippedWeapon, target.Defense, rng, fixingBonus: BuffStat("FixingDamage"));
+            var hits = Combat.SkillHits(data, skill, className, level, equippedWeapon, target.Defense, rng, fixingBonus: BuffStat("FixingDamage"), skillLevel: SkillLevel(skill));
             replies.AddRange(HitTarget(target, skill, hits, now));
         }
         return replies;
@@ -2294,7 +2294,8 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
 
     // ---------- Stats ----------
 
-    /// <summary>MPMax of the official 0x3649 sample (level 1); CANDIDATE: the same for every class and level.</summary>
+    /// <summary>MPMax of the official 0x3649 sample (level 1, OBSERVED): the start of the pools; the level's own MPMax follows
+    /// the OURS curve of progression.json (PcStatLevel has no MPMax).</summary>
     public const int MpMaxBase = 1500;
 
     IEnumerable<ItemInfo> EquippedItems() =>
@@ -2310,12 +2311,33 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
     public int Defense => data.BaseStats(className, level).GetValueOrDefault("Defense") + EquippedItems().Sum(i => i.Stat("ArmorDefense")) + EnchantStat("ArmorDefense") + BuffStat("Defense")
         + BoardStat("Defense") + TitleStat("Defense");
 
-    /// <summary>The MP pool: MPMax 1500 plus buffs.</summary>
-    int MpMax => MpMaxBase + BuffStat("MPMax") + BoardStat("MPMax") + TitleStat("MPMax");
+    /// <summary>The MP pool: the class and level's MPMax (progression.json mp_max, OURS; 1500 at level 1 as observed) plus buffs.</summary>
+    int MpMax => data.Progression.MpMax(className, level) + BuffStat("MPMax") + BoardStat("MPMax") + TitleStat("MPMax");
 
     /// <summary>
-    /// The stat sheet (0x3649 / 0x364a): the official sample's values, with HPMax from PcStatLevel
-    /// plus equipped HPMax, MPMax 1500, the weapon's damage/critical/accuracy and the armour's defense.
+    /// Combat power (progression.json combat_power, OURS): level, attack (mean weapon damage + FixingDamage + gear
+    /// WeaponFixingDamage), defense, HPMax, MPMax, critical, accuracy, block and the equip item level, each times its weight.
+    /// Sent where the client's messages already carry a combat power field (0x3633 _combat_power / _highest_combat_power,
+    /// usmap order, CANDIDATE) and shown in the admin live view.
+    /// </summary>
+    public long CombatPower()
+    {
+        var (stats, hpMax) = StatSheet();
+        int Of(int type) => stats.FirstOrDefault(s => s.Type == type).Value;
+        var gear = EquippedItems().ToList();
+        var weapon = data.WeaponStatsOf(equippedWeapon);
+        var attack = (weapon.Min + weapon.Max) / 2.0 + data.BaseStats(className, level).GetValueOrDefault("FixingDamage")
+            + gear.Sum(i => i.Stat("WeaponFixingDamage"));
+        return data.Progression.CombatPower(new Dictionary<string, double>
+        {
+            ["level"] = level, ["attack"] = attack, ["defense"] = Of(307), ["hp_max"] = hpMax, ["mp_max"] = Of(199),
+            ["critical"] = Of(128), ["accuracy"] = Of(318), ["block"] = gear.Sum(i => i.Stat("Block")), ["item_level"] = EquipItemLevel(),
+        });
+    }
+
+    /// <summary>
+    /// The stat sheet (0x3649 / 0x364a): the official sample's values (layout unchanged), with HPMax from PcStatLevel
+    /// plus equipped HPMax, MPMax from progression.json (OURS), the weapon's damage/critical/accuracy and the armour's defense.
     /// </summary>
     (IReadOnlyList<(int Type, int Value)> Stats, int HpMax) StatSheet()
     {
@@ -2415,7 +2437,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
     /// <summary>What the staff overview shows of a player in the world (read under the world gate).</summary>
     public sealed record LiveView(string Name, Guid? CharacterId, string? StaffRole, int Level, string? ClassName,
         int? MapId, string? Area, Vector3d? Position, int Hp, int HpMax, int Mp, int MpMax, bool Invisible,
-        string? PartyLeader, int PartySize, double Heading = 0, bool Dead = false, int SpeedRejects = 0);
+        string? PartyLeader, int PartySize, double Heading = 0, bool Dead = false, int SpeedRejects = 0, long CombatPower = 0);
 
     public LiveView Live()
     {
@@ -2423,7 +2445,8 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         var party = worldPlayer is null ? null : Social?.PartyOf(worldPlayer);
         return new LiveView(StoredName, CharacterId, StaffRole, level, Profile()?.Class, MapId,
             MapId is { } map && position is { } at ? Subzones.AreaAt(map, at) : null, position,
-            r.Hp, r.HpMax, r.Mp, r.MpMax, invisible, party?.Leader.Name, party?.Members.Count ?? 0, worldPlayer?.Heading ?? 0, dead, SpeedRejects);
+            r.Hp, r.HpMax, r.Mp, r.MpMax, invisible, party?.Leader.Name, party?.Members.Count ?? 0, worldPlayer?.Heading ?? 0, dead, SpeedRejects,
+            resources is null ? 0 : CombatPower());
     }
 
     /// <summary>Builder NoCool: casts ignore cooldowns.</summary>

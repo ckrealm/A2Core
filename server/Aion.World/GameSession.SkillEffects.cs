@@ -36,9 +36,13 @@ public sealed partial class GameSession
     /// <summary>The attack heals and dots scale with (Combat.Power, with this player's FixingDamage buffs).</summary>
     int SkillPower() => Combat.Power(data, className, level, equippedWeapon, rng, BuffStat("FixingDamage"));
 
-    /// <summary>heal = flat + power x ratio / 10000 + the target's HPMax x hp_ratio / 10000 (OURS).</summary>
-    int HealAmount(SkillEffect e, int targetHpMax) =>
-        Math.Max(0, RollRange(e.Flat, rng) + (int)((long)SkillPower() * RollRange(e.Ratio, rng) / 10_000) + (int)((long)targetHpMax * RollRange(e.HpRatio, rng) / 10_000));
+    /// <summary>
+    /// heal = (flat + power x ratio / 10000 + the target's HPMax x hp_ratio / 10000) x the caster's skill-level scale
+    /// (progression.json skill_level_damage, the same scale as the skill's damage; all OURS).
+    /// </summary>
+    int HealAmount(SkillEffect e, int targetHpMax, int skill) =>
+        Math.Max(0, (int)Math.Round((RollRange(e.Flat, rng) + (double)SkillPower() * RollRange(e.Ratio, rng) / 10_000 + (double)targetHpMax * RollRange(e.HpRatio, rng) / 10_000)
+            * data.Progression.SkillLevelScale(SkillLevel(skill))));
 
     /// <summary>
     /// The player a friendly skill lands on: another player on the map selected by key (alive, or dead for a resurrection; not an
@@ -91,10 +95,10 @@ public sealed partial class GameSession
                 switch (e.Type)
                 {
                     case "heal":
-                        packets.AddRange(to.Session.ReceiveHeal(HealAmount(e, theirs.HpMax)));
+                        packets.AddRange(to.Session.ReceiveHeal(HealAmount(e, theirs.HpMax, skill)));
                         break;
                     case "hot":
-                        packets.AddRange(to.Session.AddSkillBuff(skill, e, HealAmount(e, theirs.HpMax), now));
+                        packets.AddRange(to.Session.AddSkillBuff(skill, e, HealAmount(e, theirs.HpMax, skill), now));
                         break;
                     case "buff":
                         packets.AddRange(to.Session.AddSkillBuff(skill, e, 0, now));
@@ -119,7 +123,7 @@ public sealed partial class GameSession
                     break;
                 case "dot" when e.IntervalMs > 0:
                     dots.RemoveAll(d => d.Target == npc && d.Skill == skill);   // a recast renews it
-                    var raw = RollRange(e.Flat, rng) + (double)SkillPower() * RollRange(e.Ratio, rng) / 10_000;
+                    var raw = (RollRange(e.Flat, rng) + (double)SkillPower() * RollRange(e.Ratio, rng) / 10_000) * data.Progression.SkillLevelScale(SkillLevel(skill));
                     dots.Add(new Dot
                     {
                         Target = npc, Skill = skill, EffectId = data.Skill(skill)?.Damage.LastOrDefault()?.EffectId ?? 0, IntervalMs = e.IntervalMs,

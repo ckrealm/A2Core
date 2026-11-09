@@ -77,6 +77,7 @@ public sealed record Hit(int Amount, bool Critical, int EffectId);
 /// Skill damage. A data-driven CANDIDATE model, not recovered retail formulas (tools/combat.py):
 /// attack = weapon roll + FixingDamage(level); raw = flat + attack * ratio / 10000 per Damage row;
 /// crit chance Critical / 1000 (capped at 0.5) for x1.5; damage = raw * 1000 / (1000 + defense), at least 1.
+/// raw is scaled by the skill level (progression.json skill_level_damage, OURS: 1 + per_level x (skill level - 1) / 10000).
 /// </summary>
 public static class Combat
 {
@@ -98,10 +99,11 @@ public static class Combat
     }
 
     public static IReadOnlyList<Hit> SkillHits(GameData data, int skillId, string? className, int level, int? weaponItem,
-        int targetDefense, Random rng, bool pvp = false, int fixingBonus = 0)
+        int targetDefense, Random rng, bool pvp = false, int fixingBonus = 0, int skillLevel = 1)
     {
         var definition = data.Skill(skillId);
         if (definition is null) return [];
+        var levelScale = data.Progression.SkillLevelScale(skillLevel);
         var weapon = data.WeaponStatsOf(weaponItem);
         // A FixingDamage buff (skill-effects.json, OURS) adds to the attack like the level's own FixingDamage.
         var fixing = data.BaseStats(className, level).GetValueOrDefault("FixingDamage") + fixingBonus;
@@ -111,7 +113,7 @@ public static class Combat
         {
             var (flat, ratio) = pvp && row.Pvp is { } p ? (p.Flat, p.Ratio) : (row.Flat, row.Ratio);
             var attack = rng.Next(Math.Min(weapon.Min, weapon.Max), Math.Max(weapon.Min, weapon.Max) + 1) + fixing;
-            double raw = Roll(flat, rng) + attack * Roll(ratio, rng) / 10000.0;
+            double raw = (Roll(flat, rng) + attack * Roll(ratio, rng) / 10000.0) * levelScale;
             var critical = rng.NextDouble() < criticalChance;
             if (critical) raw *= CriticalMultiplier;
             hits.Add(new Hit(Mitigate(raw, targetDefense), critical, row.EffectId));
