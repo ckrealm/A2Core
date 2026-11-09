@@ -133,9 +133,11 @@ sed "s#@PG_BIN@#$PG_BIN#" "$REPO/deploy/linux/aion-postgres.service" > /etc/syst
 cp "$REPO/deploy/linux/aion-host.service" /etc/systemd/system/aion-host.service
 # Nightly database backups (deploy/linux/backup.sh; settings in /etc/aion/backup.env, see README "Backups").
 install -d -m 755 /opt/aion/bin
-install -m 755 "$REPO/deploy/linux/backup.sh" "$REPO/deploy/linux/restore.sh" /opt/aion/bin/
+install -m 755 "$REPO/deploy/linux/backup.sh" "$REPO/deploy/linux/restore.sh" "$REPO/deploy/linux/backup-paths.sh" /opt/aion/bin/
 install -d -o aion -g aion -m 750 $STATE/backups
 cp "$REPO/deploy/linux/aion-backup.service" "$REPO/deploy/linux/aion-backup.timer" /etc/systemd/system/
+# Custom backup folders in backup.env (AION_BACKUP_DIR, AION_BACKUP_COPY_DIR) become the unit's ReadWritePaths (drop-in).
+AION_NO_RELOAD=1 /opt/aion/bin/backup-paths.sh
 systemctl daemon-reload
 systemctl enable --now aion-postgres
 systemctl enable aion-host

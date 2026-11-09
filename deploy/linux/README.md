@@ -207,7 +207,24 @@ sudo systemctl disable --now aion-backup.timer                          # no nig
 sudo /opt/aion/bin/backup.sh --keep 30                                  # by hand (as root or aion)
 ```
 
-The unit may write only to `/var/lib/aion/backups`; keep copies elsewhere (another disk or machine) with your own job.
+**Other folders and an off-machine copy.** The unit is sandboxed (`ProtectSystem=strict`): it may write only to
+`/var/lib/aion/backups` and the folders `backup-paths.sh` lists for it. To back up elsewhere (`AION_BACKUP_DIR`), or to
+copy every verified backup to a second place such as another disk or a network mount (`AION_BACKUP_COPY_DIR`, with its
+own retention `AION_BACKUP_COPY_KEEP`, default the same as `AION_BACKUP_KEEP`), set them in `/etc/aion/backup.env` and
+run `backup-paths.sh` once; it creates the folders and writes the drop-in
+`/etc/systemd/system/aion-backup.service.d/10-backup-paths.conf` (install.sh, and so update.sh, runs it too):
+
+```bash
+echo 'AION_BACKUP_COPY_DIR=/mnt/backup-disk/a2core' | sudo tee -a /etc/aion/backup.env
+echo 'AION_BACKUP_COPY_KEEP=30' | sudo tee -a /etc/aion/backup.env
+sudo /opt/aion/bin/backup-paths.sh
+sudo systemctl start aion-backup && journalctl -u aion-backup -n 20     # "Copied to ..." at the end
+```
+
+The copy is written as `.partial`, compared byte for byte with the local backup, then renamed; only
+`<prefix>-<time>.dump` files are pruned there. A failed copy (say the disk is not mounted) keeps the local backup,
+prunes nothing in the copy folder and fails the unit (`systemctl --failed`, `journalctl -u aion-backup`). Folders under
+`/home`, `/root` or `/run/user` are refused (the unit cannot see them: `ProtectHome`).
 
 Restore:
 
