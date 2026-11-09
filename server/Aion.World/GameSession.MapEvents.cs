@@ -110,6 +110,7 @@ public sealed partial class GameSession : IMapEventHost
         if (copy == 0 && !IsAdmin && events.Count > 0 && !events.Any(e => new MapEventRun(e, 0, this, now).Holds(e.Start, now))) return [];
         if (!IsAdmin && !MeetsEntry(room, out var why)) { Note($"dungeon {room.Name}: entry refused ({why})"); return []; }
         if (!IsAdmin && !WithinEntryLimit(dungeonId, room, joining, now, out var over)) { Note($"dungeon {room.Name}: entry refused ({over})"); return []; }
+        if (joining is not null && OutOfRevivesIn(joining)) { Note($"dungeon {room.Name}: entry refused (no revives left in this copy)"); return []; }
         var at = position ?? spawn?.Position ?? default;
         var arrival = MapEventData.Volume(room.Map) is { } volume && volume.Base == worldMap ? at : ArrivalPoint(room) ?? at;
         instanceReturn = (worldMap, at);
