@@ -35,7 +35,7 @@ public sealed partial class GameSession
         range is not { Length: > 0 } ? 0 : random.Next(Math.Min(range[0], range[^1]), Math.Max(range[0], range[^1]) + 1);
 
     /// <summary>The attack heals and dots scale with (Combat.Power, with this player's FixingDamage buffs).</summary>
-    int SkillPower() => Combat.Power(data, className, level, equippedWeapon, rng, BuffStat("FixingDamage"));
+    int SkillPower() => Combat.Power(data, className, level, StatWeapon, rng, BuffStat("FixingDamage"));
 
     /// <summary>
     /// heal = (flat + power x ratio / 10000 + the target's HPMax x hp_ratio / 10000) x the caster's skill-level scale

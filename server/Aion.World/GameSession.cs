@@ -2104,7 +2104,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         foreach (var target in chosen.Where(t => t.Hostile).ToList())
         {
             if (target.Dead) continue;
-            var hits = Combat.SkillHits(data, skill, className, level, equippedWeapon, target.Defense, rng, fixingBonus: BuffStat("FixingDamage") + DaevanionStat("FixingDamage"), skillLevel: CombatSkillLevel(skill));
+            var hits = Combat.SkillHits(data, skill, className, level, StatWeapon, target.Defense, rng, fixingBonus: BuffStat("FixingDamage") + DaevanionStat("FixingDamage"), skillLevel: CombatSkillLevel(skill));
             replies.AddRange(HitTarget(target, skill, hits, now));
         }
         return replies;
@@ -2365,6 +2365,20 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
 
     int EquipItemLevel() => inventory.Values.Where(i => i.Container == InventoryItem.Equipped).Sum(i => i.Detail?.ItemLevel ?? 0);
 
+    /// <summary>
+    /// The item whose weapon stats this character hits with (GameData.StatWeapon, OURS): the equipped weapon, or for a Brawler's
+    /// gauntlet a Greatsword of its gear level: the character level or the mean ItemLevel of the other worn items, the higher.
+    /// </summary>
+    int? StatWeapon
+    {
+        get
+        {
+            if (data.Item(equippedWeapon) is not { Category: "Gauntlet" }) return equippedWeapon;
+            var worn = inventory.Values.Where(i => i.Container == InventoryItem.Equipped && i.Slot != 1).Select(i => data.ItemLevel(i.ItemId)).ToList();
+            return data.StatWeapon(equippedWeapon, Math.Max(level, worn.Count == 0 ? 0 : (int)worn.Average()));
+        }
+    }
+
     /// <summary>The weapon in equip slot 1; development logins (no store) keep the class starter weapon.</summary>
     int? WeaponFromInventory() =>
         inventory.Values.FirstOrDefault(i => i.Container == InventoryItem.Equipped && i.Slot == 1)?.ItemId ?? (Store is null ? data.StarterWeapon(Profile()) : null);
@@ -2387,7 +2401,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         var (stats, hpMax) = StatSheet();
         int Of(int type) => stats.FirstOrDefault(s => s.Type == type).Value;
         var gear = EquippedItems().ToList();
-        var weapon = data.WeaponStatsOf(equippedWeapon);
+        var weapon = data.WeaponStatsOf(StatWeapon);
         var attack = (weapon.Min + weapon.Max) / 2.0 + data.BaseStats(className, level).GetValueOrDefault("FixingDamage")
             + gear.Sum(i => i.Stat("WeaponFixingDamage"));
         return data.Progression.CombatPower(new Dictionary<string, double>
@@ -2410,7 +2424,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         var basis = data.BaseStats(className, level);
         var hpMax = Math.Max(1, (basis.GetValueOrDefault("HPMax") is > 0 and var hp ? hp : GamePackets.SpawnHpMax) + gear.Sum(i => i.Stat("HPMax")) + EnchantStat("HPMax") + RideStat("HPMax")
             + BuffStat("HPMax") + BoardStat("HPMax") + TitleStat("HPMax") + DaevanionStat("HPMax"));
-        var weapon = data.WeaponStatsOf(equippedWeapon);
+        var weapon = data.WeaponStatsOf(StatWeapon);
         var stats = GamePackets.DefaultStats.Select(s => s.Type switch
         {
             31 => (s.Type, weapon.Max + EnchantStat("WeaponDamage")), 33 => (s.Type, weapon.Min + EnchantStat("WeaponMinDamage")),
