@@ -248,7 +248,15 @@ def main(argv=None):
     found = {int(v) for v in sql(f'SELECT template_id FROM catalog.skills WHERE build_id={literal(build_id)};').stdout.split()}
     missing = sorted({s for _, s, _, _ in rows} - found)
     if missing:
-        raise SystemExit(f'Catalogue build lacks {len(missing)} unlock skills, e.g. {missing[:5]}')
+        # OURS unlocks (tools/data/progression.json) come from the client's developer kits; a catalogue without one
+        # of them only loses that unlock. Recovered unlocks stay strict.
+        ours = {s for unlocks in json.loads((ROOT / 'tools/data/progression.json').read_text(encoding='utf-8'))
+                .get('generated', {}).get('unlocks', {}).values() for s, *_ in unlocks}
+        strict = [s for s in missing if s not in ours]
+        if strict:
+            raise SystemExit(f'Catalogue build lacks {len(strict)} unlock skills, e.g. {strict[:5]}')
+        print(f'Warning: skipping {len(missing)} OURS unlock skills the catalogue lacks: {missing[:10]}')
+        rows = [r for r in rows if r[1] not in set(missing)]
     synced = sql(install_statements(build_id, rows)).stdout.split()
     print(f'Installed {len(rows)} unlock rows for {len({c for c, *_ in rows})} creation IDs; '
           f'resynced {synced[-1] if synced else 0} characters.')

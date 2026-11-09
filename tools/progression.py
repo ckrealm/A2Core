@@ -116,6 +116,7 @@ def build(params, rules, dev_buttons):
     unlocks, skills, levels = {}, {}, {}
     for class_name, cls in rules['classes'].items():
         extras = extra_skills(class_name, rules['classes'], rules['common_unlocks'], dev_buttons)
+        extras = [s for s in extras if s not in set(unlock.get('exclude', []))]
         if not extras or not cls['unlocks']:
             continue
         placed = spread(extras, first, last)

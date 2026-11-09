@@ -4,7 +4,11 @@
   "unlock": {
    "about": "OURS. SkillAcquireData auto-learn rows end at level 25. The skills the client's developer kit Class_<class> (DevTeleportDataTable, dev-menu.json) lists for a class but no recovered unlock gives it are spread evenly over first_level..last_level (null = the level cap).",
    "first_level": 26,
-   "last_level": null
+   "last_level": null,
+   "exclude": [
+    11000001
+   ],
+   "exclude_about": "OURS. Kit skills left out because the released server data bundle (v0.1.0 catalogue) has no entry for them; class_skills.py install now skips (with a warning) any OURS unlock the catalogue lacks. 11000001: unnamed Gladiator passive."
   },
   "skill_level_damage": {
    "about": "OURS. Damage, heals and damage over time grow by per_level (1/10000) for each skill level above 1 (skill levels are bought with skill points, GameSession.SkillLevels.cs). No SkillEffect rows per skill level were exported.",
@@ -82,58 +86,53 @@
      1
     ],
     [
-     11000001,
-     32,
+     11700000,
+     33,
      1
     ],
     [
      11110000,
-     38,
+     39,
      1
     ],
     [
      11130000,
-     44,
+     46,
      1
     ],
     [
      11240000,
-     51,
+     53,
      1
     ],
     [
      11250000,
-     57,
+     60,
      1
     ],
     [
      11340000,
-     63,
-     1
-    ],
-    [
-     11700000,
-     69,
+     66,
      1
     ],
     [
      11380000,
-     75,
+     73,
      1
     ],
     [
      11390000,
-     82,
+     80,
      1
     ],
     [
      11400000,
-     88,
+     87,
      1
     ],
     [
      11410000,
-     94,
+     93,
      1
     ],
     [
@@ -655,7 +654,7 @@
      11200000
     ]
    },
-   "11000001": {
+   "11700000": {
     "name": null,
     "type": "Passive",
     "target": "Self",
@@ -966,23 +965,6 @@
      11100000,
      11300000
     ]
-   },
-   "11700000": {
-    "name": null,
-    "type": "Passive",
-    "target": "Self",
-    "weapons": [
-     "Greatsword"
-    ],
-    "cooldown_ms": 0,
-    "casting_ms": 0,
-    "cost": {
-     "mp": 0,
-     "hp": 0,
-     "sp": 0
-    },
-    "damage": [],
-    "ours": true
    },
    "11380000": {
     "name": null,
@@ -5780,277 +5762,277 @@
     [
      2,
      1,
-     41
+     42
     ],
     [
      3,
      1,
-     44
+     45
     ],
     [
      4,
      1,
-     47
+     48
     ],
     [
      5,
      2,
-     50
+     51
     ],
     [
      6,
      2,
-     53
+     54
     ],
     [
      7,
      2,
-     56
+     57
     ],
     [
      8,
      4,
-     59
+     60
     ],
     [
      9,
      4,
-     62
+     63
     ],
     [
      10,
      4,
-     65
+     66
     ]
    ],
    "11130000": [
     [
      2,
      1,
-     47
+     49
     ],
     [
      3,
      1,
-     50
+     52
     ],
     [
      4,
      1,
-     53
+     55
     ],
     [
      5,
      2,
-     56
+     58
     ],
     [
      6,
      2,
-     59
+     61
     ],
     [
      7,
      2,
-     62
+     64
     ],
     [
      8,
      4,
-     65
+     67
     ],
     [
      9,
      4,
-     68
+     70
     ],
     [
      10,
      4,
-     71
+     73
     ]
    ],
    "11240000": [
     [
      2,
      1,
-     54
+     56
     ],
     [
      3,
      1,
-     57
+     59
     ],
     [
      4,
      1,
-     60
+     62
     ],
     [
      5,
      2,
-     63
+     65
     ],
     [
      6,
      2,
-     66
+     68
     ],
     [
      7,
      2,
-     69
+     71
     ],
     [
      8,
      4,
-     72
+     74
     ],
     [
      9,
      4,
-     75
+     77
     ],
     [
      10,
      4,
-     78
+     80
     ]
    ],
    "11250000": [
     [
      2,
      1,
-     60
+     63
     ],
     [
      3,
      1,
-     63
+     66
     ],
     [
      4,
      1,
-     66
+     69
     ],
     [
      5,
      2,
-     69
+     72
     ],
     [
      6,
      2,
-     72
+     75
     ],
     [
      7,
      2,
-     75
+     78
     ],
     [
      8,
      4,
-     78
+     81
     ],
     [
      9,
      4,
-     81
+     84
     ],
     [
      10,
      4,
-     84
+     87
     ]
    ],
    "11340000": [
     [
      2,
      1,
-     66
+     69
     ],
     [
      3,
      1,
-     69
+     72
     ],
     [
      4,
      1,
-     72
+     75
     ],
     [
      5,
      2,
-     75
+     78
     ],
     [
      6,
      2,
-     78
+     81
     ],
     [
      7,
      2,
-     81
+     84
     ],
     [
      8,
      4,
-     84
+     87
     ],
     [
      9,
      4,
-     87
+     90
     ],
     [
      10,
      4,
-     90
+     93
     ]
    ],
    "11380000": [
     [
      2,
      1,
-     78
+     76
     ],
     [
      3,
      1,
-     81
+     79
     ],
     [
      4,
      1,
-     84
+     82
     ],
     [
      5,
      2,
-     87
+     85
     ],
     [
      6,
      2,
-     90
+     88
     ],
     [
      7,
      2,
-     93
+     91
     ],
     [
      8,
      4,
-     96
+     94
     ],
     [
      9,
      4,
-     99
+     97
     ],
     [
      10,
@@ -6062,32 +6044,32 @@
     [
      2,
      1,
-     85
+     83
     ],
     [
      3,
      1,
-     88
+     86
     ],
     [
      4,
      1,
-     91
+     89
     ],
     [
      5,
      2,
-     94
+     92
     ],
     [
      6,
      2,
-     97
+     95
     ],
     [
      7,
      2,
-     100
+     98
     ],
     [
      8,
@@ -6109,22 +6091,22 @@
     [
      2,
      1,
-     91
+     90
     ],
     [
      3,
      1,
-     94
+     93
     ],
     [
      4,
      1,
-     97
+     96
     ],
     [
      5,
      2,
-     100
+     99
     ],
     [
      6,
@@ -6156,12 +6138,12 @@
     [
      2,
      1,
-     97
+     96
     ],
     [
      3,
      1,
-     100
+     99
     ],
     [
      4,
