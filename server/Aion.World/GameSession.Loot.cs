@@ -11,7 +11,9 @@ namespace Aion.World;
 // OURS on top: monsters without a reward table roll the generic level table (Aion:Rules:FallbackLoot), every monster
 // pays Kinah (MonsterRewards), and a party member's kill is shared with the members nearby (Aion:Rules:PartyLoot, the
 // members of the experience share): the killer's part lies on the ground as before, the others' part is granted straight
-// to their bags on their own loops (the same grant and inventory messages as a pickup); Kinah is split evenly.
+// to their bags on their own loops (the same grant and inventory messages as a pickup); Kinah is split evenly. A share
+// that cannot go to the bag (the member is dead, the bag is full, the store fails) lies on the ground at the kill site
+// for that member instead (its own drops, the same path as the killer's part), so nothing a kill gave is lost.
 // Aion:Loot (OURS, LootRules): class-aware and duplicate-avoiding equipment picks, bad-luck protection per character and monster.
 public sealed partial class GameSession
 {
@@ -47,21 +49,27 @@ public sealed partial class GameSession
                 : LootTables.Embedded.Roll(target.NpcId, profileRace, rng, pick, boost, me is null ? null : me.IsEquipment));
         rolled = options.Rates.WithKinah(rolled);
         var kinah = options.Rates.KinahAmount(MonsterRewards.Embedded.Kinah(target.SubType, target.Level, rng));
-        var mine = ShareLootWithParty(rolled, kinah, loot.Counts(target.SubType) ? kill : null);
+        var mine = ShareLootWithParty(rolled, kinah, loot.Counts(target.SubType) ? kill : null, target.Position);
         if (pity) mine = WithPity(mine, kill, me!);
-        if (mine.Count == 0) return [];
+        return PlaceDrops(mine, target.Position, now);
+    }
+
+    /// <summary>Lays items on the ground around <paramref name="center"/> for this player (0x561e), or nothing.</summary>
+    List<byte[]> PlaceDrops(IReadOnlyList<(int ItemId, long Count)> items, Vector3d center, long now)
+    {
+        if (items.Count == 0) return [];
         var placed = new List<DropItem>();
-        foreach (var (item, count) in mine)
+        foreach (var (item, count) in items)
         {
             dropCounter++;
             var key = FirstDropKey + dropCounter % 40_000;
             var uid = ((long)playerKey << 32) | (uint)dropCounter;
             var angle = rng.NextDouble() * 2 * Math.PI;
             var radius = 60 + rng.NextDouble() * 90;
-            var at = target.Position with { X = target.Position.X + Math.Cos(angle) * radius, Y = target.Position.Y + Math.Sin(angle) * radius };
-            var drop = new GroundDrop(key, uid, item, count, target.Position, at, now + DropLifetimeMs);
+            var at = center with { X = center.X + Math.Cos(angle) * radius, Y = center.Y + Math.Sin(angle) * radius };
+            var drop = new GroundDrop(key, uid, item, count, center, at, now + DropLifetimeMs);
             drops[uid] = drop;
-            placed.Add(new DropItem(key, target.Position, at, uid, item, (int)Math.Min(int.MaxValue, count), selected?.WireId ?? playerKey,
+            placed.Add(new DropItem(key, center, at, uid, item, (int)Math.Min(int.MaxValue, count), selected?.WireId ?? playerKey,
                 now + DropLifetimeMs, (byte)profileRace));
         }
         return [LootPackets.DropItems(placed)];
@@ -70,8 +78,9 @@ public sealed partial class GameSession
     /// <summary>
     /// Aion:Rules:PartyLoot over a kill's items and Kinah among the killer and its party members nearby (NearbyPartyMembers,
     /// as the experience share). The other members' parts are granted on their loops (ShareLoot); the killer's part is returned.
+    /// <paramref name="killSite"/> (default: the killer's position) is where a member's part lands if its bag cannot take it.
     /// </summary>
-    internal List<(int ItemId, long Count)> ShareLootWithParty(List<(int ItemId, long Count)> items, long kinah, LootKill? kill = null)
+    internal List<(int ItemId, long Count)> ShareLootWithParty(List<(int ItemId, long Count)> items, long kinah, LootKill? kill = null, Vector3d? killSite = null)
     {
         var rule = options.Rules.LootRule;
         var members = rule == PartyLootRule.Killer || worldPlayer is null ? [] : NearbyPartyMembers();
@@ -96,20 +105,27 @@ public sealed partial class GameSession
             if (shares[i] > 0) parts[everyone[i]].Add((KinaItemId, shares[i]));
         // With bad-luck protection every member nearby hears of the kill (its own dry count), even with an empty share.
         foreach (var member in members)
-            if (parts[member].Count > 0 || kill is not null) member.Session.ShareLoot(parts[member], kill);
+            if (parts[member].Count > 0 || kill is not null) member.Session.ShareLoot(parts[member], killSite ?? position ?? Vector3d.Zero, kill);
         return parts[worldPlayer!];
     }
 
-    /// <summary>Loot a party member's kill gave this player: granted on this player's own loop (its store, its messages).</summary>
-    public void ShareLoot(IReadOnlyList<(int ItemId, long Count)> items, LootKill? kill = null, CancellationToken ct = default) =>
-        _ = InvokeAsync(async now => (true, await GrantSharedLootAsync(items, kill, now, ct)));
+    /// <summary>
+    /// Loot a party member's kill gave this player: granted on this player's own loop (its store, its messages); if the bag
+    /// cannot take it, it lies on the ground at <paramref name="killSite"/> for this player. (A share still queued when this
+    /// player's connection ends is dropped with the connection's other pending work.) <paramref name="kill"/>: the kill, for
+    /// this member's own Aion:Loot dry count.
+    /// </summary>
+    public void ShareLoot(IReadOnlyList<(int ItemId, long Count)> items, Vector3d killSite, LootKill? kill = null, CancellationToken ct = default) =>
+        _ = InvokeAsync(async now => (true, await GrantSharedLootAsync(items, killSite, kill, now, ct)));
 
     /// <summary>Item and Kinah lines this player received from party members' kills.</summary>
     public long SharedLootReceived { get; private set; }
 
-    async Task<List<byte[]>> GrantSharedLootAsync(IReadOnlyList<(int ItemId, long Count)> items, LootKill? kill, long now, CancellationToken ct)
+    /// <summary>Item and Kinah lines of shares that went to the ground instead (dead, bag full, store error).</summary>
+    public long SharedLootDropped { get; private set; }
+
+    async Task<List<byte[]>> GrantSharedLootAsync(IReadOnlyList<(int ItemId, long Count)> items, Vector3d killSite, LootKill? kill, long now, CancellationToken ct)
     {
-        if (dead) return [];
         // Aion:Loot on this member's own loop: another class's weapon becomes this class's; this member's dry kills and guarantee.
         if (options.Loot.ClassAware || kill is not null && options.Loot.BadLuckProtection)
         {
@@ -118,11 +134,12 @@ public sealed partial class GameSession
             if (kill is not null && PityCounts(kill, me)) items = WithPity([.. items], kill, me);
         }
         if (items.Count == 0) return [];
+        if (dead) return DropSharedLoot(items, killSite, now);
         var replies = new List<byte[]>();
         if (Store is { } store && CharacterId is { } character)
         {
             var granted = await Stored(async () => await store.GrantLootAsync(character, items, ct) ? [[]] : []);
-            if (granted.Count == 0) return [];
+            if (granted.Count == 0) return DropSharedLoot(items, killSite, now);
             replies.AddRange(await InventoryChangesAsync(ct, IncreaseDropItemGet, 0));
             replies.AddRange(await AutoUseAsync(items.Select(i => i.ItemId), now, ct));
         }
@@ -174,6 +191,13 @@ public sealed partial class GameSession
 
     /// <summary>Equipment items bad-luck protection guaranteed to this player (for checks).</summary>
     public int PityDrops { get; private set; }
+
+    /// <summary>A share the bag could not take: on the ground at the kill site for this player (picked up later, or it expires).</summary>
+    List<byte[]> DropSharedLoot(IReadOnlyList<(int ItemId, long Count)> items, Vector3d killSite, long now)
+    {
+        SharedLootDropped += items.Count;
+        return PlaceDrops(items, killSite, now);
+    }
 
     /// <summary>Pet souls (and pets) are used as soon as they are acquired (Item.dat AutoUseWhenAcquire).</summary>
     async Task<List<byte[]>> AutoUseAsync(IEnumerable<int> itemIds, long now, CancellationToken ct)

@@ -39,3 +39,11 @@
 - **Account warehouse** (`Aion:Alts:SharedWarehouse`, on): the Storage NPC's warehouse (container 2, `kStorage`) is shared by the account's characters on the world; old per-character warehouses join it on load. Moves are locked per account and revision-checked, and the account's other online characters are refreshed, so two sessions of one account cannot duplicate items. Soul-bound items stay out.
 - **Player mail** (`Aion:Alts:PlayerMail`, on; `MailFee` 0, `MailDays` 365): `//mail <name> <subject> | <text>`, `//sendkinah <name> <amount>`, `//senditem <name> <bag slot> [count]`. The client has no send request, so these are chat commands; mail arrives in the real mailbox and items keep their upgrades.
 - Migration 040, `docs/friends-server/ALTS.md`, checks in Aion.Native.Checks and Aion.Persistence.Checks.
+
+## 2026-11-09 — Market and market bot (`//ah`)
+- **Auction house in chat**: `//ah search|list|more|buy|sell|mine|cancel|price` for every player with a stored character. Listed items wait in escrow (enchants kept), buyers pay Kinah from the bag, sellers are paid by mail minus `SaleTaxPercent` (5%), unsold items return after `ListingHours` (48). Per world unless `CrossWorld`.
+- **Seller bot** ("Market Trader", like `mod-ah-bot`): keeps `TargetListings` (250) listings of crafting materials and crafted items (equipment optional, level range, include/exclude, fixed prices) at 3× their vendor value ±20%.
+- **Buyer bot**: buys player listings priced up to 2× vendor value after 10 minutes, by chance, a few per cycle, at most 1,000,000 Kinah a day. It always pays less than the seller bot's lowest price and NPC merchants' prices, so nothing can be resold to it at a profit.
+- Config `Aion:Market:*` (all on by default), migration `040_market.sql`, `docs/MARKET.md`. 78 checks (`tests/Aion.Market.Checks`, `tools/check_market.py`).
+- Not yet: the client's own Trade Post window (its browse protocol is not captured).
+- **Reference prices** (`Aion:Market:PriceFile`, CSV or JSON): the bots follow a price table (e.g. official NA East Siel prices) instead of vendor values; the buyer pays at most 80% of the reference, so overpriced listings stay unsold. No licensed live feed exists, so the table is filled by hand (`deploy/market-prices.example.csv`).
