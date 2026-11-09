@@ -90,6 +90,7 @@ public sealed partial class GameSession
         var broadcast = PlayerPackets.LevelBroadcast(playerKey, level);
         worldPlayer?.Map?.Broadcast(worldPlayer, [broadcast]);
         replies.Add(broadcast);
+        replies.AddRange(await DaevanionLevelUpAsync(ct));
         replies.AddRange(RefreshStats());
         if (resources is { } r)
         {

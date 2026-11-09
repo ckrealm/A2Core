@@ -44,7 +44,7 @@ TABLES = ROOT / 'research/local/pet-tables-20261016'
 CATALOG = ROOT / 'research/local/game-catalog-v2/entries.jsonl'
 MAP_EVENTS = ROOT / 'tools/data/map-events.json'
 EFFECTS = {'RewardBox', 'GetVehicle', 'GetVehicleSoul', 'GetVehicleSoulCrystal', 'Fix_VehicleCreatureLevel', 'Skill', 'Telpo_Home', 'GetKina', 'GetNonBindingKina',
-           'GetTitle', 'GetSkin', 'GetSkinSet', 'GetSocialAction'}
+           'GetTitle', 'GetSkin', 'GetSkinSet', 'GetSocialAction', 'GetDaevanionPoint', 'Fix_DaevanionPoint'}
 CRYSTALS = {'SoulCrystalFeral': 1, 'SoulCrystalIntellect': 2, 'SoulCrystalNature': 3, 'SoulCrystalTrans': 4, 'SoulCrystalSpecial': 5,
             'SoulCrystalAll': 6}   # usmap ESoulCrystalType
 CREATURES = {'Intellect': 2, 'Feral': 3, 'Nature': 4, 'Trans': 5, 'Special': 6}   # usmap ECreatureType
