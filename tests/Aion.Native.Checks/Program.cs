@@ -3019,6 +3019,191 @@ checks = 0;
     await bots.TickAsync(t += 50);
     Check(bots.All.Count == 0, "a bot whose leader left the world (lobby, logout) leaves on the next tick");
 }
+// Playerbots looking after their group: heals, resurrection, buffs, self-defence, a tank, looting, party dungeons.
+{
+    var supWorld = new SharedWorld(data);
+    // The table with one resurrection of our own (the class data has none): Divine Aura (17150000) revives a dead ally.
+    using var effectsStream = typeof(SkillEffectTable).Assembly.GetManifestResourceStream("skill-effects.json")!;
+    var effectsJson = System.Text.Json.Nodes.JsonNode.Parse(effectsStream)!;
+    effectsJson["skills"]!["17150000"] = System.Text.Json.Nodes.JsonNode.Parse("""{"name": "Rez", "target": "dead_friendly", "effects": [{"type": "resurrect", "hp_ratio": [5000, 5000]}]}""");
+    var supTable = SkillEffectTable.Parse(effectsJson.ToJsonString());
+    var supOptions = new GameSessionOptions { World = supWorld, TrainingDummy = true, CharacterLevel = 16, SkillEffects = supTable, Rules = WorldRules.Default with { PartyLoot = "killer" } };
+    const int ClericRez = 17150000, HealingLightSkill = 17100000, ChanterDefiance = 18200000;
+    var embeddedRotations = BotRotations.Embedded;
+    var clericRotation = embeddedRotations.For("Cleric")!;
+    var withRez = clericRotation.Rotation.ToList();
+    withRez.Insert(withRez.FindIndex(s => s.Condition.Target is "self" && s.Condition.BuffMissing == true),
+        new BotRotationStep(ClericRez, "Rez", 3, new BotCondition("dead_ally", InCombat: false)));
+    var supRotations = new BotRotations
+    {
+        GlobalCooldownMs = embeddedRotations.GlobalCooldownMs, TankHateMultiplier = embeddedRotations.TankHateMultiplier,
+        Classes = new(embeddedRotations.Classes) { ["Cleric"] = clericRotation with { Rotation = [.. withRez] } },
+    };
+    Check(embeddedRotations.TankHateMultiplier > 1 && embeddedRotations.For("Cleric")!.Rotation[0] is { Skill: HealingLightSkill, Roles: ["heal"] } clericFirst
+          && clericFirst.Condition.Target == "ally" && embeddedRotations.For("Cleric")!.Roles[0] == "heal",
+          "bot-rotations.json: the Cleric opens with its ally heal (heal role), tanks have a hate multiplier");
+    long t = Now + 3_000_000;
+    var chief = new GameSession(data, supOptions, new Random(31));
+    await chief.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), t);
+    await chief.HandleAsync(new PacketWriter().U16(0x361b).String("Chief").U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), t);
+    await chief.HandleAsync(select, t);
+    await chief.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    var squad = new PlayerBots(data, new BotOptions { Enabled = true, MaxPerAccount = 3, MaxTotal = 5 }, supWorld, supRotations);
+    foreach (var (name, cls) in new[] { ("Medic", "Cleric"), ("Chant", "Chanter"), ("Guard", "Templar") })
+        Check(await squad.CommandAsync(chief, $"add {name} {cls}", t, default) == $"Summoning {name}.", $"a {cls} bot is summoned");
+    await squad.TickAsync(t += 50);
+    var medic = squad.All.Single(b => b.Name == "Medic");
+    var chant = squad.All.Single(b => b.Name == "Chant");
+    var guard = squad.All.Single(b => b.Name == "Guard");
+    Check(squad.All.All(b => b.State == PlayerBot.Phase.InWorld && b.InParty && b.Session.Level == 16) && medic.Brain!.Role == "heal" && guard.Brain!.Role == "tank"
+          && chant.Session.ClassName == "Chanter", "a full party: the leader, a heal Cleric, a Chanter and a tank Templar");
+    async Task Run(int ticks, Func<bool>? until = null)
+    {
+        for (var k = 0; k < ticks && until?.Invoke() != true; k++)
+        {
+            await squad.TickAsync(t += 50);
+            await chief.TickAsync(t);
+        }
+    }
+    await Run(40);
+
+    // Heal: the leader drops to 30%; the heal bot casts Healing Light at it.
+    chief.SetResource('H', chief.Resource.HpMax * 30 / 100);
+    var hurtHp = chief.Resource.Hp;
+    await Run(60, () => medic.Brain!.SupportLog.Any(c => c.Skill == HealingLightSkill && c.Target == chief.PlayerKey));
+    Check(medic.Brain!.SupportLog.Any(c => c.Skill == HealingLightSkill && c.Target == chief.PlayerKey) && chief.Resource.Hp > hurtHp,
+          $"a heal Cleric bot heals its hurt leader with Healing Light (HP {hurtHp} -> {chief.Resource.Hp})");
+    Check(medic.Brain.CastsSent == medic.Brain.CastsAccepted, "every heal it sends is accepted by the session's cast handler");
+    Check(!chant.Session.HasSkillBuff(ChanterDefiance, t), "out of a fight the combat buff stays down (a heal is no fight)");
+
+    // Buff upkeep: in a fight the Chanter keeps Defiance up, recast once it ran out and is off cooldown.
+    var supDummy = chief.Targets[Combat.TrainingDummyKey];
+    async Task Fight(int ticks, Func<bool>? until = null)
+    {
+        for (var k = 0; k < ticks && until?.Invoke() != true; k++)
+        {
+            if (k % 40 == 0)
+            {
+                supDummy.Hp = supDummy.HpMax;
+                await chief.HandleAsync(Cast(11020000, supDummy.Key, chief.WorldPosition!.Value), t);   // Keen Strike, the Gladiator filler (no cooldown)
+            }
+            await squad.TickAsync(t += 50);
+            await chief.TickAsync(t);
+        }
+    }
+    await Fight(200, () => chant.Session.HasSkillBuff(ChanterDefiance, t));
+    Check(chant.Session.HasSkillBuff(ChanterDefiance, t) && chant.Session.BuffStatOf("Defense") >= 200, "in a fight the Chanter bot buffs itself (Defiance)");
+    Check(guard.Brain!.FightingKey == supDummy.Key && medic.Brain.FightingKey == supDummy.Key, "the others assist the leader's target");
+    t += data.Skill(ChanterDefiance)!.CooldownMs;
+    Check(!chant.Session.HasSkillBuff(ChanterDefiance, t), "the buff ran out");
+    await Fight(200, () => chant.Brain!.SupportLog.Count(c => c.Skill == ChanterDefiance) >= 2);
+    Check(chant.Brain!.SupportLog.Count(c => c.Skill == ChanterDefiance) >= 2 && chant.Session.HasSkillBuff(ChanterDefiance, t), "once off cooldown the Chanter puts it up again");
+
+    // Resurrection out of combat: the leader dies in the fight; the Cleric waits for the fight to end, then revives it.
+    chief.NpcHitsPlayer(chief.Resource.HpMax * 2, t);
+    Check(chief.Dead, "the leader died");
+    await Run(10);
+    Check(chief.Dead && !medic.Brain.SupportLog.Any(c => c.Skill == ClericRez), "no resurrection while the group still fights");
+    await squad.CommandAsync(chief, "passive", t, default);
+    await Run(300, () => !chief.Dead);
+    Check(!chief.Dead && medic.Brain.SupportLog.Any(c => c.Skill == ClericRez && c.Target == chief.PlayerKey) && chief.Resource.Hp == chief.Resource.HpMax / 2,
+          "out of combat the Cleric bot resurrects its dead leader (half HP)");
+    await squad.CommandAsync(chief, "assist", t, default);
+    await Run(200);   // the leader's and the bots' own fights are forgotten (GameSession.AssistMemoryMs)
+
+    // Self-defence: a monster attacks the Chanter while the leader fights nothing; the bots fight it.
+    var nearStart = chief.WorldPosition!.Value;
+    static double Apart2(Vector3d a, Vector3d b) => Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
+    // Monsters that do not attack on sight (NpcData AggroType not Aggro_A), so only the forced aggro below starts a fight.
+    bool Calm(Target m) => m.Hostile && !m.Dead && !m.Aggressive && m.RunSpeed > 0 && m.Key != Combat.TrainingDummyKey && m.HpMax > 500;
+    var monsters = chief.Targets.Values.Where(Calm).ToList();
+    var (m1, m2) = monsters.SelectMany(a => monsters.Where(b => b != a && Apart2(a.Position, b.Position) < 1200).Select(b => (a, b)))
+        .OrderBy(p => Apart2(p.a.Position, nearStart)).First();
+    chief.Teleport(chief.MapId!.Value, m1.Position with { X = m1.Position.X + 400 }, t);
+    await chief.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    await Run(60);
+    var supAi = chief.SharedMap!.Ai;
+    Check(squad.All.All(b => Apart2(b.Session.WorldPosition!.Value, chief.WorldPosition!.Value) < 1500 && b.Brain!.FightingKey is null) && !m1.Dead && !m2.Dead,
+          "the party stands by two calm monsters, nobody fighting");
+    await squad.CommandAsync(chief, "passive Medic", t, default);
+    await squad.CommandAsync(chief, "passive Guard", t, default);   // the Chanter alone, so the fight is its own
+    supAi.ForceAggro(m1, chant.Session.PlayerKey, t);
+    await Run(20, () => chant.Brain!.FightingKey == m1.Key);
+    Check(chant.Brain!.FightingKey == m1.Key && chief.AttackTarget(t) is null, "a bot attacked by a monster fights back although its leader has not engaged it");
+    var m1Hp = m1.Hp;
+    await Run(100, () => m1.Hp < m1Hp);
+    Check(m1.Hp < m1Hp, $"its rotation hurts the monster ({m1Hp} -> {m1.Hp})");
+    await Run(1200, () => m1.Dead);
+    Check(m1.Dead, "the bot kills the monster that attacked it");
+    await squad.CommandAsync(chief, "assist", t, default);
+    await Run(300, () => squad.All.All(b => b.Session.LootableDrops(t).Count == 0 && b.Brain!.FightingKey is null));   // its loot, if any, before the party moves on
+
+    // Looting (Aion:Rules:PartyLoot killer): the killer's drops lie on the ground; a bot picks its own up with 0x5620 after the fight.
+    for (var killNo = 0; killNo < 12 && !squad.All.Any(b => b.Brain!.LootsSent > 0); killNo++)
+    {
+        var prey = chief.Targets.Values.Where(m => Calm(m) && m != m2)
+            .OrderBy(m => Apart2(m.Position, chief.WorldPosition!.Value)).First();
+        if (Apart2(prey.Position, chief.WorldPosition!.Value) > 1500)
+        {
+            chief.Teleport(chief.MapId!.Value, prey.Position with { X = prey.Position.X + 300 }, t);
+            await chief.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+            await Run(40);
+        }
+        prey.Hp = Math.Min(prey.Hp, 5);
+        supAi.ForceAggro(prey, guard.Session.PlayerKey, t);
+        await Run(400, () => prey.Dead && squad.All.All(b => b.Brain!.FightingKey is null && b.Session.LootableDrops(t).Count == 0));
+    }
+    await Run(200, () => squad.All.All(b => b.Session.LootableDrops(t).Count == 0));
+    var looter = squad.All.FirstOrDefault(b => b.Brain!.LootsSent > 0);
+    Check(looter is not null && looter.Session.LootableDrops(t).Count == 0 && looter.Session.GroundDrops.Count == 0,
+          "a bot that killed a monster picks up its own drops (0x5620, the client's pick-up) once the fight is over");
+
+    // Tank: a monster hits the Cleric, another the Chanter; the tank takes the one on the healer first, and its hits count
+    // tank_hate_multiplier times in the monster's hate table, so the monster turns to it.
+    m2 = chief.Targets.Values.Where(Calm).OrderBy(m => Apart2(m.Position, chief.WorldPosition!.Value)).First();
+    var m3 = chief.Targets.Values.Where(m => Calm(m) && m != m2).OrderBy(m => Apart2(m.Position, m2.Position)).First();
+    chief.Teleport(chief.MapId!.Value, m2.Position with { X = m2.Position.X + 400 }, t);
+    await chief.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    await squad.CommandAsync(chief, "passive Medic", t, default);
+    await squad.CommandAsync(chief, "passive Chant", t, default);   // the tank's hits alone reach the monster's hate table
+    await Run(60);
+    const int Sturdy = 100_000;   // the monster's HP raised for the check, so it lives through the tank's first hits
+    m2.Hp = Sturdy;
+    supAi.ForceAggro(m2, medic.Session.PlayerKey, t);
+    supAi.ForceAggro(m3, guard.Session.PlayerKey, t);
+    await Run(10, () => guard.Brain!.FightingKey is not null);
+    Check(guard.Brain!.FightingKey == m2.Key, "the tank bot picks the monster hitting the healer, not the one hitting itself");
+    var guardCasts = guard.Brain.CastsAccepted;
+    await Run(200, () => guard.Brain.CastsAccepted > guardCasts && m2.Hp < Sturdy);
+    var dealt = Sturdy - m2.Hp;
+    var m2Brain = supAi.Brains[m2.Key];
+    Check(dealt > 0 && m2Brain.Hate.GetValueOrDefault(guard.Session.PlayerKey) == (long)Math.Round(dealt * embeddedRotations.TankHateMultiplier)
+          && m2Brain.VictimKey == guard.Session.PlayerKey, $"the tank's hits count x{embeddedRotations.TankHateMultiplier} in the hate table and the monster turns to it ({dealt} damage, {m2Brain.Hate.GetValueOrDefault(guard.Session.PlayerKey)} hate)");
+    await squad.CommandAsync(chief, "assist", t, default);
+    m2.Hp = Math.Min(m2.Hp, m2.HpMax);
+    await Run(1500, () => m2.Dead && m3.Dead);
+
+    // Party dungeons: the leader uses Krao Cave's portal on map 1010; the bots in its party follow with the same portal request.
+    var portals = WorldObjects.ObjectsOn(1010);
+    var kraoAt = portals.Select((o, i) => (o, i)).First(x => x.o.Env == 1400551);
+    chief.Teleport(1010, kraoAt.o.At with { X = kraoAt.o.At.X + 50 }, t);
+    await chief.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    await Run(40);
+    Check(squad.All.All(b => b.Session.MapId == 1010), "the bots followed the leader to map 1010");
+    await chief.HandleAsync(new PacketWriter().U16(0x3636).Varint((uint)(WorldObjects.FirstKey + kraoAt.i)).ToArray(), t);
+    await chief.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    Check(chief.MapId == 600002 && chief.InstanceKey != 0, "the leader is inside Krao Cave");
+    await Run(200, () => squad.All.All(b => b.Session.InstanceKey == chief.InstanceKey));
+    Check(squad.All.All(b => b.Session.MapId == 600002 && b.Session.InstanceKey == chief.InstanceKey && b.Note is null),
+          "the bots in its party enter the same copy through the portal (the normal entry path)");
+    Check(squad.All.All(b => b.Session.SharedMap == chief.SharedMap), "they share the leader's copy of the map");
+    await chief.HandleAsync([0x04, 0x40], t);
+    await chief.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    await Run(100, () => squad.All.All(b => b.Session.InstanceKey == 0 && b.Session.MapId == 1010));
+    Check(chief.MapId == 1010 && squad.All.All(b => b.Session.InstanceKey == 0 && b.Session.MapId == 1010), "when the leader leaves the copy, the bots leave it too (0x4004)");
+    chief.ExitSharedWorld();
+    await squad.OwnerLeftAsync(chief);
+}
 Console.WriteLine($"{checks} playerbot checks passed (Aion:Bots).");
 
 int DarkCreation(GameData d) => Enumerable.Range(1, 64).First(c => d.Profile(c, 1) is { Race: 2 });

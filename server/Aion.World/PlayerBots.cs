@@ -51,6 +51,10 @@ public sealed class PlayerBot
     public BotBrain? Brain { get; internal set; }
     public bool InParty { get; internal set; }
     public string? LastError { get; internal set; }
+    /// <summary>Why the bot is not with its leader right now (an instance copy it cannot follow into), for //bot list.</summary>
+    public string? Note { get; internal set; }
+    /// <summary>The next try at following the leader into (or out of) an instance copy.</summary>
+    internal long CopyRetryAt { get; set; }
     internal WorldTurn? Turn { get; init; }
     /// <summary>Held while the bot loop works on this bot (taken before the world lock, never inside it).</summary>
     internal SemaphoreSlim Busy { get; } = new(1, 1);
@@ -94,7 +98,7 @@ public sealed class PlayerBots(GameData data, BotOptions options, SharedWorld wo
             {
                 var mine = Of(owner);
                 return mine.Count == 0 ? "No bots. //bot add <character> summons one of your characters."
-                    : "Bots: " + string.Join(", ", mine.Select(b => $"{b.Name} ({b.State}{(b.Brain is { } br ? $", {br.Movement}, {(br.Assist ? "assist" : "passive")}, {br.Role}" : "")}{(b.LastError is { } e ? ", " + e : "")})"));
+                    : "Bots: " + string.Join(", ", mine.Select(b => $"{b.Name} ({b.State}{(b.Brain is { } br ? $", {br.Movement}, {(br.Assist ? "assist" : "passive")}, {br.Role}" : "")}{(b.LastError is { } e ? ", " + e : "")}{(b.Note is { } n ? ", " + n : "")})"));
             }
             case "follow" or "stay" or "assist" or "passive":
                 return Apply(owner, who, b =>
@@ -255,6 +259,7 @@ public sealed class PlayerBots(GameData data, BotOptions options, SharedWorld wo
         }
         await Feed(bot, await session.TickAsync(now, ct), now, ct);
         if (session.Dead) return;   // the session revives it at its respawn point after GameSession.ReviveDelayMs
+        if (await FollowCopyAsync(bot, now, ct)) return;
         if (FarFromLeader(bot) is { } spot)
         {
             await Feed(bot, session.Teleport(spot.Map, spot.At, now), now, ct);
@@ -268,13 +273,89 @@ public sealed class PlayerBots(GameData data, BotOptions options, SharedWorld wo
         }
     }
 
-    /// <summary>A leader on another map (not a private copy) or beyond TeleportBeyond: the spot next to it.</summary>
+    /// <summary>A leader on another map or beyond TeleportBeyond, in the same copy as the bot (or both outside one): the spot next to it.</summary>
     (int Map, Vector3d At)? FarFromLeader(PlayerBot bot)
     {
         var (session, owner) = (bot.Session, bot.Owner);
-        if (owner.MapId is not { } map || owner.WorldPosition is not { } lead || session.WorldPosition is not { } me || owner.InstanceKey != 0) return null;
+        if (owner.MapId is not { } map || owner.WorldPosition is not { } lead || session.WorldPosition is not { } me || owner.InstanceKey != session.InstanceKey) return null;
         var near = map == session.MapId && Math.Sqrt((me.X - lead.X) * (me.X - lead.X) + (me.Y - lead.Y) * (me.Y - lead.Y)) <= options.TeleportBeyond;
         return near ? null : (map, bot.Brain!.SlotAround(lead));
+    }
+
+    /// <summary>OURS: waits between tries at following into a copy, and after a try that did not get in.</summary>
+    public const int CopyRetryMs = 3000, CopyGiveUpMs = 30_000;
+
+    static double Flat(Vector3d a, Vector3d b) => Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
+
+    /// <summary>
+    /// Instance copies (docs/PLAYERBOTS.md "Instances"). A bot in a copy its leader is not in leaves it with the client's 0x4004.
+    /// A leader in a copy the bot is not in: a bot in its party goes to where the leader entered from (a teleport, as following
+    /// does), then uses the same entry a player uses there, the dungeon's portal (0x3636) or entry NPC (0x4006); the session's
+    /// EnterPartyDungeon puts a party member into the copy a member is in, with the entry rules (MapEntrance level, item level,
+    /// quest step; a full copy) a player has. Copies with no such entry (a trigger box's solo copy, a staff EnterDungeon, sealed
+    /// one-member dungeons) are not followed: the bot waits outside. True while this step is about copies.
+    /// </summary>
+    async Task<bool> FollowCopyAsync(PlayerBot bot, long now, CancellationToken ct)
+    {
+        var (session, owner) = (bot.Session, bot.Owner);
+        if (session.InstanceKey != 0 && session.InstanceKey != owner.InstanceKey)
+        {
+            if (now < bot.CopyRetryAt) return true;
+            // Leaving a copy of its own while the leader is in another one means the try to join it failed: wait a while.
+            bot.CopyRetryAt = now + (owner.InstanceKey != 0 ? CopyGiveUpMs : CopyRetryMs);
+            await Feed(bot, await session.HandleAsync(BotRequests.LeaveInstance(), now, ct), now, ct);
+            return true;
+        }
+        if (owner.InstanceKey == 0 || session.InstanceKey == owner.InstanceKey)
+        {
+            bot.Note = null;
+            return false;
+        }
+        if (now < bot.CopyRetryAt) return true;
+        bot.CopyRetryAt = now + CopyRetryMs;
+        var room = owner.MapId is { } copyMap ? MapEventTables.Embedded.DungeonOfMap(copyMap) : null;
+        if (!bot.InParty || room is null || room.MaxMember == 1 || owner.InstanceReturn is not { } back || owner.MapId is not { } inside)
+        {
+            bot.Note = !bot.InParty ? "not in the leader's party, waits outside its instance" : "waits outside the leader's solo instance";
+            return true;
+        }
+        if (session.MapId != back.Map || session.WorldPosition is not { } me || Flat(me, back.At) > options.TeleportBeyond)
+        {
+            await Feed(bot, session.Teleport(back.Map, back.At, now), now, ct);
+            return true;
+        }
+        if (DungeonEntry(session, inside, back.At) is not { } entry)
+        {
+            bot.Note = $"no portal or entry NPC to map {inside} here, waits outside";
+            return true;
+        }
+        if (Flat(me, entry.At) > 150)
+        {
+            await Feed(bot, session.Teleport(back.Map, entry.At with { X = entry.At.X + 50 }, now), now, ct);
+            return true;
+        }
+        bot.Note = null;
+        bot.CopyRetryAt = now + entry.WaitMs + CopyRetryMs;
+        await Feed(bot, await session.HandleAsync(entry.Request, now, ct), now, ct);
+        return true;
+    }
+
+    /// <summary>The nearest portal (EnvObjData PartyDungeon/EnterDungeon) or entry NPC on the bot's map leading to the copy's map.</summary>
+    static (byte[] Request, Vector3d At, int WaitMs)? DungeonEntry(GameSession session, int copyMap, Vector3d near)
+    {
+        var tables = MapEventTables.Embedded;
+        bool Leads(int dungeon) => tables.Dungeon(dungeon)?.Map == copyMap;
+        var found = new List<(byte[] Request, Vector3d At, int WaitMs)>();
+        if (session.MapId is { } map)
+        {
+            var objects = WorldObjects.ObjectsOn(map);
+            for (var i = 0; i < objects.Count; i++)
+                if (objects[i].Portal is { } portal && portal.Any(Leads))
+                    found.Add((BotRequests.UseObject(WorldObjects.FirstKey + i, objects[i].Env), objects[i].At, objects[i].InteractTime));
+        }
+        foreach (var npc in session.Targets.Values)
+            if (!npc.Dead && tables.EntryNpc(npc.NpcId) is { Dungeon: not 0 } e && Leads(e.Dungeon)) found.Add((BotRequests.NpcConversation(npc.Key), npc.Position, 0));
+        return found.Count == 0 ? null : found.MinBy(f => Flat(f.At, near));
     }
 
     /// <summary>The null transport: drops what a client would get, answers map loads (0x3621) as the client does (0x3622).</summary>
@@ -309,7 +390,7 @@ public sealed class PlayerBots(GameData data, BotOptions options, SharedWorld wo
         }
         int slot;
         lock (gate) slot = bots.Count(b => b.Owner == owner && b != bot && b.State == PlayerBot.Phase.InWorld);
-        bot.Brain = new BotBrain(data, session, owner, Rotations.For(session.ClassName), slot, Rotations.GlobalCooldownMs);
+        bot.Brain = new BotBrain(data, session, owner, Rotations.For(session.ClassName), slot, Rotations.GlobalCooldownMs, Rotations.TankHateMultiplier);
         if (bot.State != PlayerBot.Phase.Pending) return;   // dismissed while it logged in: it leaves at once
         bot.State = PlayerBot.Phase.InWorld;
         presence?.Enter(session.CharacterName!, session, session.Store?.AccountId);

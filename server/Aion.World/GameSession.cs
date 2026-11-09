@@ -2127,7 +2127,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
             replies.Add(GamePackets.Kill(target.Key, skill, playerKey, ServerId, StoredName));
             replies.AddRange(ai.Killed(target));
         }
-        else replies.AddRange(ai.Engage(targets, target, now, playerKey, hits.Sum(h => h.Amount)));    // a hit monster chases its attacker
+        else replies.AddRange(ai.Engage(targets, target, now, playerKey, Threat(hits.Sum(h => h.Amount))));    // a hit monster chases its attacker (a tank bot counts more)
         return replies;
     }
 

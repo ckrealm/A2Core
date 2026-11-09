@@ -1,16 +1,27 @@
 {
  "marker": "OURS",
- "about": "Playerbot rotations (docs/PLAYERBOTS.md); built by tools/bot_rotations.py from class-skills.json.",
+ "about": "Playerbot rotations (docs/PLAYERBOTS.md); built by tools/bot_rotations.py from class-skills.json and skill-effects.json.",
  "global_cooldown_ms": 1000,
+ "tank_hate_multiplier": 3,
  "classes": {
   "Gladiator": {
    "weapon_type": "Greatsword",
    "range": 300,
    "roles": [
-    "tank",
-    "dps"
+    "dps",
+    "tank"
    ],
    "rotation": [
+    {
+     "skill": 11260000,
+     "name": "Defiance",
+     "level": 16,
+     "when": {
+      "target": "self",
+      "buff_missing": true,
+      "in_combat": true
+     }
+    },
     {
      "skill": 11100000,
      "name": "Ruinous Blow",
@@ -110,6 +121,16 @@
    ],
    "rotation": [
     {
+     "skill": 12260000,
+     "name": "Defiance",
+     "level": 16,
+     "when": {
+      "target": "self",
+      "buff_missing": true,
+      "in_combat": true
+     }
+    },
+    {
      "skill": 12090000,
      "name": "Punishment",
      "level": 14,
@@ -206,6 +227,16 @@
     "dps"
    ],
    "rotation": [
+    {
+     "skill": 13260000,
+     "name": "Defiance",
+     "level": 16,
+     "when": {
+      "target": "self",
+      "buff_missing": true,
+      "in_combat": true
+     }
+    },
     {
      "skill": 13360000,
      "name": "Infiltrate",
@@ -305,6 +336,75 @@
    ],
    "rotation": [
     {
+     "skill": 17100000,
+     "name": "Healing Light",
+     "level": 10,
+     "when": {
+      "target": "ally",
+      "target_hp_below": 70
+     },
+     "roles": [
+      "heal"
+     ]
+    },
+    {
+     "skill": 17100000,
+     "name": "Healing Light",
+     "level": 10,
+     "when": {
+      "target": "ally",
+      "target_hp_below": 35
+     },
+     "roles": [
+      "dps"
+     ]
+    },
+    {
+     "skill": 17120000,
+     "name": "Radiant Recovery",
+     "level": 12,
+     "when": {
+      "target": "self",
+      "target_hp_below": 50
+     }
+    },
+    {
+     "skill": 17090000,
+     "name": "Light of Regeneration",
+     "level": 7,
+     "when": {
+      "target": "ally",
+      "target_hp_below": 90,
+      "buff_missing": true
+     },
+     "roles": [
+      "heal"
+     ]
+    },
+    {
+     "skill": 17090000,
+     "name": "Light of Regeneration",
+     "level": 7,
+     "when": {
+      "target": "self",
+      "target_hp_below": 70,
+      "buff_missing": true
+     },
+     "roles": [
+      "dps"
+     ]
+    },
+    {
+     "skill": 17240000,
+     "name": "Defiance",
+     "level": 16,
+     "when": {
+      "target": "self",
+      "buff_missing": true,
+      "in_combat": true
+     }
+    },
+    {
      "skill": 17060000,
      "name": "Bolt",
      "level": 14,
@@ -369,6 +469,16 @@
     "dps"
    ],
    "rotation": [
+    {
+     "skill": 14260000,
+     "name": "Defiance",
+     "level": 16,
+     "when": {
+      "target": "self",
+      "buff_missing": true,
+      "in_combat": true
+     }
+    },
     {
      "skill": 14010000,
      "name": "Deadshot",
@@ -459,6 +569,16 @@
    ],
    "rotation": [
     {
+     "skill": 16200000,
+     "name": "Defiance",
+     "level": 16,
+     "when": {
+      "target": "self",
+      "buff_missing": true,
+      "in_combat": true
+     }
+    },
+    {
      "skill": 16070000,
      "name": "Soul's Cry",
      "level": 12,
@@ -523,6 +643,26 @@
     "dps"
    ],
    "rotation": [
+    {
+     "skill": 15240000,
+     "name": "Defiance",
+     "level": 16,
+     "when": {
+      "target": "self",
+      "buff_missing": true,
+      "in_combat": true
+     }
+    },
+    {
+     "skill": 15310000,
+     "name": "Wish of Concentration",
+     "level": 12,
+     "when": {
+      "target": "self",
+      "buff_missing": true,
+      "in_combat": true
+     }
+    },
     {
      "skill": 15110000,
      "name": "Winter's Shackles",
@@ -605,6 +745,25 @@
     "dps"
    ],
    "rotation": [
+    {
+     "skill": 18120000,
+     "name": "Recuperation",
+     "level": 8,
+     "when": {
+      "target": "self",
+      "target_hp_below": 50
+     }
+    },
+    {
+     "skill": 18200000,
+     "name": "Defiance",
+     "level": 16,
+     "when": {
+      "target": "self",
+      "buff_missing": true,
+      "in_combat": true
+     }
+    },
     {
      "skill": 18290000,
      "name": "Spinning Strike",
