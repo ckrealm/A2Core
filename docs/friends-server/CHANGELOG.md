@@ -39,3 +39,7 @@
 - Config `Aion:Market:*` (all on by default), migration `040_market.sql`, `docs/MARKET.md`. 78 checks (`tests/Aion.Market.Checks`, `tools/check_market.py`).
 - Not yet: the client's own Trade Post window (its browse protocol is not captured).
 - **Reference prices** (`Aion:Market:PriceFile`, CSV or JSON): the bots follow a price table (e.g. official NA East Siel prices) instead of vendor values; the buyer pays at most 80% of the reference, so overpriced listings stay unsold. No licensed live feed exists, so the table is filled by hand (`deploy/market-prices.example.csv`).
+
+## 2026-11-09 — Daevanion boards
+- **Daevanion boards** (`GameSession.Daevanion.cs`, `docs/DAEVANION.md`): each class's boards from the client's own tables (Brawler/Fighter included), nodes opened next to opened ones for Daevanion points, closed for Kinah, board reset, open all and open route; stats, skill levels and passives applied; per-character state in `character_settings`; point items (`GetDaevanionPoint`, `Fix_DaevanionPoint`). Config `Aion:Daevanion:*` (PointRate, ExtraPoints, FreeReset, MaxBoardLevel, DisabledBoards, LevelPoints). 20 checks + 3 Python tests.
+- The board data (`tools/data/daevanion.json`) is a placeholder until `tools/daevanion_data.py` runs on a client export (needs the archive key from the running game).

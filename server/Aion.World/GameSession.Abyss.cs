@@ -34,7 +34,7 @@ public sealed partial class GameSession
         var replies = new List<byte[]>();
         var seq = 0;
         var total = 0;
-        foreach (var hit in Combat.SkillHits(data, skill, className, level, equippedWeapon, victim.Session.Defense, rng, pvp: true, fixingBonus: BuffStat("FixingDamage"), skillLevel: SkillLevel(skill)))
+        foreach (var hit in Combat.SkillHits(data, skill, className, level, equippedWeapon, victim.Session.Defense, rng, pvp: true, fixingBonus: BuffStat("FixingDamage") + DaevanionStat("FixingDamage"), skillLevel: CombatSkillLevel(skill)))
         {
             total += hit.Amount;
             replies.Add(GamePackets.SkillHit(victim.Key, playerKey, skill, hit.EffectId, hit.Amount, hit.Critical, ++seq));

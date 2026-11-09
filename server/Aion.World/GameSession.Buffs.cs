@@ -246,13 +246,12 @@ public sealed partial class GameSession
     {
         if (resend) passiveUids.Clear();
         var fresh = new List<AbnormalWire>();
-        foreach (var skill in learned.Order())
-            foreach (var abnormal in Boxes.Passives(skill))
-            {
-                if (passiveUids.ContainsKey(abnormal)) continue;
-                var uid = passiveUids[abnormal] = FirstPassiveUid + passiveUids.Count;
-                fresh.Add(new AbnormalWire(uid, abnormal, -1, PassiveExpireTime, CasterKey: playerKey, Level: 1, RangeBase: position ?? Vector3d.Zero));
-            }
+        foreach (var abnormal in learned.Order().SelectMany(Boxes.Passives).Concat(DaevanionPassiveAbnormals()))
+        {
+            if (passiveUids.ContainsKey(abnormal)) continue;
+            var uid = passiveUids[abnormal] = FirstPassiveUid + passiveUids.Count;
+            fresh.Add(new AbnormalWire(uid, abnormal, -1, PassiveExpireTime, CasterKey: playerKey, Level: 1, RangeBase: position ?? Vector3d.Zero));
+        }
         return fresh.Count == 0 ? [] : [PlayerPackets.AbnormalAdd(playerKey, fresh)];
     }
 

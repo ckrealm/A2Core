@@ -22,9 +22,11 @@ Output tools/data/daevanion.json:
   level_points: level -> {EDaevanionPointType: points} (the Exp.dat map; cumulative or per level is decided by the server)
   currency_items: ECurrencyCategory name -> item id (when CurrencyInfo.dat was exported)
   point_items: [raw rows] naming a Daevanion point use effect
+  stats:    EStat name -> id (the usmap's enum: the stat sheet's wire ids)
 
     python tools/daevanion_data.py select <table-inventory.json> <selection.json>   # the WorldProbe selection
     python tools/daevanion_data.py build [--tables research/local/daevanion-tables]
+    python tools/daevanion_data.py empty    # the placeholder (stat ids only) before any export
 """
 import argparse
 import json
@@ -35,6 +37,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 TABLES = ROOT / 'research/local/daevanion-tables'
 DATA = ROOT / 'tools/data/daevanion.json'
+USMAP = ROOT / 'research/local/tooling/mappings/AION2-5.3.2.0-2.0.6.0.usmap'
 
 POINT_TYPES = {'None': 0, 'DaevanionCrystal': 1, 'ConquestCrystal': 2, 'BattleCrystal': 3, 'Season02Crystal01': 4, 'Season03Crystal01': 5}
 NODE_TYPES = {'None': 0, 'Start': 1, 'Stat': 2, 'Passive': 3, 'SkillLevel': 4}
@@ -92,6 +95,21 @@ def _tables(tables):
     return found
 
 
+def stat_ids(usmap=USMAP):
+    """EStat name -> id from the usmap (empty when the mapping is absent)."""
+    if not Path(usmap).exists():
+        return {}
+    sys.path.insert(0, str(ROOT / 'tools'))
+    from usmap_dump import UsmapParser
+    return {name: int(key) for key, name in UsmapParser(str(usmap)).enums.get('EStat', {}).items() if name not in ('None', 'Max')}
+
+
+def empty():
+    """The file before any client export: no boards, the stat ids only."""
+    return {'source': 'placeholder: no client export yet (tools/daevanion_data.py build)', 'boards': {}, 'nodes': {}, 'capacity': {},
+            'level_points': {}, 'currency_items': {}, 'point_items': [], 'stats': stat_ids()}
+
+
 def build(tables=TABLES):
     tables = Path(tables)
     found = _tables(tables)
@@ -142,7 +160,7 @@ def build(tables=TABLES):
                 point_items.append({'table': name, 'row': row})
     return {'source': 'DaevanionBoard/DaevanionNode/DaevanionMaxCapacity/Exp/CurrencyInfo .dat (tools/daevanion_data.py)',
             'boards': boards, 'nodes': nodes, 'capacity': capacity, 'level_points': level_points,
-            'currency_items': currency_items, 'point_items': point_items}
+            'currency_items': currency_items, 'point_items': point_items, 'stats': stat_ids()}
 
 
 def main():
@@ -154,6 +172,8 @@ def main():
     bld = sub.add_parser('build')
     bld.add_argument('--tables', default=str(TABLES))
     bld.add_argument('--output', default=str(DATA))
+    emp = sub.add_parser('empty')
+    emp.add_argument('--output', default=str(DATA))
     args = parser.parse_args()
     if args.command == 'select':
         chosen = select(args.inventory)
@@ -161,7 +181,7 @@ def main():
         print('\n'.join(chosen))
         print(f'{len(chosen)} tables -> {args.output}', file=sys.stderr)
         return
-    data = build(args.tables)
+    data = empty() if args.command == 'empty' else build(args.tables)
     Path(args.output).write_text(json.dumps(data, separators=(',', ':'), ensure_ascii=False) + '\n', encoding='utf-8')
     classes = sorted({b['class'] for b in data['boards'].values()})
     print(f"{len(data['boards'])} boards ({', '.join(classes)}), {len(data['nodes'])} nodes, {len(data['level_points'])} levels with points, "
