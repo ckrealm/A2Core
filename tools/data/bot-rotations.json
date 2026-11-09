@@ -2360,7 +2360,7 @@
    "rotation": [
     {
      "skill": 19420000,
-     "name": "???",
+     "name": "Chain Fist",
      "level": 4,
      "when": {
       "target": "enemy",
@@ -2369,7 +2369,7 @@
     },
     {
      "skill": 19160000,
-     "name": "???",
+     "name": "Ascending Blow",
      "level": 14,
      "when": {
       "target": "enemy",
@@ -2378,7 +2378,7 @@
     },
     {
      "skill": 19070000,
-     "name": "???",
+     "name": "Whirlwind",
      "level": 3,
      "when": {
       "target": "enemy"
@@ -2386,7 +2386,7 @@
     },
     {
      "skill": 19230000,
-     "name": "???",
+     "name": "Shoulder Tackle",
      "level": 10,
      "when": {
       "target": "enemy"
@@ -2394,7 +2394,7 @@
     },
     {
      "skill": 19090000,
-     "name": "???",
+     "name": "Smite Ground",
      "level": 8,
      "when": {
       "target": "enemy"
@@ -2402,7 +2402,7 @@
     },
     {
      "skill": 19170000,
-     "name": "???",
+     "name": "Sweeping Kick",
      "level": 7,
      "when": {
       "target": "enemy"
@@ -2410,7 +2410,7 @@
     },
     {
      "skill": 19200000,
-     "name": "???",
+     "name": "Exploding Fist",
      "level": 12,
      "when": {
       "target": "enemy"
@@ -2418,7 +2418,7 @@
     },
     {
      "skill": 19420000,
-     "name": "???",
+     "name": "Chain Fist",
      "level": 4,
      "when": {
       "target": "enemy",
@@ -2426,120 +2426,120 @@
      }
     },
     {
-     "skill": 19270000,
-     "name": null,
-     "level": 32,
-     "when": {
-      "target": "enemy"
-     }
-    },
-    {
-     "skill": 19280000,
-     "name": null,
-     "level": 37,
-     "when": {
-      "target": "enemy"
-     }
-    },
-    {
-     "skill": 19300000,
-     "name": null,
-     "level": 49,
-     "when": {
-      "target": "enemy"
-     }
-    },
-    {
-     "skill": 19310000,
-     "name": null,
-     "level": 54,
-     "when": {
-      "target": "enemy"
-     }
-    },
-    {
-     "skill": 19330000,
-     "name": null,
-     "level": 66,
-     "when": {
-      "target": "enemy"
-     }
-    },
-    {
-     "skill": 19350000,
-     "name": null,
-     "level": 72,
-     "when": {
-      "target": "enemy"
-     }
-    },
-    {
-     "skill": 19380000,
-     "name": null,
-     "level": 83,
-     "when": {
-      "target": "enemy"
-     }
-    },
-    {
-     "skill": 19390000,
-     "name": null,
-     "level": 89,
-     "when": {
-      "target": "enemy"
-     }
-    },
-    {
-     "skill": 19440000,
-     "name": null,
-     "level": 100,
-     "when": {
-      "target": "enemy"
-     }
-    },
-    {
-     "skill": 19110000,
-     "name": null,
-     "level": 26,
-     "when": {
-      "target": "enemy"
-     }
-    },
-    {
-     "skill": 19290000,
-     "name": null,
-     "level": 43,
-     "when": {
-      "target": "enemy"
-     }
-    },
-    {
-     "skill": 19320000,
-     "name": null,
-     "level": 60,
-     "when": {
-      "target": "enemy"
-     }
-    },
-    {
      "skill": 19360000,
-     "name": null,
+     "name": "Unstoppable",
      "level": 77,
      "when": {
       "target": "enemy"
      }
     },
     {
+     "skill": 19110000,
+     "name": "Consecutive Kicks",
+     "level": 26,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 19380000,
+     "name": "Assault Blow",
+     "level": 83,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 19280000,
+     "name": "Rage",
+     "level": 37,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 19330000,
+     "name": "Phantom",
+     "level": 66,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 19290000,
+     "name": "Surging Cleave",
+     "level": 43,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 19310000,
+     "name": "Pulverize",
+     "level": 54,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 19390000,
+     "name": "Discharge Energy",
+     "level": 89,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
      "skill": 19400000,
-     "name": null,
+     "name": "Zone Summon",
      "level": 94,
      "when": {
       "target": "enemy"
      }
     },
     {
+     "skill": 19300000,
+     "name": "Quake",
+     "level": 49,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 19320000,
+     "name": "Sever Bloodstream",
+     "level": 60,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 19270000,
+     "name": "Cyclone Kick",
+     "level": 32,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 19350000,
+     "name": "Focused Block",
+     "level": 72,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 19440000,
+     "name": "Shadow-Cleaving Fist",
+     "level": 100,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
      "skill": 19040000,
-     "name": "???",
+     "name": "Roundhouse",
      "level": 1,
      "when": {
       "target": "enemy",
@@ -2549,7 +2549,7 @@
     },
     {
      "skill": 19250000,
-     "name": "???",
+     "name": "Typhoon Flurry",
      "level": 5,
      "when": {
       "target": "enemy"
@@ -2557,7 +2557,7 @@
     },
     {
      "skill": 19010000,
-     "name": "???",
+     "name": "Flurry",
      "level": 1,
      "when": {
       "target": "enemy"

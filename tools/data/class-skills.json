@@ -13407,7 +13407,7 @@
    "damage": []
   },
   "19000100": {
-   "name": "???",
+   "name": "Dodge",
    "icon": "Skill/ICON_CO_SKILL_001",
    "type": "Active",
    "target": "Self",
@@ -13424,7 +13424,7 @@
    "damage": []
   },
   "19010000": {
-   "name": "???",
+   "name": "Flurry",
    "icon": "Skill/ICON_GT_SKILL_001",
    "type": "Active",
    "target": "MainSelf",
@@ -13508,7 +13508,7 @@
    ]
   },
   "19040000": {
-   "name": "???",
+   "name": "Roundhouse",
    "icon": "Skill/ICON_GT_SKILL_004",
    "type": "Active",
    "target": "MainSelf",
@@ -13592,7 +13592,7 @@
    ]
   },
   "19070000": {
-   "name": "???",
+   "name": "Whirlwind",
    "icon": "Skill/ICON_GT_SKILL_007",
    "type": "Active",
    "target": "MainTarget",
@@ -13632,7 +13632,7 @@
    ]
   },
   "19090000": {
-   "name": "???",
+   "name": "Smite Ground",
    "icon": "Skill/ICON_GT_SKILL_009",
    "type": "Active",
    "target": "MainTarget",
@@ -13672,7 +13672,7 @@
    ]
   },
   "19130000": {
-   "name": "???",
+   "name": "Rampage",
    "icon": "Skill/ICON_GT_SKILL_013",
    "type": "Active",
    "target": "Self",
@@ -13689,7 +13689,7 @@
    "damage": []
   },
   "19160000": {
-   "name": "???",
+   "name": "Ascending Blow",
    "icon": "Skill/ICON_GT_SKILL_016",
    "type": "Active",
    "target": "MainTarget",
@@ -13729,7 +13729,7 @@
    ]
   },
   "19170000": {
-   "name": "???",
+   "name": "Sweeping Kick",
    "icon": "Skill/ICON_GT_SKILL_017",
    "type": "Active",
    "target": "MainTarget",
@@ -13791,7 +13791,7 @@
    ]
   },
   "19200000": {
-   "name": "???",
+   "name": "Exploding Fist",
    "icon": "Skill/ICON_GT_SKILL_020",
    "type": "Active",
    "target": "MainTarget",
@@ -13831,7 +13831,7 @@
    ]
   },
   "19230000": {
-   "name": "???",
+   "name": "Shoulder Tackle",
    "icon": "Skill/ICON_GT_SKILL_023",
    "type": "Active",
    "target": "MainTarget",
@@ -13871,7 +13871,7 @@
    ]
   },
   "19250000": {
-   "name": "???",
+   "name": "Typhoon Flurry",
    "icon": "Skill/ICON_GT_SKILL_025",
    "type": "Active",
    "target": "MainTarget",
@@ -13977,7 +13977,7 @@
    ]
   },
   "19420000": {
-   "name": "???",
+   "name": "Chain Fist",
    "icon": "Skill/ICON_GT_SKILL_042",
    "type": "Active",
    "target": "MainTarget",
@@ -14017,7 +14017,7 @@
    ]
   },
   "19450000": {
-   "name": "???",
+   "name": "Defiance",
    "icon": "Skill/ICON_CO_SKILL_002",
    "type": "Active",
    "target": "Self",
@@ -14034,7 +14034,7 @@
    "damage": []
   },
   "19710000": {
-   "name": "???",
+   "name": "Hold the Line",
    "icon": "Skill/ICON_GT_SKILL_Passive_001",
    "type": "Passive",
    "target": "Self",
@@ -14051,7 +14051,7 @@
    "damage": []
   },
   "19720000": {
-   "name": "???",
+   "name": "Shatter Frontline",
    "icon": "Skill/ICON_GT_SKILL_Passive_002",
    "type": "Passive",
    "target": "Self",
@@ -14068,7 +14068,7 @@
    "damage": []
   },
   "19730000": {
-   "name": "???",
+   "name": "Mental Conversion",
    "icon": "Skill/ICON_GT_SKILL_Passive_003",
    "type": "Passive",
    "target": "Self",
@@ -14085,7 +14085,7 @@
    "damage": []
   },
   "19740000": {
-   "name": "???",
+   "name": "Dominance",
    "icon": "Skill/ICON_GT_SKILL_Passive_004",
    "type": "Passive",
    "target": "Self",
@@ -14102,7 +14102,7 @@
    "damage": []
   },
   "19750000": {
-   "name": "???",
+   "name": "Rampage Boost",
    "icon": "Skill/ICON_GT_SKILL_Passive_005",
    "type": "Passive",
    "target": "Self",
@@ -14119,7 +14119,7 @@
    "damage": []
   },
   "19760000": {
-   "name": "???",
+   "name": "Impact Hit",
    "icon": "Skill/ICON_GT_SKILL_Passive_006",
    "type": "Passive",
    "target": "Self",
@@ -14136,7 +14136,7 @@
    "damage": []
   },
   "19770000": {
-   "name": "???",
+   "name": "Massive Rage",
    "icon": "Skill/ICON_GT_SKILL_Passive_007",
    "type": "Passive",
    "target": "Self",
@@ -14153,7 +14153,7 @@
    "damage": []
   },
   "19780000": {
-   "name": "???",
+   "name": "Impact Blow",
    "icon": "Skill/ICON_GT_SKILL_Passive_008",
    "type": "Passive",
    "target": "Self",
@@ -14170,7 +14170,7 @@
    "damage": []
   },
   "19790000": {
-   "name": "???",
+   "name": "Revitalization Contract",
    "icon": "Skill/ICON_GT_SKILL_Passive_009",
    "type": "Passive",
    "target": "Self",
@@ -14187,7 +14187,7 @@
    "damage": []
   },
   "19800000": {
-   "name": "???",
+   "name": "Lightweight",
    "icon": "Skill/ICON_GT_SKILL_Passive_010",
    "type": "Passive",
    "target": "Self",

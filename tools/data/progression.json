@@ -5782,13 +5782,13 @@
     ]
    },
    "19110000": {
-    "name": null,
+    "name": "Consecutive Kicks",
     "type": "Active",
     "target": "MainTarget",
     "weapons": [
      "Gauntlet"
     ],
-    "cooldown_ms": 10000,
+    "cooldown_ms": 120000,
     "casting_ms": 0,
     "cost": {
      "mp": 0,
@@ -5798,37 +5798,38 @@
     "damage": [
      {
       "flat": [
-       472,
-       472
+       286,
+       286
       ],
       "ratio": [
-       23250,
-       23250
+       12750,
+       12750
       ],
       "value4": null,
       "pvp": {
        "flat": [
-        302,
-        302
+        260,
+        260
        ],
        "ratio": [
-        14035,
-        14035
+        11480,
+        11480
        ]
       },
       "effect_id": 1911000011
      }
     ],
     "ours": true,
-    "band": "short",
+    "band": "long",
     "comparable": [
-     19170000,
-     19200000,
-     19420000
+     19070000,
+     19090000,
+     19160000,
+     19230000
     ]
    },
    "19270000": {
-    "name": null,
+    "name": "Cyclone Kick",
     "type": "Active",
     "target": "MainTarget",
     "weapons": [
@@ -5875,13 +5876,13 @@
     ]
    },
    "19280000": {
-    "name": null,
+    "name": "Rage",
     "type": "Active",
     "target": "MainTarget",
     "weapons": [
      "Gauntlet"
     ],
-    "cooldown_ms": 20000,
+    "cooldown_ms": 90000,
     "casting_ms": 0,
     "cost": {
      "mp": 0,
@@ -5922,13 +5923,13 @@
     ]
    },
    "19290000": {
-    "name": null,
+    "name": "Surging Cleave",
     "type": "Active",
     "target": "MainTarget",
     "weapons": [
      "Gauntlet"
     ],
-    "cooldown_ms": 10000,
+    "cooldown_ms": 60000,
     "casting_ms": 0,
     "cost": {
      "mp": 0,
@@ -5938,43 +5939,44 @@
     "damage": [
      {
       "flat": [
-       472,
-       472
+       286,
+       286
       ],
       "ratio": [
-       23250,
-       23250
+       12750,
+       12750
       ],
       "value4": null,
       "pvp": {
        "flat": [
-        302,
-        302
+        260,
+        260
        ],
        "ratio": [
-        14035,
-        14035
+        11480,
+        11480
        ]
       },
       "effect_id": 1929000011
      }
     ],
     "ours": true,
-    "band": "short",
+    "band": "long",
     "comparable": [
-     19170000,
-     19200000,
-     19420000
+     19070000,
+     19090000,
+     19160000,
+     19230000
     ]
    },
    "19300000": {
-    "name": null,
+    "name": "Quake",
     "type": "Active",
     "target": "MainTarget",
     "weapons": [
      "Gauntlet"
     ],
-    "cooldown_ms": 20000,
+    "cooldown_ms": 30000,
     "casting_ms": 0,
     "cost": {
      "mp": 0,
@@ -6015,13 +6017,13 @@
     ]
    },
    "19310000": {
-    "name": null,
+    "name": "Pulverize",
     "type": "Active",
     "target": "MainTarget",
     "weapons": [
      "Gauntlet"
     ],
-    "cooldown_ms": 20000,
+    "cooldown_ms": 60000,
     "casting_ms": 0,
     "cost": {
      "mp": 0,
@@ -6062,13 +6064,13 @@
     ]
    },
    "19320000": {
-    "name": null,
+    "name": "Sever Bloodstream",
     "type": "Active",
     "target": "MainTarget",
     "weapons": [
      "Gauntlet"
     ],
-    "cooldown_ms": 10000,
+    "cooldown_ms": 30000,
     "casting_ms": 0,
     "cost": {
      "mp": 0,
@@ -6078,43 +6080,44 @@
     "damage": [
      {
       "flat": [
-       472,
-       472
+       286,
+       286
       ],
       "ratio": [
-       23250,
-       23250
+       12750,
+       12750
       ],
       "value4": null,
       "pvp": {
        "flat": [
-        302,
-        302
+        260,
+        260
        ],
        "ratio": [
-        14035,
-        14035
+        11480,
+        11480
        ]
       },
       "effect_id": 1932000011
      }
     ],
     "ours": true,
-    "band": "short",
+    "band": "mid",
     "comparable": [
-     19170000,
-     19200000,
-     19420000
+     19070000,
+     19090000,
+     19160000,
+     19230000
     ]
    },
    "19330000": {
-    "name": null,
+    "name": "Phantom",
     "type": "Active",
     "target": "MainTarget",
     "weapons": [
      "Gauntlet"
     ],
-    "cooldown_ms": 20000,
+    "cooldown_ms": 90000,
     "casting_ms": 0,
     "cost": {
      "mp": 0,
@@ -6146,7 +6149,7 @@
      }
     ],
     "ours": true,
-    "band": "mid",
+    "band": "long",
     "comparable": [
      19070000,
      19090000,
@@ -6155,7 +6158,7 @@
     ]
    },
    "19350000": {
-    "name": null,
+    "name": "Focused Block",
     "type": "Active",
     "target": "MainTarget",
     "weapons": [
@@ -6193,7 +6196,7 @@
      }
     ],
     "ours": true,
-    "band": "long",
+    "band": "mid",
     "comparable": [
      19070000,
      19090000,
@@ -6202,13 +6205,13 @@
     ]
    },
    "19360000": {
-    "name": null,
+    "name": "Unstoppable",
     "type": "Active",
     "target": "MainTarget",
     "weapons": [
      "Gauntlet"
     ],
-    "cooldown_ms": 10000,
+    "cooldown_ms": 180000,
     "casting_ms": 0,
     "cost": {
      "mp": 0,
@@ -6218,43 +6221,44 @@
     "damage": [
      {
       "flat": [
-       472,
-       472
+       286,
+       286
       ],
       "ratio": [
-       23250,
-       23250
+       12750,
+       12750
       ],
       "value4": null,
       "pvp": {
        "flat": [
-        302,
-        302
+        260,
+        260
        ],
        "ratio": [
-        14035,
-        14035
+        11480,
+        11480
        ]
       },
       "effect_id": 1936000011
      }
     ],
     "ours": true,
-    "band": "short",
+    "band": "long",
     "comparable": [
-     19170000,
-     19200000,
-     19420000
+     19070000,
+     19090000,
+     19160000,
+     19230000
     ]
    },
    "19380000": {
-    "name": null,
+    "name": "Assault Blow",
     "type": "Active",
     "target": "MainTarget",
     "weapons": [
      "Gauntlet"
     ],
-    "cooldown_ms": 20000,
+    "cooldown_ms": 120000,
     "casting_ms": 0,
     "cost": {
      "mp": 0,
@@ -6286,7 +6290,7 @@
      }
     ],
     "ours": true,
-    "band": "mid",
+    "band": "long",
     "comparable": [
      19070000,
      19090000,
@@ -6295,13 +6299,13 @@
     ]
    },
    "19390000": {
-    "name": null,
+    "name": "Discharge Energy",
     "type": "Active",
     "target": "MainTarget",
     "weapons": [
      "Gauntlet"
     ],
-    "cooldown_ms": 20000,
+    "cooldown_ms": 45000,
     "casting_ms": 0,
     "cost": {
      "mp": 0,
@@ -6342,13 +6346,13 @@
     ]
    },
    "19400000": {
-    "name": null,
+    "name": "Zone Summon",
     "type": "Active",
     "target": "MainTarget",
     "weapons": [
      "Gauntlet"
     ],
-    "cooldown_ms": 10000,
+    "cooldown_ms": 45000,
     "casting_ms": 0,
     "cost": {
      "mp": 0,
@@ -6358,37 +6362,38 @@
     "damage": [
      {
       "flat": [
-       472,
-       472
+       286,
+       286
       ],
       "ratio": [
-       23250,
-       23250
+       12750,
+       12750
       ],
       "value4": null,
       "pvp": {
        "flat": [
-        302,
-        302
+        260,
+        260
        ],
        "ratio": [
-        14035,
-        14035
+        11480,
+        11480
        ]
       },
       "effect_id": 1940000011
      }
     ],
     "ours": true,
-    "band": "short",
+    "band": "long",
     "comparable": [
-     19170000,
-     19200000,
-     19420000
+     19070000,
+     19090000,
+     19160000,
+     19230000
     ]
    },
    "19440000": {
-    "name": null,
+    "name": "Shadow-Cleaving Fist",
     "type": "Active",
     "target": "MainTarget",
     "weapons": [

@@ -26,6 +26,8 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / 'tools/data/progression.json'
 CLASS_SKILLS = ROOT / 'tools/data/class-skills.json'
 DEV_MENU = ROOT / 'tools/data/dev-menu.json'
+# Researched names and cooldowns of skills the client leaves unnamed (the Brawler: tools/brawler.py, docs/friends-server/BRAWLER.md).
+KNOWN = ROOT / 'tools/data/brawler-skills.json'
 BANDS = ('short', 'mid', 'long')
 
 
@@ -108,7 +110,8 @@ def mastery(need, params, max_level):
             for level, cost in enumerate(params['costs'], start=2)]
 
 
-def build(params, rules, dev_buttons):
+def build(params, rules, dev_buttons, known=None):
+    known = load_known() if known is None else known
     unlock = params['unlock']
     edges = params['cooldown_bands_ms']
     max_level = rules['max_level']
@@ -126,12 +129,16 @@ def build(params, rules, dev_buttons):
         for skill, need in placed:
             if str(skill) in rules['skills']:
                 continue   # recovered cast data exists
+            info = known.get(str(skill), {})
             if is_passive(skill):
-                skills[str(skill)] = passive_definition(skill, cls['weapon_type'])
+                skills[str(skill)] = dict(passive_definition(skill, cls['weapon_type']), name=info.get('name_en'))
                 continue
             band = BANDS[active_index % len(BANDS)]   # unknown cooldown: the bands in turn
             active_index += 1
-            skills[str(skill)] = fallback_definition(skill, band, pool, cls['weapon_type'])
+            if info.get('cooldown_ms'):
+                band = band_of(info['cooldown_ms'], edges)   # researched cooldown (KNOWN)
+            skills[str(skill)] = fallback_definition(skill, band, pool, cls['weapon_type'], name=info.get('name_en'),
+                                                     base={k: info[k] for k in ('cooldown_ms',) if k in info})
             if str(skill) not in rules['levels']:
                 levels[str(skill)] = mastery(need, params['mastery'], max_level)
     # Recovered active skills without Damage rows that do hit (params.damage_fallbacks, each with its reason).
@@ -145,6 +152,11 @@ def build(params, rules, dev_buttons):
                                          rules['classes'][owner]['weapon_type'], base=base)
         damage[skill_id] = definition['damage']
     return {'unlocks': unlocks, 'skills': skills, 'levels': levels, 'damage': damage}
+
+
+def load_known(path=KNOWN):
+    """Researched names and cooldowns by skill ID (KNOWN), or {} without the file."""
+    return json.loads(Path(path).read_text(encoding='utf-8'))['skills'] if Path(path).exists() else {}
 
 
 def load(path=DATA):

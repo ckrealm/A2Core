@@ -71,3 +71,6 @@
 - Duels give back the HP and MP they cost (never a free heal).
 - All OURS values, all configurable, all on by default. 28 checks.
 - Player chat commands work with a single slash (/buff, /hub, /report, /help, /bot, /ah, /boost); GM commands keep //.
+
+## 2026-11-09 — Brawler names from the Korean live game
+- **Brawler skill names** (`tools/data/brawler-skills.json`): Korean names, English (fan or ours) names, kinds and effects for all 41 Brawler skills, matched to the client IDs by learn level and cooldown (shugo.gg/ko). They replace "???" in class-skills.json and the OURS fallbacks; the stigma skills past 25 take their real cooldowns. BRAWLER.md has the research (release, role, rage, opener, gaps).

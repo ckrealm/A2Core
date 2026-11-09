@@ -1,0 +1,339 @@
+{
+ "source": "Korean live Aion 2 Brawler (권성, released 2026-07-01, Chapter 1). Korean names, learn levels and cooldowns: shugo.gg/ko/skills/fighter (data 2026-11-04), matched to client IDs by learn level and cooldown (the 12 actives, 10 passive levels and 13 stigma cooldowns line up one-for-one). English names: no official localization exists; fan names from aion2hub.me/en/classes/brawler, else ours. Read 2026-11-09. Nothing here changes combat; it names the skills the 2.0.6.0 client shows as '???'.",
+ "sources": [
+  "https://shugo.gg/ko/skills/fighter",
+  "https://aion2hub.me/en/classes/brawler",
+  "https://www.inven.co.kr/board/aion2/6388/231368",
+  "https://www.inven.co.kr/board/aion2/6544/315"
+ ],
+ "resource": "Rage (분노) in Korea; the server keeps MP (OURS: no rage system yet)",
+ "role": "front-line melee DPS",
+ "skills": {
+  "19000100": {
+   "name_ko": "회피",
+   "name_en": "Dodge",
+   "confidence": "medium",
+   "kind": "dodge",
+   "effect": "Class dodge (긴급 회피); enables 철산고",
+   "name_en_source": "ours"
+  },
+  "19010000": {
+   "name_ko": "연격",
+   "name_en": "Flurry",
+   "confidence": "high",
+   "kind": "basic attack/chain",
+   "effect": "3-stage chain 연격→중격→강격, up to 4 targets, +10 rage per hit",
+   "name_en_source": "aion2hub.me fan name"
+  },
+  "19040000": {
+   "name_ko": "비각",
+   "name_en": "Roundhouse",
+   "confidence": "high",
+   "kind": "basic attack/chain",
+   "effect": "3-stage chain 비각→승강권→충권, stagger damage; in Berserk cuts 연환권 cooldown by 1s",
+   "name_en_source": "aion2hub.me fan name"
+  },
+  "19130000": {
+   "name_ko": "폭주",
+   "name_en": "Rampage",
+   "confidence": "high",
+   "kind": "buff",
+   "effect": "Enter Berserk: drains rage, +15% combat speed, +15% frontal damage amp, swaps in [폭주] skills",
+   "name_en_source": "aion2hub.me fan name"
+  },
+  "19070000": {
+   "name_ko": "질풍격",
+   "name_en": "Whirlwind",
+   "confidence": "high",
+   "kind": "gap closer",
+   "effect": "20m dash through up to 4 enemies; enables 환영각 pull for 5s",
+   "name_en_source": "aion2hub.me fan name"
+  },
+  "19420000": {
+   "name_ko": "연환권",
+   "name_en": "Chain Fist",
+   "confidence": "high",
+   "kind": "attack",
+   "effect": "Usable after a crit (always in Berserk), up to 4 targets",
+   "name_en_source": "aion2hub.me fan name"
+  },
+  "19250000": {
+   "name_ko": "태풍 연타",
+   "name_en": "Typhoon Flurry",
+   "confidence": "high",
+   "kind": "attack",
+   "effect": "Multi-hit flurry on groggy targets",
+   "name_en_source": "aion2hub.me fan name"
+  },
+  "19170000": {
+   "name_ko": "회전각",
+   "name_en": "Sweeping Kick",
+   "confidence": "high",
+   "kind": "stun",
+   "effect": "Block counter, 2 hits, 50% chance of 2s stun",
+   "name_en_source": "aion2hub.me fan name"
+  },
+  "19090000": {
+   "name_ko": "지면 강타",
+   "name_en": "Smite Ground",
+   "confidence": "high",
+   "kind": "AoE stun",
+   "effect": "AoE on up to 4 targets, 50% chance of 2s stun",
+   "name_en_source": "aion2hub.me fan name"
+  },
+  "19230000": {
+   "name_ko": "철산고",
+   "name_en": "Shoulder Tackle",
+   "confidence": "high",
+   "kind": "gap closer",
+   "effect": "10m rush after a dodge or in flight, 30% chance of 3s stun, +50 rage",
+   "name_en_source": "aion2hub.me fan name"
+  },
+  "19200000": {
+   "name_ko": "폭렬권",
+   "name_en": "Exploding Fist",
+   "confidence": "high",
+   "kind": "attack",
+   "effect": "3-stage charge, +100/200/300 rage; instant in Berserk",
+   "name_en_source": "aion2hub.me fan name"
+  },
+  "19160000": {
+   "name_ko": "승천타",
+   "name_en": "Ascending Blow",
+   "confidence": "high",
+   "kind": "gap closer",
+   "effect": "Charged 10m rush, AoE, 50% chance of 3s air bind at full charge; main damage skill",
+   "name_en_source": "aion2hub.me fan name"
+  },
+  "19450000": {
+   "name_ko": "충격 해제",
+   "name_en": "Defiance",
+   "confidence": "high",
+   "kind": "CC break",
+   "effect": "Removes CC, 5s CC immunity",
+   "name_en_source": "aion2hub.me fan name"
+  },
+  "19730000": {
+   "name_ko": "정신 전환",
+   "name_en": "Mental Conversion",
+   "confidence": "high",
+   "kind": "passive",
+   "effect": "Converts part of max MP into max HP",
+   "name_en_source": "aion2hub.me fan name"
+  },
+  "19710000": {
+   "name_ko": "전선 유지",
+   "name_en": "Hold the Line",
+   "confidence": "high",
+   "kind": "passive",
+   "effect": "+block, chance to heal on block",
+   "name_en_source": "aion2hub.me fan name"
+  },
+  "19720000": {
+   "name_ko": "정면 돌파",
+   "name_en": "Shatter Frontline",
+   "confidence": "high",
+   "kind": "passive",
+   "effect": "+accuracy, +crit, 25% chance of bonus damage on frontal hits",
+   "name_en_source": "aion2hub.me fan name"
+  },
+  "19740000": {
+   "name_ko": "위세",
+   "name_en": "Dominance",
+   "confidence": "high",
+   "kind": "passive",
+   "effect": "+frontal, PvE and PvP damage amp",
+   "name_en_source": "aion2hub.me fan name"
+  },
+  "19750000": {
+   "name_ko": "폭주 증폭",
+   "name_en": "Rampage Boost",
+   "confidence": "high",
+   "kind": "passive",
+   "effect": "Attack and defense bonuses by Normal or Berserk state",
+   "name_en_source": "aion2hub.me fan name"
+  },
+  "19760000": {
+   "name_ko": "충격 적중",
+   "name_en": "Impact Hit",
+   "confidence": "high",
+   "kind": "passive",
+   "effect": "+shock-hit chance, +heavy hit",
+   "name_en_source": "aion2hub.me fan name"
+  },
+  "19780000": {
+   "name_ko": "충격타",
+   "name_en": "Impact Blow",
+   "confidence": "high",
+   "kind": "passive",
+   "effect": "Bonus damage vs shocked or groggy targets",
+   "name_en_source": "aion2hub.me fan name"
+  },
+  "19770000": {
+   "name_ko": "거대한 분노",
+   "name_en": "Massive Rage",
+   "confidence": "high",
+   "kind": "passive",
+   "effect": "+max rage, rage on kill, lower Berserk drain",
+   "name_en_source": "aion2hub.me fan name"
+  },
+  "19790000": {
+   "name_ko": "회생의 계약",
+   "name_en": "Revitalization Contract",
+   "confidence": "high",
+   "kind": "passive",
+   "effect": "+CC resistance; heals 35% of max HP at 10% HP or below",
+   "name_en_source": "aion2hub.me fan name"
+  },
+  "19800000": {
+   "name_ko": "경량화",
+   "name_en": "Lightweight",
+   "confidence": "high",
+   "kind": "passive",
+   "effect": "Bonus damage vs targets above 50% HP",
+   "name_en_source": "aion2hub.me fan name"
+  },
+  "19110000": {
+   "name_ko": "연속 차기",
+   "name_en": "Consecutive Kicks",
+   "confidence": "low",
+   "kind": "AoE",
+   "effect": "120s cooldown, heavy AoE, 75% chance of 3s knockdown",
+   "name_en_source": "ours",
+   "cooldown_ms": 120000
+  },
+  "19270000": {
+   "name_ko": "선풍각",
+   "name_en": "Cyclone Kick",
+   "confidence": "low",
+   "kind": "knockback",
+   "effect": "Kick with 10m knockback",
+   "name_en_source": "ours"
+  },
+  "19280000": {
+   "name_ko": "격노",
+   "name_en": "Rage",
+   "confidence": "high",
+   "kind": "buff",
+   "effect": "Restores 52% rage, PvE/PvP damage amp for 15s",
+   "name_en_source": "aion2hub.me fan name",
+   "cooldown_ms": 90000
+  },
+  "19290000": {
+   "name_ko": "공파참",
+   "name_en": "Surging Cleave",
+   "confidence": "high",
+   "kind": "gap closer",
+   "effect": "20m dash, 50% chance of 2s stun",
+   "name_en_source": "aion2hub.me fan name",
+   "cooldown_ms": 60000
+  },
+  "19300000": {
+   "name_ko": "진각",
+   "name_en": "Quake",
+   "confidence": "high",
+   "kind": "gap closer",
+   "effect": "Move to target within 10m, AoE, 50% chance of 3s slow",
+   "name_en_source": "aion2hub.me fan name",
+   "cooldown_ms": 30000
+  },
+  "19310000": {
+   "name_ko": "파쇄",
+   "name_en": "Pulverize",
+   "confidence": "high",
+   "kind": "buff",
+   "effect": "For 20s, every 8 hits trigger a 2-hit AoE",
+   "name_en_source": "aion2hub.me fan name",
+   "cooldown_ms": 60000
+  },
+  "19320000": {
+   "name_ko": "혈류 차단",
+   "name_en": "Sever Bloodstream",
+   "confidence": "high",
+   "kind": "AoE",
+   "effect": "AoE, reduces healing received, 30% lifesteal",
+   "name_en_source": "aion2hub.me fan name",
+   "cooldown_ms": 30000
+  },
+  "19330000": {
+   "name_ko": "분신",
+   "name_en": "Phantom",
+   "confidence": "high",
+   "kind": "buff",
+   "effect": "15s; 15% chance per hit to summon up to 5 clones",
+   "name_en_source": "aion2hub.me fan name",
+   "cooldown_ms": 90000
+  },
+  "19350000": {
+   "name_ko": "집중 막기",
+   "name_en": "Focused Block",
+   "confidence": "high",
+   "kind": "buff",
+   "effect": "Channelled guaranteed block with heavy damage reduction",
+   "name_en_source": "aion2hub.me fan name",
+   "cooldown_ms": 20000
+  },
+  "19360000": {
+   "name_ko": "저지 불가",
+   "name_en": "Unstoppable",
+   "confidence": "high",
+   "kind": "buff",
+   "effect": "HP cannot drop below 10% for 4s",
+   "name_en_source": "aion2hub.me fan name",
+   "cooldown_ms": 180000
+  },
+  "19370000": {
+   "name_ko": "전력",
+   "name_en": "Full Force",
+   "confidence": "high",
+   "kind": "AoE",
+   "effect": "Spends all rage on a large AoE hit",
+   "name_en_source": "aion2hub.me fan name",
+   "cooldown_ms": 90000
+  },
+  "19380000": {
+   "name_ko": "강습 타격",
+   "name_en": "Assault Blow",
+   "confidence": "high",
+   "kind": "stun",
+   "effect": "20m strike on up to 4 targets, 30% chance of 3s stun",
+   "name_en_source": "aion2hub.me fan name",
+   "cooldown_ms": 120000
+  },
+  "19390000": {
+   "name_ko": "권기 방출",
+   "name_en": "Discharge Energy",
+   "confidence": "high",
+   "kind": "AoE",
+   "effect": "20m ranged energy burst",
+   "name_en_source": "aion2hub.me fan name",
+   "cooldown_ms": 45000
+  },
+  "19400000": {
+   "name_ko": "영역 소환",
+   "name_en": "Zone Summon",
+   "confidence": "high",
+   "kind": "AoE stun",
+   "effect": "Places a 20s zone; 역행 returns to it, AoE with 50% chance of 3s stun",
+   "name_en_source": "ours",
+   "cooldown_ms": 45000
+  },
+  "19460000": {
+   "name_ko": "순보",
+   "name_en": "Flash Step",
+   "confidence": "high",
+   "kind": "gap closer",
+   "effect": "Moves behind target within 20m and strikes",
+   "name_en_source": "aion2hub.me fan name",
+   "cooldown_ms": 30000
+  },
+  "19440000": {
+   "name_ko": "참영권",
+   "name_en": "Shadow-Cleaving Fist",
+   "confidence": "low",
+   "kind": "gap closer",
+   "effect": "20m dash strike (alternative: 환영각, the 질풍격 follow-up pull)",
+   "name_en_source": "ours"
+  }
+ }
+}

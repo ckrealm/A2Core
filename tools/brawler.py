@@ -22,7 +22,9 @@ What this script writes (OURS where the data is silent, each marked):
    19000001 at 4).
 2. starter-skills.json: Brawler creation profiles (OURS creation IDs, see CREATION) for Light and Dark, male and
    female. The pc_id is the one setting the client must recognise; PC_IDS holds it.
-3. progression.json `generated` (tools/progression.py): the 16 kit skills past level 25, like every class.
+3. progression.json `generated` (tools/progression.py): the kit skills past level 25, like every class.
+4. Skill names: tools/data/brawler-skills.json (Korean live research, docs/friends-server/BRAWLER.md) names every
+   Brawler skill the client calls "???"; progression.py takes the researched cooldowns of the stigma skills.
 
 Run `python tools/brawler.py`; it is idempotent.
 """
@@ -32,6 +34,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CLASS_SKILLS = ROOT / 'tools/data/class-skills.json'
 STARTERS = ROOT / 'tools/data/starter-skills.json'
+# Researched Korean live names (OURS English, see its "source"): replace the client's "???" in class-skills.json.
+KNOWN = ROOT / 'tools/data/brawler-skills.json'
 NAME = 'Fighter'
 WEAPON = 'Gauntlet'
 STARTER_WEAPONS = {'1': 150960002, '2': 150960003}
@@ -105,6 +109,10 @@ def apply():
     if bad:
         raise SystemExit(f'Unlock-level rule fails on {bad} released-class unlocks; not writing Fighter')
     unlocks = fighter_unlocks(rules)
+    known = json.loads(KNOWN.read_text(encoding='utf-8'))['skills']
+    for skill_id, entry in rules['skills'].items():
+        if skill_id in known:
+            entry['name'] = known[skill_id]['name_en']
     rules['classes'][NAME] = {'weapon_type': WEAPON, 'starter_weapons': dict(STARTER_WEAPONS), 'unlocks': unlocks, 'ours': {
         'unlocks': 'rebuilt from SkillAcquireData Mastery rows: unlock level = NeedCharacterLevel of skill level 2 '
                    f'({ok}/{ok} recovered unlocks of the released classes follow it); 19000000/19000100 at 1, 19000001 at 4 (their acquisition rows)',
