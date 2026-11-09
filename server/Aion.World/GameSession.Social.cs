@@ -514,6 +514,7 @@ public sealed partial class GameSession
             case DuelState.InCountDown:
                 duel.State = DuelState.InBattle;
                 duel.NextMs = now + Duel.LimitMs;
+                RememberDuelists(duel);
                 var status = SocialPackets.DuelStateUpdate(Status(duel, now));
                 duel.Challenger.Send(status);
                 duel.Accepter.Send(status);
@@ -532,7 +533,7 @@ public sealed partial class GameSession
         var loser = winner is null ? null : duel.Other(winner);
         var result = SocialPackets.DuelResult(duel.RoomKey, reason, winner?.Key ?? 0, loser?.Key ?? 0, winner?.Name ?? "", loser?.Name ?? "");
         foreach (var p in new[] { duel.Challenger, duel.Accepter }) p.Send([SocialPackets.DuelStateUpdate(Status(duel, now)), result]);
-        duel.Challenger.Map?.Broadcast(duel.Challenger, [SocialPackets.DuelComplete(duel.RoomKey, reason, winner?.Key ?? 0, winner?.Name ?? "", loser?.Name ?? "")]);
+        duel.Challenger.Map?.Broadcast(duel.Challenger, [SocialPackets.DuelComplete(duel.RoomKey, reason, winner?.Key ?? 0, winner?.Name ?? "", loser?.Name ?? "")]);        RestoreDuelists(duel);
     }
 
     /// <summary>A cast at a duel opponent in battle: PvP damage (Skill.dat PvP rows) to the opponent; at 1 HP the duel is lost.</summary>

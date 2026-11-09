@@ -132,9 +132,9 @@ Takeaway: the wire protocol for login, movement, combat and other players' messa
 | Friends / block | Implemented (CANDIDATE layouts) | `GameSession.Social.cs:41-47`, migration 015 | — |
 | Trade | Partial | `GameSession.Social.cs:57-62` | — |
 | Chat | Partial | `Aion.Application/Chat/ChatRelay.cs:10-27`; `Aion.Host/Chat/LimeChatEndpoints.cs` (Lime HTTP + STOMP) | World, region and shout rooms plus whispers. **Party, guild and race rooms aren't joinable** (no membership checks). Rate limit 5 per 5 s. Mutes and a chat log exist. |
-| PvP (open world) | Partial | `GameSession.Abyss.cs:30-45` `FactionHits` | Only on Abyss maps 20/22/23, opposite race only. Gives 100 Abyss Points per kill (OURS). |
+| PvP (open world) | Partial | `GameSession.Abyss.cs:30-45` `FactionHits` | On Abyss maps 20/22/23, and in the home fields between players with rift PvP on; opposite race only. Gives 100 Abyss Points per kill (OURS). |
 | Arena | Partial | `GameSession.Arena.cs:30-50` | Matchmaking queue, 1v1 and 5v5, lives, score, result. The flow is OURS from message names. Ranking, penalties and schedules aren't modelled. |
-| Abyss | Partial | `GameSession.Abyss.cs:5-11` | Entry via portal NPCs and faction PvP. Ranks, fortresses, artifacts and rifts aren't modelled. AbyssArtifactEventInfo returns empty (`ClientRequests.cs:46`). |
+| Abyss | Partial | `GameSession.Abyss.cs`, `AbyssWar.cs`, `GameSession.AbyssWar.cs` | Entry via portal NPCs and faction PvP. Artifact sieges, Spacetime Rifts and the battlefield as on global (docs/ABYSS_PVP.md), with bots filling the sides. Ranks and fortresses aren't modelled; siege opcodes CANDIDATE. |
 
 ## 7. Staff tools
 

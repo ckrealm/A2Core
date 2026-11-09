@@ -99,6 +99,9 @@ var bots = (builder.Configuration.GetSection("Aion:Bots").Get<Aion.World.BotOpti
 // (Enabled, Endpoint, Model, ApiKey from the environment only, Room, FactionOnly, ...).
 var worldBots = (builder.Configuration.GetSection("Aion:WorldBots").Get<Aion.World.WorldBotOptions>() ?? new Aion.World.WorldBotOptions()).Validated();
 var botChat = (builder.Configuration.GetSection("Aion:BotChat").Get<Aion.World.BotChatOptions>() ?? new Aion.World.BotChatOptions()).Validated();
+// Friends-server extras (OURS, docs/friends-server/FUN.md): Aion:Fun (FieldBosses with Boss/Named respawn windows,
+// BossAnnouncements, SharedBossLoot, BuffCommand/BuffMinutes/BuffSkills, HubCommand, DuelRestore). All on by default.
+var fun = (builder.Configuration.GetSection("Aion:Fun").Get<Aion.World.FunOptions>() ?? Aion.World.FunOptions.Default).Validated();
 // Market (OURS, docs/MARKET.md): Aion:Market (Enabled, ListingHours, SaleTaxPercent, CrossWorld, ...), Aion:Market:Seller and
 // Aion:Market:Buyer (the market bot). Needs the game database.
 var market = (builder.Configuration.GetSection("Aion:Market").Get<Aion.World.MarketOptions>() ?? new Aion.World.MarketOptions()).Validated();
@@ -178,6 +181,11 @@ if (native.LoginPort is not null || native.GamePort is not null)
             builder.Services.AddHostedService<BotChatService>();
         }
     }
+    if (native.GamePort is not null)
+    {
+        builder.Services.AddSingleton(new Aion.World.FunFeatures(fun));
+        builder.Services.AddHostedService<Aion.Host.Native.FunNoticeService>();
+    }
     if (market.Enabled && native.GamePort is not null && !string.IsNullOrWhiteSpace(connectionString))
     {
         builder.Services.AddSingleton(market);
@@ -200,6 +208,7 @@ if (native.LoginPort is not null || native.GamePort is not null)
             Bots = provider.GetService<Aion.World.PlayerBots>(),
             WorldBots = provider.GetService<Aion.World.WorldBots>(),
             Market = provider.GetService<Aion.World.MarketCommands>(),
+            Fun = provider.GetService<Aion.World.FunFeatures>(),
             // "//report <text>" opens a ticket for the staff dashboard (accounts only).
             Report = provider.GetService<IStaffTools>() is { } staffTools ? async (sender, name, text, ct) =>
             {

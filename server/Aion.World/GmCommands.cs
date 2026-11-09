@@ -92,20 +92,31 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
     /// <summary>"//ah ..." (docs/MARKET.md): the market for every player. Null: no market on this host (no game database).</summary>
     public MarketCommands? Market { get; init; }
 
+    /// <summary>"//buff" and "//hub" (Aion:Fun, docs/friends-server/FUN.md) for every player. Null: off on this host.</summary>
+    public FunFeatures? Fun { get; init; }
+
+    /// <summary>Commands every player may type with a single slash (the client's own slash commands never reach the server).</summary>
+    static readonly HashSet<string> PlayerWords = new(StringComparer.OrdinalIgnoreCase) { "help", "report", "buff", "hub", "bot", "ah", "boost", "mail", "pmail", "sendkinah", "senditem", "dungeon", "abyss", "rift" };
+
+    static bool Is(string line, string word) =>
+        line.StartsWith(word, StringComparison.OrdinalIgnoreCase) && (line.Length == word.Length || char.IsWhiteSpace(line[word.Length]));
+
     public async Task<string> HandleAsync(ChatIdentity sender, string userName, string content, CancellationToken ct)
     {
         var text = content.Trim();
-        // /dungeon (player command, single slash; //dungeon works too).
-        var bare = text.TrimStart('/');
-        if (bare.StartsWith("dungeon", StringComparison.OrdinalIgnoreCase) && (bare.Length == 7 || char.IsWhiteSpace(bare[7])))
-            return await DungeonAsync(userName, bare[7..].Trim(), ct);
-        if (!text.StartsWith("//", StringComparison.Ordinal)) return "Unknown command. Use //help.";
-        var line = text[2..].Trim();
+        string line;
+        if (text.StartsWith("//", StringComparison.Ordinal)) line = text[2..].Trim();
+        // One slash works for the player commands (/buff, /hub, /report, /help, /bot, /ah, /boost, /mail, /pmail, /sendkinah, /senditem,
+        // /dungeon, /abyss, /rift);
+        // "//" works for them too, and builder (GM) commands keep "//".
+        else if (text.StartsWith('/') && text[1..].Split(' ', 2)[0] is var word && PlayerWords.Contains(word)) line = text[1..].Trim();
+        else return "Unknown command. Use /help.";
+        if (Is(line, "dungeon")) return await DungeonAsync(userName, line[7..].Trim(), ct);
         if (line.StartsWith("report", StringComparison.OrdinalIgnoreCase) && (line.Length == 6 || char.IsWhiteSpace(line[6])))
         {
             var report = line[6..].Trim();
             if (Report is null) return "Reports are not available on this server.";
-            if (report.Length < 3) return "Write what happened: //report <text> (a bug, a player, or being stuck).";
+            if (report.Length < 3) return "Write what happened: /report <text> (a bug, a player, or being stuck).";
             return await Report(sender, Aion.Core.Characters.CharacterNames.Stored(userName), report, ct);
         }
         // The client may send the displayed name ("[GM] Elyra"); the world knows the stored one.
@@ -118,15 +129,22 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
                 return Market is { } market ? await market.HandleAsync(actor.Session, line[2..].Trim(), ct) : "The market is not available on this server.";
             if (line.StartsWith("bot", StringComparison.OrdinalIgnoreCase) && (line.Length == 3 || char.IsWhiteSpace(line[3])))
                 return await BotAsync(actor.Session, line[3..].Trim(), ct);
-            if (Word(line, "abyss") is { } abyssArgs) return await AbyssAsync(actor.Session, abyssArgs, ct);
-            if (Word(line, "rift") is { } riftArgs) return await AbyssAsync(actor.Session, "rift " + riftArgs, ct);
+            if (Is(line, "abyss")) return await AbyssAsync(actor.Session, line[5..].Trim(), ct);
+            if (Is(line, "rift")) return await AbyssAsync(actor.Session, "rift " + line[4..].Trim(), ct);
+            if (Fun is { Options.BuffCommand: true } && Is(line, "buff"))
+                return await actor.Session.InvokeAsync(now => actor.Session.FunBuff(now)).WaitAsync(TimeSpan.FromSeconds(10), ct);
+            if (Fun is { Options.HubCommand: true } && Is(line, "hub"))
+                return await actor.Session.InvokeAsync(now => actor.Session.FunHub(line[3..].Trim(), now)).WaitAsync(TimeSpan.FromSeconds(10), ct);
             if (line.Length == 0 || line.Equals("help", StringComparison.OrdinalIgnoreCase))
                 return await builder.AllowedAsync(actor.Session, ct)
                     ? "Builder commands (in chat: //<command>; console: s <command>): " + string.Join(", ", BuilderCommands.Supported)
                         + (Bots is { Options.Enabled: true } ? "; //bot add <character> for playerbots" : "")
-                    : "Commands: //report <text> sends a report to the staff. " + GameSession.DungeonHelp
-                        + " //abyss shows the siege, rifts and battlefield; //abyss bf queues for the battlefield; //rift on|off switches rift PvP."
-                        + (Bots is { Options: { Enabled: true, PlayersMayUse: true } } ? " //bot add <character> summons one of your characters as a bot." : "");
+                    : "Commands: /report <text> sends a report to the staff. " + GameSession.DungeonHelp
+                        + " /abyss shows the siege, rifts and battlefield; /abyss bf queues for the battlefield; /rift on|off switches rift PvP."
+                        + (Fun is { Options.BuffCommand: true } ? " /buff gives you the food and scroll buffs." : "")
+                        + (Fun is { Options.HubCommand: true } ? " /hub teleports to a town or the Abyss." : "")
+                        + (Market is not null ? " /ah help shows the auction house commands." : "")
+                        + (Bots is { Options: { Enabled: true, PlayersMayUse: true } } ? " /bot add <character> summons one of your characters as a bot." : "");
             return await actor.Session.InvokeAsync(async now =>
             {
                 var outcome = await builder.RunAsync(actor.Session, line, now, ct);
@@ -138,10 +156,6 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
             return "The game connection did not respond.";
         }
     }
-
-    /// <summary>The rest of the line after a leading command word, or null when the line starts with another word.</summary>
-    static string? Word(string line, string word) =>
-        line.StartsWith(word, StringComparison.OrdinalIgnoreCase) && (line.Length == word.Length || char.IsWhiteSpace(line[word.Length])) ? line[word.Length..].Trim() : null;
 
     /// <summary>
     /// //abyss (docs/ABYSS_PVP.md): the state for everyone; "bf" queues for the battlefield; "rift on|off" switches rift PvP; staff:
@@ -170,7 +184,7 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
                 ("siege", "end") when !war.SiegeRunning => Say("No siege is running."),
                 ("siege", "end") => Do(() => war.EndSiege(now), "Siege ended."),
                 ("rift", "open") => Do(() => war.OpenRifts(now, minutes * 60_000L), $"Rifts open for {minutes ?? war.Options.Rifts.OpenMinutes} minutes."),
-                _ => Say("Use //abyss, //abyss bf, //rift on|off" + "; staff: //abyss siege start [minutes] | siege end | rift open [minutes]."),
+                _ => Say("Use /abyss, /abyss bf, /rift on|off; staff: //abyss siege start [minutes] | siege end | rift open [minutes]."),
             };
             return result;
             (string, List<byte[]>) Do(Action work, string done) { work(); return (done, []); }
