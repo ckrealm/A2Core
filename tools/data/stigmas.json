@@ -326,67 +326,67 @@
    "Fighter": [
     [
      19280000,
-     null,
+     "Rage",
      90000
     ],
     [
      19290000,
-     null,
+     "Surging Cleave",
      60000
     ],
     [
      19300000,
-     null,
+     "Quake",
      30000
     ],
     [
      19310000,
-     null,
+     "Pulverize",
      60000
     ],
     [
      19320000,
-     null,
+     "Sever Bloodstream",
      30000
     ],
     [
      19330000,
-     null,
+     "Phantom",
      90000
     ],
     [
      19350000,
-     null,
+     "Focused Block",
      20000
     ],
     [
      19360000,
-     null,
+     "Unstoppable",
      180000
     ],
     [
      19370000,
-     null,
+     "Full Force",
      90000
     ],
     [
      19380000,
-     null,
+     "Assault Blow",
      120000
     ],
     [
      19390000,
-     null,
+     "Discharge Energy",
      45000
     ],
     [
      19400000,
-     null,
+     "Zone Summon",
      45000
     ],
     [
      19460000,
-     null,
+     "Flash Step",
      30000
     ]
    ],
@@ -659,7 +659,7 @@
     ]
    ]
   },
-  "recovered_about": "Recovered data: each class's 13 stigma skills [id, name, NeedCoolTime ms] from SkillAcquireData Stigma rows (all Active, bIsStigmaSkill). The x700000 skill is the class's 120 s Assault stigma. The Brawler's (Fighter) names are '???' in the client. These replace the developer-kit candidates (tools/stigmas.py class_stigmas)."
+  "recovered_about": "Recovered data: each class's 13 stigma skills [id, name, NeedCoolTime ms] from SkillAcquireData Stigma rows (all Active, bIsStigmaSkill). The x700000 skill is the class's 120 s Assault stigma. The Brawler's (Fighter) names are '???' in the client. These replace the developer-kit candidates (tools/stigmas.py class_stigmas). The Brawler's English names are aion2hub fan names matched by cooldown to shugo.gg/ko's Korean names (the client has '???'; Korean names and effects in tools/data/brawler-skills.json, PR #18)."
  },
  "generated": {
   "classes": {
@@ -3492,7 +3492,7 @@
     ]
    },
    "19280000": {
-    "name": null,
+    "name": "Rage",
     "type": "Active",
     "target": "MainTarget",
     "weapons": [
@@ -3539,7 +3539,7 @@
     ]
    },
    "19290000": {
-    "name": null,
+    "name": "Surging Cleave",
     "type": "Active",
     "target": "MainTarget",
     "weapons": [
@@ -3586,7 +3586,7 @@
     ]
    },
    "19300000": {
-    "name": null,
+    "name": "Quake",
     "type": "Active",
     "target": "MainTarget",
     "weapons": [
@@ -3633,7 +3633,7 @@
     ]
    },
    "19310000": {
-    "name": null,
+    "name": "Pulverize",
     "type": "Active",
     "target": "MainTarget",
     "weapons": [
@@ -3680,7 +3680,7 @@
     ]
    },
    "19320000": {
-    "name": null,
+    "name": "Sever Bloodstream",
     "type": "Active",
     "target": "MainTarget",
     "weapons": [
@@ -3727,7 +3727,7 @@
     ]
    },
    "19330000": {
-    "name": null,
+    "name": "Phantom",
     "type": "Active",
     "target": "MainTarget",
     "weapons": [
@@ -3774,7 +3774,7 @@
     ]
    },
    "19350000": {
-    "name": null,
+    "name": "Focused Block",
     "type": "Active",
     "target": "MainTarget",
     "weapons": [
@@ -3821,7 +3821,7 @@
     ]
    },
    "19360000": {
-    "name": null,
+    "name": "Unstoppable",
     "type": "Active",
     "target": "MainTarget",
     "weapons": [
@@ -3868,7 +3868,7 @@
     ]
    },
    "19370000": {
-    "name": null,
+    "name": "Full Force",
     "type": "Active",
     "target": "MainTarget",
     "weapons": [
@@ -3915,7 +3915,7 @@
     ]
    },
    "19380000": {
-    "name": null,
+    "name": "Assault Blow",
     "type": "Active",
     "target": "MainTarget",
     "weapons": [
@@ -3962,7 +3962,7 @@
     ]
    },
    "19390000": {
-    "name": null,
+    "name": "Discharge Energy",
     "type": "Active",
     "target": "MainTarget",
     "weapons": [
@@ -4009,7 +4009,7 @@
     ]
    },
    "19400000": {
-    "name": null,
+    "name": "Zone Summon",
     "type": "Active",
     "target": "MainTarget",
     "weapons": [
@@ -4056,7 +4056,7 @@
     ]
    },
    "19460000": {
-    "name": null,
+    "name": "Flash Step",
     "type": "Active",
     "target": "MainTarget",
     "weapons": [

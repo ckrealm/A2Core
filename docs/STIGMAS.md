@@ -51,7 +51,7 @@ under `relationships.acquisition`) has 2,340 Stigma rows: 117 stigma skills, 13 
 Brawler (`Fighter`). All are Active and flagged `bIsStigmaSkill`. Every class's x700000 skill is its 120 s Assault
 stigma. All 117 share one cost ladder (the 1/2/4/8 above), and every level needs character level 22. Level 1 also needs
 Ascension grade 3, which we do not check (OURS). The ID, name and cooldown of each stigma are in
-`tools/data/stigmas.json` `params.recovered`. The Brawler's names are "???" in the client.
+`tools/data/stigmas.json` `params.recovered`. The Brawler's names are "???" in the client; we use the aion2hub fan names (Rage, Phantom, Pulverize, ...), matched by cooldown to the Korean live names.
 
 **Cast data.** None of them has recovered damage rows. `tools/stigmas.py` gives each one a definition
 (`generated.skills`): its real name and cooldown, with damage taken from the class's comparable damage skills in that
