@@ -46,6 +46,7 @@
 
     <!-- Playerbot rotations (OURS), tools/bot_rotations.py from class-skills.json; see docs/PLAYERBOTS.md. -->
     <EmbeddedResource Include="../../tools/data/bot-rotations.json" LogicalName="bot-rotations.json" />
+    <EmbeddedResource Include="../../tools/data/market-prices.csv" LogicalName="market-prices.csv" />
 
     <!-- OURS: unlocks after level 25, fallback skills/damage, skill-level scaling, MPMax curve, combat power (docs/PROGRESSION.md). -->
     <EmbeddedResource Include="../../tools/data/progression.json" LogicalName="progression.json" />
