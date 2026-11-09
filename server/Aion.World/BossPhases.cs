@@ -169,6 +169,8 @@ public static class Summons
     /// <summary>Keys of summoned monsters (clear of map NPCs 2000+, staff spawns 600000+, players 100000+ and Kibelisks 900000+).</summary>
     public const int FirstKey = 700_000, LastKey = 899_999;
     public static bool IsSummon(int key) => key is >= FirstKey and <= LastKey;
+    /// <summary>Appended to a summon's name so map-event spawners (a wave's "{wave}_{n}", KillSpawner) never count or respawn it.</summary>
+    public const string NameSuffix = "_Summon";
 
     /// <summary>
     /// Copies of the NPC (its template, the name of a placed spawn of it) in a ring around a point; their targets, already in the
@@ -186,7 +188,7 @@ public static class Summons
             var hp = Combat.HpFor(placed);
             var t = new Target
             {
-                Key = next, Name = placed.Name, Hp = hp, HpMax = hp,
+                Key = next, Name = placed.Name + NameSuffix, Hp = hp, HpMax = hp,
                 Position = centre with { X = centre.X + Math.Cos(angle) * radius, Y = centre.Y + Math.Sin(angle) * radius },
                 NpcId = placed.NpcId, Level = placed.Level, Direction = (angle * 180 / Math.PI + 180) % 360, Relationship = placed.Relationship,
                 Aggressive = true, WalkSpeed = placed.WalkSpeed, RunSpeed = placed.RunSpeed, Radius = placed.Radius, Function = placed.Function,

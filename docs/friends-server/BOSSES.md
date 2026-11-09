@@ -42,11 +42,16 @@ script, which already starts its extractor waves at 90%, 60% and 30% HP.
 
 A wipe resets the boss: it walks home, heals, its adds vanish and the phases start over.
 
-### Bots
+### Bots and player defences
 
-Slams are ordinary NPC skill starts on the wire, so bots see them. The bot rotations thread (PR #4) is wiring its escape
-logic to `NpcAi.TelegraphArea(target)` and `NpcAi.TelegraphDueAt(target)`. Once both PRs are merged, bots, the tank
-included, will step out of a slam. A slam can't be interrupted.
+A slam being wound up shows in `NpcAi.WindingArea` and `NpcAi.SpecialDueAt`, like the area specials. Bots outside the
+boss's target step out of the radius, and the target dodges just before it lands. Slams go through the same guard as
+other monster hits, so a block halves one and a Dodge's i-frames evade it. Interrupt skills don't break a slam. A hold or
+stun does, and the boss tries the slam again 4 s later.
+
+Adds are named `<monster>_Summon`, so the scripts' spawner checks, wave restarts and kill objectives never count them.
+They spawn at full strength. Once the short-handed dungeon scaling (PR #7) is merged, they should be scaled like the rest
+of the copy.
 
 ## Settings: `Aion:Bosses`
 

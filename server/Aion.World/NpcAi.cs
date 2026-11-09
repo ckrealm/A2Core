@@ -859,6 +859,8 @@ public sealed class NpcAi(Random rng, GameData? data = null)
         return (replies, false);
     }
 
+    /// <summary>A slam broken by a hold or stun is tried again this long after (OURS).</summary>
+    public const int SlamRetryMs = 4000;
     /// <summary>After a slam the boss waits this long before its next attack (OURS).</summary>
     public const int SlamRecoverMs = 800;
 
@@ -926,7 +928,12 @@ public sealed class NpcAi(Random rng, GameData? data = null)
         if (target.Held || target.Stunned(now))
         {
             brain.Pending = null;
-            if (brain.Fight is { } heldFight) heldFight.Winding = null;   // a hold breaks a slam's wind-up too
+            // A hold or stun breaks a slam's wind-up (an interrupt skill does not); the slam comes again soon after.
+            if (brain.Fight is { Winding: not null } heldFight)
+            {
+                heldFight.Winding = null;
+                heldFight.NextSlamMs = now + SlamRetryMs;
+            }
             return brain.Moving ? Stop(target, brain, brain.Heading, now) : [];
         }
         // Directed by a map event: the walk, nothing else.

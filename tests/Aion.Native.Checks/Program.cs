@@ -3117,6 +3117,8 @@ checks = 0;
     Check(bpFightAi.TelegraphArea(bpBoss) == 620 && bpDue is { } d && d - bpClock is > 2_000 and <= 2_650
           && bpFightPackets.Any(b => b.SequenceEqual(GameSession.Notice("slam!", 22, "FF8040"))),
           "the slam winds up (2 s wind-up plus the hit delay): its area is 5 m plus the boss's radius, the warning goes out");
+    Check(bpFightAi.WindingArea(bpBoss) == 620 && bpFightAi.SpecialDueAt(bpBoss) == bpDue && !bpFightAi.Interrupt(bpBoss, bpClock),
+          "the bots' WindingArea and SpecialDueAt report the slam; an interrupt skill does not break it");
     bpHits.Clear();
     Step(bpDue!.Value + 50);
     var slamHits = bpHits.Where(h => h.At >= bpDue).ToList();
@@ -3130,6 +3132,19 @@ checks = 0;
     Step(bpFightAi.TelegraphDueAt(bpBoss)!.Value + 50);
     Check(bpFight!.Slams == 2 && bpHits.Where(h => h.Key == 100_001).All(h => h.At < bpClock - 700) && bpHits.Any(h => h.Key == 100_002),
           "a player who walked out of the radius during the wind-up is not hit; the one who stayed is");
+    // The Guard hook (blocks, a Dodge's i-frames) applies to slams: the player 100_002 evades this one.
+    bpFightAi.Guard = (key, damage, _) => key == 100_002 ? 0 : damage;
+    while (bpFightAi.TelegraphArea(bpBoss) is null && bpClock < 60_000) Step(bpClock);
+    bpHits.Clear();
+    Step(bpFightAi.TelegraphDueAt(bpBoss)!.Value + 50);
+    Check(bpHits.Any(h => h.Key == 100_001 && h.Damage > 0) && bpHits.Where(h => h.Key == 100_002).All(h => h.Damage == 0), "a guarded (dodged) slam does no damage");
+    bpFightAi.Guard = null;
+    // A stun during the wind-up breaks the slam; it comes again 4 s later instead of a whole interval.
+    while (bpFightAi.TelegraphArea(bpBoss) is null && bpClock < 80_000) Step(bpClock);
+    bpBoss.StunnedUntil = bpClock + 500;
+    Step(bpClock + 100);
+    Check(bpFightAi.TelegraphArea(bpBoss) is null && bpFight!.NextSlamMs - bpClock is > 3_000 and <= NpcAi.SlamRetryMs, "a stun breaks the wind-up and the slam is retried soon after");
+    bpBoss.StunnedUntil = 0;
     bpPlayers[0] = (100_001, new Vector3d(200, 0, 0));
     // Phases: 70 % bpCalls the bpAdds (the host places them), 40 % doubles the damage and halves the cooldowns.
     bpBoss.Hp = 6_900;
@@ -3138,7 +3153,7 @@ checks = 0;
     Check(bpFight.Reached == 1 && bpCalls.Count == 1 && bpCalls[0].Adds is { Npc: 2310102, Count: 2 } && bpCalls[0].Fight == bpFight
           && bpFightPackets.Any(b => b.SequenceEqual(GameSession.Notice("help!", 22, "FFB040"))), "70 %: the boss calls two adds and says so");
     var bpAdds = Summons.Spawn(data, bpArena, 600002, 2310102, bpBoss.Position, 2, 500);
-    Check(bpAdds.Count == 2 && bpAdds.All(a => Summons.IsSummon(a.Key) && a.NpcId == 2310102 && a.Hostile && !a.Dead && bpArena.ContainsKey(a.Key))
+    Check(bpAdds.Count == 2 && bpAdds.All(a => Summons.IsSummon(a.Key) && a.NpcId == 2310102 && a.Name.EndsWith(Summons.NameSuffix, StringComparison.Ordinal) && a.Hostile && !a.Dead && bpArena.ContainsKey(a.Key))
           && bpAdds[0].Key + 1 == bpAdds[1].Key && Math.Abs(bpAdds[0].Position.X - bpBoss.Position.X - 500) < 1,
           "Summons.Spawn copies the dungeon's monster (its placed spawn's template) around the boss with keys of their own");
     bpFight.Adds.AddRange(bpAdds.Select(a => a.Key));

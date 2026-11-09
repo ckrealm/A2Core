@@ -301,7 +301,9 @@ public sealed partial class GameSession : IMapEventHost
         if (mapEventRuns.Count == 0) return DrainMapEvents();
         mapEventNow = now;
         var alive = targets?.Values.Any(t => string.Equals(t.Name, target.Name, StringComparison.OrdinalIgnoreCase) && !t.Dead) == true;
-        foreach (var run in mapEventRuns.ToList()) run.Killed(target.NpcId, target.Name, target.Hostile, alive, now);
+        // Summoned adds and wave helpers are ours: they never count toward the script's kill objectives.
+        if (!Summons.IsSummon(target.Key))
+            foreach (var run in mapEventRuns.ToList()) run.Killed(target.NpcId, target.Name, target.Hostile, alive, now);
         return DrainMapEvents();
     }
 
