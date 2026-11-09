@@ -64,7 +64,7 @@ Takeaway: the wire protocol for login, movement, combat and other players' messa
 | System | Status | Evidence | Notes |
 |---|---|---|---|
 | Inventory (bag, move, sort, remove, restore) | Implemented | `GameSession.cs:1238-1415`; `GameSession.Bag.cs`; migrations 005, 034 | Items are DB rows (`game.item_instances`, `item_stacks`). |
-| Warehouse / storage | Partial | `GameSession.Bag.cs:35-45` | Per character (OURS). Whether it's account-wide is unknown (CAPTURE.md item 15). |
+| Warehouse / storage | Partial | `GameSession.Bag.cs`, `GameSession.Alts.cs` | Account-wide by default (`Aion:Alts:SharedWarehouse`, docs/friends-server/ALTS.md); `kStorage` = account warehouse is CANDIDATE (CAPTURE.md item 15). |
 | Equipment equip/unequip | Implemented | `EquipRequestAsync` at `GameSession.cs:1329`, live opcodes 0xe247/0xe249 at `:1327` | Uses `game.equipment_rules`. Includes soul-binding (0x562b/2d/2f). |
 | Enchant, decompose, skins, titles, wings, rides | Partial | `GameSession.Enchant.cs`, `.Decompose.cs`, `.Skins.cs`, `.Titles.cs`, `.Rides.cs` | Data-driven (enchant.json 3535 items, decompose.json, skins.json, titles.json 1504). Results and costs are CANDIDATE (CAPTURE.md items 13, 18, 19). |
 | Leveling / XP | Partial | `GameSession.Experience.cs:15-46` | Exp curve is data (levels.json, 100 levels). **Kill XP is OURS**: NeedExp(mob level)/25 × a level-gap factor. Party share is an even split among nearby members (OURS). Quest XP comes from quest data. |
@@ -94,7 +94,7 @@ Takeaway: the wire protocol for login, movement, combat and other players' messa
 | Crafting | Partial | `GameSession.Craft.cs`; crafts.json (1,098 recipes) | Craft XP is OURS (CAPTURE.md item 18). |
 | Loot | Partial | `GameSession.Loot.cs`, `LootTables.cs`; loot.json | Ground drops are **owned by the killer only**; they expire after 60 s (`Loot.cs:17`). Only **1,385 of 5,988 monster templates (≈23%) have loot tables**, and prologue mobs have none. Roll reading is CANDIDATE. |
 | Currency (Kina) | Partial | Kina is an item: `KinaItemId = 930100001`, `GameSession.cs:547` | Kina comes from quest rewards (`:1016`), selling, mail and staff rewards. **No loot table contains Kina** (0 hits in loot.json). |
-| Mail | Partial | `GameSession.Mail.cs`; migration 030 | Load, read, delete and take attachments. Staff/GM mail is supported. Player-to-player sending isn't visible here (only system/staff posts). |
+| Mail | Partial | `GameSession.Mail.cs`, `GameSession.Alts.cs`; migrations 030, 040 | Load, read, delete and take attachments. Staff/GM mail. Player mail by chat command (`//mail`, `//sendkinah`, `//senditem`; the client has no send request), docs/friends-server/ALTS.md. |
 | Achievements, collections, attendance, battle pass | Partial | `.Achievements.cs`, `.Collections.cs`, `.BattlePass.cs` | Data is large (6,346 achievements). Battle-pass purchase always fails (`GameSession.cs:444`). |
 
 ## 4. Combat

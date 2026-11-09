@@ -7,7 +7,7 @@ namespace Aion.World;
 /// <item><see cref="FreePremiumPass"/>: the paid battle-pass track's level rewards can be claimed without a purchase, and a
 /// purchase request succeeds without charging anything.</item>
 /// <item><see cref="BothFactions"/>: an account may hold Elyos and Asmodian characters on this server (official: one race per
-/// server; each race's world lists only its own characters, with its own lobby slots, as migration 040 allows).</item>
+/// server; each race's world lists only its own characters, with its own lobby slots, as migration 041 allows).</item>
 /// <item><see cref="FlightMultiplier"/>: the flight gauge's maximum (FP, officially 250,000: 25 s of flight) times this;
 /// drain and refill per second stay official, so flights last longer and the gauge takes longer to refill.</item>
 /// </list>

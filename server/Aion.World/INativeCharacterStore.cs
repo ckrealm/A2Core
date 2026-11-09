@@ -47,6 +47,12 @@ public interface INativeCharacterStore : IAsyncDisposable
     Task<PostRecord?> SendPostAsync(Guid toCharacter, int dataId, string parameters, IReadOnlyList<(int TemplateId, long Count)> attachments, int tab, CancellationToken ct) => Task.FromResult<PostRecord?>(null);
     Task<bool> MarkPostsAsync(Guid character, IReadOnlyList<long> ids, bool delete, CancellationToken ct) => Task.FromResult(false);
     Task<bool> TakePostAsync(Guid character, long id, CancellationToken ct) => Task.FromResult(false);
+    /// <summary>Aion:Alts:SharedWarehouse: the account's warehouse rows (location 'account_storage'), the character's own warehouse merged in first.</summary>
+    Task<IReadOnlyList<ItemState>> AccountWarehouseAsync(Guid character, CancellationToken ct) => Task.FromResult<IReadOnlyList<ItemState>>([]);
+    /// <summary>Aion:Alts:SharedWarehouse: a bag item to 'account_storage' or an account warehouse item to 'bag' / another warehouse slot.</summary>
+    Task<bool> MoveWarehouseItemAsync(Guid character, Guid item, long revision, string location, int slot, CancellationToken ct) => Task.FromResult(false);
+    /// <summary>Aion:Alts:PlayerMail: a player's mail to a character by name (see IGameplayStore.SendPlayerPostAsync).</summary>
+    Task<PlayerPostResult> SendPlayerPostAsync(Guid character, PlayerPost post, CancellationToken ct) => Task.FromResult(new PlayerPostResult("unavailable"));
     Task<Guid?> CharacterByNameAsync(string name, CancellationToken ct) => Task.FromResult<Guid?>(null);
     Task<IReadOnlyList<CollectionRecord>> CollectionsAsync(Guid character, CancellationToken ct) => Task.FromResult<IReadOnlyList<CollectionRecord>>([]);
     Task<IReadOnlyList<BossChallengeRecord>> BossChallengesAsync(Guid character, CancellationToken ct) => Task.FromResult<IReadOnlyList<BossChallengeRecord>>([]);

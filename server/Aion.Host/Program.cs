@@ -114,6 +114,10 @@ var friends = (builder.Configuration.GetSection("Aion:Friends").Get<Aion.World.F
 builder.Services.AddSingleton(friends);
 builder.Services.AddSingleton(enchantRules);
 builder.Services.AddSingleton(lootRules);
+// Aion:Alts (OURS, docs/friends-server/ALTS.md): SharedWarehouse (account warehouse, on), PlayerMail (//mail, //sendkinah,
+// //senditem; on), MailFee (Kinah per mail, 0), MailDays (365). Both off is the behaviour before.
+var alts = (builder.Configuration.GetSection("Aion:Alts").Get<Aion.World.AltRules>() ?? Aion.World.AltRules.Default).Validated();
+builder.Services.AddSingleton(alts);
 if (native.LoginPort is not null || native.GamePort is not null)
 {
     if (!native.Development && !accountsReady)
@@ -278,6 +282,7 @@ if (native.LoginPort is not null || native.GamePort is not null)
         rates, rules, native.MaxPlayers is > 0 and var maxPlayers ? $"at most {maxPlayers}" : $"no cap beyond {native.MaxConnections} connections per port", dungeonRules, dungeonScaling, enchantRules, friends.Describe(), resets);
 if (native.LoginPort is not null || native.GamePort is not null)
     app.Logger.LogInformation("Loot: {Loot}.", lootRules);
+if (native.LoginPort is not null || native.GamePort is not null) app.Logger.LogInformation("Alts: {Alts}.", alts);
 // Chat mutes and the chat log go through the staff tools when both exist.
 if (app.Services.GetService<Aion.Host.Authentication.ServerControl>() is { } serverControl && app.Services.GetService<ChatRelay>() is { } chatRelay)
     chatRelay.Moderation = serverControl;

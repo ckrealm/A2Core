@@ -33,8 +33,8 @@ public sealed partial class GameSession
 
     /// <summary>
     /// 0x563a ItemMove_RQ {npc key i32, EItemContainerType u8, item key i64, slot pos i32}: a bag or warehouse item to a
-    /// slot of the bag (1) or the warehouse (2, kStorage: the Storage NPCs' depot; kept per character, OURS — the
-    /// official one is account-wide). Equipped items go through ItemEquip.
+    /// slot of the bag (1) or the warehouse (2, kStorage: the Storage NPCs' depot). With Aion:Alts:SharedWarehouse (default)
+    /// it is the account's warehouse (GameSession.Alts.cs); off, it is kept per character (OURS). Equipped items go through ItemEquip.
     /// </summary>
     async Task<List<byte[]>> MoveItemInBagAsync(byte[] plain, CancellationToken ct)
     {
@@ -47,6 +47,7 @@ public sealed partial class GameSession
             return [Reply(1)];
         var moved = await Stored(async () => (target == "bag" && row.Location == "bag"
             ? await store.MoveBagItemAsync(character, row.InstanceId, row.Revision, slot, ct)
+            : options.Alts.SharedWarehouse ? await store.MoveWarehouseItemAsync(character, row.InstanceId, row.Revision, target == "storage" ? "account_storage" : "bag", slot, ct)
             : await store.MoveItemToContainerAsync(character, row.InstanceId, row.Revision, target, slot, ct)) ? [[]] : []);
         if (moved.Count == 0) return [Reply(1)];
         return [Reply(0), .. await InventoryChangesAsync(ct, 0, 0), .. target == "storage" && row.Location == "bag" ? Achieve("StorageStore") : []];

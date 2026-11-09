@@ -286,6 +286,32 @@ await using(var source=NpgsqlDataSource.Create(connectionString))
     immutableItem.Parameters.AddWithValue(item.InstanceId);
     try { await immutableItem.ExecuteNonQueryAsync(); throw new Exception("Item wire ID changed"); }
     catch(PostgresException e) when(e.SqlState=="P0001") { Check(true,"item wire ID immutable"); }
+    // Aion:Alts (migration 040): the account warehouse is shared by the account's characters on the world; player mail
+    // carries the item itself to a character by name.
+    var altId=await game.CreateAsync(first,draft with {RequestId=Guid.NewGuid(),Name="Altfirst",LobbySlot=7});
+    await game.AdminAsync(second,new AdminCommand(Guid.NewGuid(),id,"grant","test",101));
+    var deposit=(await game.InventoryAsync(first,id))!.Items.Last(x=>x.Location=="bag" && x.TemplateId==101 && !x.Upgrades.TryGetProperty("soul_bind",out _));
+    Check(await game.MoveWarehouseItemAsync(first,id,deposit.InstanceId,deposit.Revision,"account_storage",0),"a bag item goes into the account warehouse");
+    Check(!await game.MoveWarehouseItemAsync(first,id,deposit.InstanceId,deposit.Revision,"bag",1),"a stale revision is refused");
+    Check(!await game.MoveWarehouseItemAsync(second,staffChar,deposit.InstanceId,deposit.Revision+1,"bag",1),"another account cannot reach the warehouse");
+    var seen=(await game.AccountWarehouseAsync(first,altId)).Single(x=>x.InstanceId==deposit.InstanceId);
+    Check(seen is { Location: "account_storage", Slot: 0 } && seen.WireId==deposit.WireId && (await game.AccountWarehouseAsync(second,staffChar)).All(x=>x.InstanceId!=deposit.InstanceId),
+          "the account's other character sees it; another account does not");
+    Check(await game.MoveWarehouseItemAsync(first,altId,deposit.InstanceId,seen.Revision,"bag",3)
+          && (await game.InventoryAsync(first,altId))!.Items.Single(x=>x.InstanceId==deposit.InstanceId) is { Location: "bag", Slot: 3 },"the other character takes it into its bag");
+    var bound=(await game.InventoryAsync(first,id))!.Items.Single(x=>x.InstanceId==bagItem.InstanceId);
+    Check(!await game.MoveWarehouseItemAsync(first,id,bound.InstanceId,bound.Revision,"account_storage",1)
+          && (await game.SendPlayerPostAsync(first,id,new PlayerPost("Altfirst",106,"x|y",bound.InstanceId,bound.Revision))).Result=="bound","soul-bound items stay out of the warehouse and the mail");
+    Check((await game.SendPlayerPostAsync(first,altId,new PlayerPost("nobody-here",106,"x|y"))).Result=="unknown"
+          && (await game.SendPlayerPostAsync(first,altId,new PlayerPost("altfirst",106,"x|y"))).Result=="self","player mail: unknown names and yourself refused");
+    var held=(await game.InventoryAsync(first,altId))!.Items.Single(x=>x.InstanceId==deposit.InstanceId);
+    var mailed=await game.SendPlayerPostAsync(first,altId,new PlayerPost("[gm]staff",106,"[Altfirst] Sword|For you",held.InstanceId,held.Revision));
+    Check(mailed.Result=="ok" && mailed.Recipient==staffChar && mailed.Post!.Attachments.SequenceEqual([(101,1L)]) && mailed.Post.Tab==2
+          && (await game.InventoryAsync(first,altId))!.Items.All(x=>x.InstanceId!=deposit.InstanceId),"a player mail takes the item from the sender's bag and lists it on the post");
+    Check(await game.MarkPostsAsync(second,staffChar,[mailed.Post!.Id],true) && (await game.PostsAsync(second,staffChar)).Any(p=>p.Id==mailed.Post!.Id),"a post with an item not yet taken is not deleted");
+    Check(await game.TakePostAsync(second,staffChar,mailed.Post!.Id)
+          && (await game.InventoryAsync(second,staffChar))!.Items.Single(x=>x.InstanceId==deposit.InstanceId) is { Location: "bag" } arrived && arrived.WireId==deposit.WireId
+          && !await game.TakePostAsync(second,staffChar,mailed.Post!.Id),"taking the post moves the item itself (identity kept) into the recipient's bag, once");
 }
 Console.WriteLine($"{checks} isolated PostgreSQL repository checks passed.");
 

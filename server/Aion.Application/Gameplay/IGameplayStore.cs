@@ -53,6 +53,10 @@ public sealed record DungeonEntryRecord(int DungeonId, string Period, int Count)
 /// <summary>A period collection list's progress (migration 032).</summary>
 public sealed record CollectionRecord(int CollectionId, int ListId, int Registered, bool Rewarded);
 /// <summary>A mail (migration 030): Post.dat template, EPostType, EPostSaveTab, its message parameters and attachments.</summary>
+/// <summary>A player mail (Aion:Alts:PlayerMail): to a name, the post's parameters, an optional bag stack (count 0: all of it), Kinah and the fee.</summary>
+public sealed record PlayerPost(string To, int DataId, string Parameters, Guid? Item = null, long ItemRevision = 0, long ItemCount = 0, long Kinah = 0, long Fee = 0, int Days = 365);
+/// <summary>ok, unknown (no such character on the world), self, kinah (not enough), item (gone or changed), bound (soul-bound), count, invalid.</summary>
+public sealed record PlayerPostResult(string Result, Guid? Recipient = null, PostRecord? Post = null);
 public sealed record PostRecord(long Id, int Type, int Tab, int DataId, string Params, bool Read, bool Taken, DateTimeOffset Sent, DateTimeOffset Expire,
     IReadOnlyList<(int TemplateId, long Count)> Attachments, int Reason);
 // A friend, friend request or block of a character (Kind: friend, sent, received, blocked).
@@ -169,6 +173,22 @@ public interface IGameplayStore
     Task<bool> MarkPostsAsync(VerifiedAccount account, Guid character, IReadOnlyList<long> ids, bool delete, CancellationToken ct = default) => Task.FromResult(false);
     /// <summary>Grants a post's attachments once and marks it taken.</summary>
     Task<bool> TakePostAsync(VerifiedAccount account, Guid character, long id, CancellationToken ct = default) => Task.FromResult(false);
+    /// <summary>
+    /// Aion:Alts:SharedWarehouse: the account's warehouse on the character's world (location 'account_storage', migration 040),
+    /// after the character's own warehouse rows ('storage') join it (slots kept where free).
+    /// </summary>
+    Task<IReadOnlyList<ItemState>> AccountWarehouseAsync(VerifiedAccount account, Guid character, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ItemState>>([]);
+    /// <summary>
+    /// Moves a bag item into the account warehouse ('account_storage') or an account warehouse item to the bag or another warehouse
+    /// slot (revision-checked; the item on the target slot takes the old place; soul-bound items stay out). The account's other
+    /// characters on the world are told (pg_notify aion_inventory) so a second session sees the change.
+    /// </summary>
+    Task<bool> MoveWarehouseItemAsync(VerifiedAccount account, Guid character, Guid item, long revision, string location, int slot, CancellationToken ct = default) => Task.FromResult(false);
+    /// <summary>
+    /// Aion:Alts:PlayerMail: a mail from the character to a character by name on the same world (any account), atomically paying
+    /// kina + fee from the bag's Kinah and sending (part of) a bag stack, which waits in location 'mail' until taken.
+    /// </summary>
+    Task<PlayerPostResult> SendPlayerPostAsync(VerifiedAccount account, Guid character, PlayerPost post, CancellationToken ct = default) => Task.FromResult(new PlayerPostResult("unavailable"));
     Task<IReadOnlyList<AchievementRecord>> AchievementsAsync(VerifiedAccount account, Guid character, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<AchievementRecord>>([]);
     Task<IReadOnlyList<(int Group, int Step)>> GroupRewardsTakenAsync(VerifiedAccount account, Guid character, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<(int, int)>>([]);
     /// <summary>Upserts the given states.</summary>

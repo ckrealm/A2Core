@@ -106,11 +106,19 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
         {
             if (line.StartsWith("bot", StringComparison.OrdinalIgnoreCase) && (line.Length == 3 || char.IsWhiteSpace(line[3])))
                 return await BotAsync(actor.Session, line[3..].Trim(), ct);
+            // Player mail (Aion:Alts:PlayerMail, GameSession.Alts.cs; off: as before). "//mail" without a '|' stays the staff builder's Mail for staff.
+            var mailWord = line.Split(' ', 2)[0];
+            if (actor.Session.Alts.PlayerMail && GameSession.MailCommands.FirstOrDefault(c => c.Equals(mailWord, StringComparison.OrdinalIgnoreCase)) is { } mailCommand
+                && (mailCommand != "mail" || line.Contains('|') || !await builder.AllowedAsync(actor.Session, ct)))
+                return await actor.Session.InvokeAsync(async _ => await actor.Session.PlayerMailAsync(mailCommand, line[mailWord.Length..].Trim(), ct))
+                    .WaitAsync(TimeSpan.FromSeconds(10), ct);
             if (line.Length == 0 || line.Equals("help", StringComparison.OrdinalIgnoreCase))
                 return await builder.AllowedAsync(actor.Session, ct)
                     ? "Builder commands (in chat: //<command>; console: s <command>): " + string.Join(", ", BuilderCommands.Supported)
                         + (Bots is { Options.Enabled: true } ? "; //bot add <character> for playerbots" : "")
+                        + (actor.Session.Alts.PlayerMail ? "; player mail: " + GameSession.MailUsage : "")
                     : "Commands: //report <text> sends a report to the staff."
+                        + (actor.Session.Alts.PlayerMail ? " Mail: " + GameSession.MailUsage + "." : "")
                         + (Bots is { Options: { Enabled: true, PlayersMayUse: true } } ? " //bot add <character> summons one of your characters as a bot." : "");
             return await actor.Session.InvokeAsync(async now =>
             {

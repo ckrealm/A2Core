@@ -46,6 +46,8 @@ public sealed record GameSessionOptions
     public DungeonScaling DungeonScaling { get; init; } = DungeonScaling.Default;
     /// <summary>Aion:Loot: class-aware and duplicate-avoiding equipment picks, bad-luck protection (LootRules, OURS).</summary>
     public LootRules Loot { get; init; } = LootRules.Default;
+    /// <summary>Aion:Alts: the account warehouse and player mail (both on by default; <see cref="AltRules.Off"/> is the behaviour before).</summary>
+    public AltRules Alts { get; init; } = AltRules.Default;
     /// <summary>Heal/buff/debuff effects of class skills; null: the embedded tools/data/skill-effects.json (OURS values).</summary>
     public SkillEffectTable? SkillEffects { get; init; }
 }
@@ -1330,7 +1332,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
 
     async Task<List<InventoryItem>> LoadInventoryAsync(INativeCharacterStore store, Guid character, CancellationToken ct)
     {
-        var rows = await store.InventoryAsync(character, ct);
+        var rows = await InventoryRowsAsync(store, character, ct);
         storedItems.Clear();
         foreach (var row in rows) storedItems[WireKey(row)] = row;
         return Layout(rows, selected?.WireId ?? 0, data);
@@ -1420,7 +1422,13 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         var gained = new List<(int ItemId, long Count)>();
         foreach (var item in items)
         {
-            if (!inventory.TryGetValue(item.Key, out var before)) { changes.Add(new ItemModification(0, item, Increase: increase)); gained.Add((item.ItemId, item.Count)); }
+            // An item another character of the account put in the shared warehouse is not a gain (Aion:Alts:SharedWarehouse).
+            if (!inventory.TryGetValue(item.Key, out var before))
+            {
+                var deposited = item.Container == InventoryItem.Storage;
+                changes.Add(new ItemModification(0, item, Increase: deposited ? (byte)0 : increase));
+                if (!deposited) gained.Add((item.ItemId, item.Count));
+            }
             else if (before != item)
             {
                 changes.Add(new ItemModification(1, item, Increase: (byte)(item.Count > before.Count ? increase : 0), Decrease: (byte)(item.Count < before.Count ? decrease : 0)));

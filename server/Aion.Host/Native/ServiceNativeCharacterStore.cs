@@ -292,6 +292,24 @@ public sealed class ServiceNativeCharacterStore(string token, WorldIdentity iden
         return await game.TakePostAsync(identity.Account, character, id, ct);
     }
 
+    public async Task<IReadOnlyList<ItemState>> AccountWarehouseAsync(Guid character, CancellationToken ct)
+    {
+        await ValidateAsync(ct);
+        return await game.AccountWarehouseAsync(identity.Account, character, ct);
+    }
+
+    public async Task<bool> MoveWarehouseItemAsync(Guid character, Guid item, long revision, string location, int slot, CancellationToken ct)
+    {
+        await ValidateAsync(ct);
+        return await game.MoveWarehouseItemAsync(identity.Account, character, item, revision, location, slot, ct);
+    }
+
+    public async Task<PlayerPostResult> SendPlayerPostAsync(Guid character, PlayerPost post, CancellationToken ct)
+    {
+        await ValidateAsync(ct);
+        return await game.SendPlayerPostAsync(identity.Account, character, post, ct);
+    }
+
     public async Task<Guid?> CharacterByNameAsync(string name, CancellationToken ct)
     {
         await ValidateAsync(ct);

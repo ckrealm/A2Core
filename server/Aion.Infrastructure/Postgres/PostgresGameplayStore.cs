@@ -6,7 +6,7 @@ using NpgsqlTypes;
 
 namespace Aion.Infrastructure.Postgres;
 
-public sealed class PostgresGameplayStore(NpgsqlDataSource source) : IGameplayStore
+public sealed partial class PostgresGameplayStore(NpgsqlDataSource source) : IGameplayStore
 {
     /// <summary>The highest character level (class-skills.json max_level, PcStatLevel).</summary>
     public const int MaxLevel = 100;
@@ -794,14 +794,16 @@ public sealed class PostgresGameplayStore(NpgsqlDataSource source) : IGameplaySt
         var attachments=(JsonSerializer.Deserialize<long[][]>(r.GetString(9)) ?? []).Where(a=>a.Length>=2).Select(a=>((int)a[0],a[1])).ToList();
         return new(r.GetInt64(0),r.GetInt16(1),r.GetInt16(2),r.GetInt32(3),r.GetString(4),r.GetBoolean(5),r.GetBoolean(6),r.GetFieldValue<DateTimeOffset>(7),r.GetFieldValue<DateTimeOffset>(8),attachments,r.GetInt32(10));
     }
-    const string PostColumns="post_id,post_type,save_tab,post_data_id,msg_params,read,taken,sent_at,expire_at,attachments::text,reason";
+    // Items sent by players (migration 040, location 'mail' until taken) are listed after the granted attachments.
+    const string PostColumns="p.post_id,p.post_type,p.save_tab,p.post_data_id,p.msg_params,p.read,p.taken,p.sent_at,p.expire_at,"
+        +"(p.attachments||COALESCE((SELECT jsonb_agg(jsonb_build_array(i.template_id,i.quantity) ORDER BY i.instance_id) FROM game.item_instances i WHERE i.instance_id=ANY(p.attached_items)),'[]'::jsonb))::text,p.reason";
 
     public async Task<IReadOnlyList<PostRecord>> PostsAsync(VerifiedAccount account, Guid character, CancellationToken ct=default)
     {
         await using var c=await source.OpenConnectionAsync(ct); await using var t=await c.BeginTransactionAsync(ct);
         if(!await Own(c,t,account.AccountId,character,ct)) return [];
         var posts=new List<PostRecord>();
-        await using(var q=Query(c,t,$"SELECT {PostColumns} FROM game.character_posts WHERE character_id=$1 AND NOT deleted AND expire_at>now() ORDER BY post_id DESC LIMIT 200",character))
+        await using(var q=Query(c,t,$"SELECT {PostColumns} FROM game.character_posts p WHERE p.character_id=$1 AND NOT p.deleted AND p.expire_at>now() ORDER BY p.post_id DESC LIMIT 200",character))
         {
             await using var r=await q.ExecuteReaderAsync(ct);
             while(await r.ReadAsync(ct)) posts.Add(ReadPost(r));
@@ -817,7 +819,7 @@ public sealed class PostgresGameplayStore(NpgsqlDataSource source) : IGameplaySt
         var id=await Scalar(c,t,"INSERT INTO game.character_posts(character_id,save_tab,post_data_id,msg_params,attachments) VALUES($1,$2,$3,$4,$5) RETURNING post_id",
             ct,toCharacter,(short)tab,dataId,parameters,Json(attachments.Select(a=>new[]{(long)a.TemplateId,a.Count})));
         PostRecord? post=null;
-        await using(var q=Query(c,t,$"SELECT {PostColumns} FROM game.character_posts WHERE post_id=$1",(long)id!))
+        await using(var q=Query(c,t,$"SELECT {PostColumns} FROM game.character_posts p WHERE p.post_id=$1",(long)id!))
         {
             await using var r=await q.ExecuteReaderAsync(ct);
             if(await r.ReadAsync(ct)) post=ReadPost(r);
@@ -833,7 +835,7 @@ public sealed class PostgresGameplayStore(NpgsqlDataSource source) : IGameplaySt
         await using var c=await source.OpenConnectionAsync(ct); await using var t=await c.BeginTransactionAsync(ct);
         if(!await Own(c,t,account.AccountId,character,ct)) return false;
         var sql=delete
-            ? "UPDATE game.character_posts SET deleted=true WHERE character_id=$1 AND post_id=ANY($2) AND (taken OR attachments='[]'::jsonb)"
+            ? "UPDATE game.character_posts SET deleted=true WHERE character_id=$1 AND post_id=ANY($2) AND (taken OR (attachments='[]'::jsonb AND cardinality(attached_items)=0))"
             : "UPDATE game.character_posts SET read=true WHERE character_id=$1 AND post_id=ANY($2)";
         await Execute(c,t,sql,ct,character,ids.ToArray());
         await t.CommitAsync(ct); return true;
@@ -845,6 +847,8 @@ public sealed class PostgresGameplayStore(NpgsqlDataSource source) : IGameplaySt
         if(!await Own(c,t,account.AccountId,character,ct)) return false;
         var attachmentsText=await Scalar(c,t,"SELECT attachments::text FROM game.character_posts WHERE post_id=$1 AND character_id=$2 AND NOT taken AND NOT deleted FOR UPDATE",ct,id,character) as string;
         if(attachmentsText is null) return false;
+        // A player's item (migration 040) waits under the recipient in location 'mail': it moves into the bag as it is.
+        await Execute(c,t,"UPDATE game.item_instances SET location='bag',slot=NULL,character_id=$2 WHERE location='mail' AND instance_id=ANY((SELECT attached_items FROM game.character_posts WHERE post_id=$1))",ct,id,character);
         var build=await Scalar(c,t,"SELECT build_id FROM catalog.builds ORDER BY imported_at DESC LIMIT 1",ct) as string;
         foreach(var a in JsonSerializer.Deserialize<long[][]>(attachmentsText) ?? [])
             if(a.Length>=2 && a[1]>0 && build is not null && await Scalar(c,t,"SELECT template_id FROM catalog.items WHERE build_id=$1 AND template_id=$2",ct,build,(int)a[0]) is not null)

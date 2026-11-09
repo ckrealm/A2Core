@@ -1756,11 +1756,12 @@ Check(Op(registered[0]) == GameSession.RegisterPeriodCollectionRs && BitConverte
 Check(BitConverter.ToUInt16((await staffSession.HandleAsync(new PacketWriter().U16(GameSession.RegisterPeriodCollectionRq).I32(5401317).I32(offeredList.Id).Varint(0).ToArray(), officialDay))[0], 2) == 1,
       "a rewarded list takes nothing more");
 
-// Warehouse: ItemMove_RQ with container 2 (kStorage) parks a bag item in the depot (location 'storage'); back with container 1.
-var parked = staffStore.Items.First(i => i.Location == "bag" && i.TemplateId == 530116001);
+// Warehouse: ItemMove_RQ with container 2 (kStorage) parks a bag item in the depot (the account warehouse, location
+// 'account_storage', with Aion:Alts:SharedWarehouse on by default; per character 'storage' with it off, checked below); back with container 1.
+var parked = staffStore.Items.First(i => i.Location == "bag" && i.TemplateId == 530116001 && !i.Upgrades.TryGetProperty("soul_bind", out _));   // bound items stay out of the account warehouse
 var parkedKey = parked.WireId;
 var toDepot = await staffSession.HandleAsync(new PacketWriter().U16(GameSession.ItemMoveRq).I32(0).U8(InventoryItem.Storage).I64(parkedKey).I32(3).ToArray(), Now + 7500);
-Check(BitConverter.ToUInt16(toDepot[0], 2) == 0 && staffStore.Items.First(i => i.WireId == parkedKey) is { Location: "storage", Slot: 3 }
+Check(BitConverter.ToUInt16(toDepot[0], 2) == 0 && staffStore.Warehouse.First(i => i.WireId == parkedKey) is { Location: "account_storage", Slot: 3 }
       && toDepot.Any(b => Op(b) == 0x561b), "a bag item moves into the warehouse (container 2, slot 3) and the change is sent (0x561b)");
 var fromDepot = await staffSession.HandleAsync(new PacketWriter().U16(GameSession.ItemMoveRq).I32(0).U8(InventoryItem.Bag).I64(parkedKey).I32(7).ToArray(), Now + 7510);
 Check(BitConverter.ToUInt16(fromDepot[0], 2) == 0 && staffStore.Items.First(i => i.WireId == parkedKey) is { Location: "bag", Slot: 7 }, "and back into the bag");
@@ -2417,7 +2418,7 @@ presence.Enter("Player1", game, null);
 presence.Enter("Visitor", stored, null);
 Check((await gm.HandleAsync(chatter, "player1", "//help", default)).StartsWith("Builder commands"), "configured development GM");
 Check((await gm.HandleAsync(chatter, "[GM] Player1", "//help", default)).StartsWith("Builder commands"), "chat under the displayed name finds the character");
-Check(await gm.HandleAsync(chatter, "Visitor", "//help", default) == "Commands: //report <text> sends a report to the staff.", "players get the report command as help");
+Check((await gm.HandleAsync(chatter, "Visitor", "//help", default)).StartsWith("Commands: //report <text> sends a report to the staff. Mail: //mail <name>"), "players get the report and mail commands as help");
 Check(await gm.HandleAsync(chatter, "Visitor", "//report the bridge is broken", default) == "Reports are not available on this server.", "no reports without staff tools");
 var reports = new List<string>();
 var reporting = new GmCommands(presence, builder) { Report = (_, name, text, _) => { reports.Add(name + ":" + text); return Task.FromResult("sent"); } };
@@ -3782,6 +3783,115 @@ checks = 0;
 }
 Console.WriteLine($"{checks} progression checks passed (unlocks past 25, fallback damage, skill-level scaling, MP max, combat power).");
 
+// Alts (Aion:Alts, AltRules.cs, docs/friends-server/ALTS.md): the account warehouse and player mail.
+checks = 0;
+{
+    Check(new AltRules() is { SharedWarehouse: true, PlayerMail: true, MailFee: 0 } && AltRules.Off is { SharedWarehouse: false, PlayerMail: false }
+          && new AltRules().Validated().ToString().Contains("shared by the account"), "Aion:Alts defaults: shared warehouse and player mail on, no fee");
+    foreach (var bad in new[] { new AltRules { MailFee = -1 }, new AltRules { MailDays = 0 } })
+    {
+        var altRefused = false;
+        try { bad.Validated(); } catch (InvalidOperationException) { altRefused = true; }
+        Check(altRefused, "an invalid Aion:Alts value stops the host at startup");
+    }
+    var empty = JsonSerializer.SerializeToElement(new { });
+    ItemState Row(int template, long count, string location, int? slot, long wire, object? upgrades = null) =>
+        new(Guid.NewGuid(), "b", template, count, location, slot, 1, empty, upgrades is null ? empty : JsonSerializer.SerializeToElement(upgrades), wire);
+    async Task<GameSession> Alt(AltRules alts, string name, FakeStore store, Action<FakeStore>? seed = null)
+    {
+        var session = new GameSession(data, new GameSessionOptions { Alts = alts }, new Random(23)) { Store = store };
+        await session.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+        await session.HandleAsync(new PacketWriter().U16(0x361b).String(name).U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
+        seed?.Invoke(store);
+        await session.HandleAsync(new PacketWriter().U16(0x361f).Varint(store.States[0].WireId << 16).I32(0).Vec3(Vector3d.Zero).ToArray(), Now);
+        await session.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+        await session.HandleAsync([0x10, 0x56], Now);
+        return session;
+    }
+    byte[] Move(byte container, long key, int slot) => new PacketWriter().U16(GameSession.ItemMoveRq).I32(0).U8(container).I64(key).I32(slot).ToArray();
+    bool Ok(List<byte[]> replies) => replies.Count > 0 && BitConverter.ToUInt16(replies[0], 2) == 0;
+
+    // Off: the warehouse is the character's own, as before (location 'storage', the account warehouse never consulted).
+    var soloStore = new FakeStore();
+    var solo = await Alt(AltRules.Off, "Solo", soloStore, s => s.Items.Add(Row(530116001, 1, "bag", 0, 8001)));
+    Check(Ok(await solo.HandleAsync(Move(InventoryItem.Storage, 8001, 4), Now + 10)) && soloStore.Items.Single(i => i.WireId == 8001) is { Location: "storage", Slot: 4 }
+          && soloStore.Warehouse.Count == 0 && soloStore.WarehouseMoves == 0, "SharedWarehouse off: ItemMove into container 2 keeps the item in the character's own warehouse");
+    Check((await solo.PlayerMailAsync("mail", "Anyone hello | hi", CancellationToken.None)).Message == "Player mail is off on this server.", "PlayerMail off: the commands answer that mail is off");
+
+    // On: two characters of one account (two stores sharing one warehouse, as two sessions of one account at once).
+    var accountShared = new List<ItemState>();
+    var mainStore = new FakeStore { Warehouse = accountShared };
+    var altStore = new FakeStore { Warehouse = accountShared };
+    var main = await Alt(AltRules.Default, "Mainchar", mainStore, s => s.Items.AddRange([Row(530116001, 1, "bag", 0, 8101), Row(110160001, 1, "bag", 1, 8102, new { soul_bind = 1 }),
+        Row(530126003, 5, "storage", 2, 8103)]));
+    Check(accountShared.Single(i => i.WireId == 8103) is { Location: "account_storage", Slot: 2 } && mainStore.Items.All(i => i.Location != "storage")
+          && main.StoredItemKeys.Contains(8103L), "the character's old per-character warehouse joins the account warehouse at load (slot kept) and is shown in container 2");
+    Check(Ok(await main.HandleAsync(Move(InventoryItem.Storage, 8101, 0), Now + 20)) && accountShared.Single(i => i.WireId == 8101) is { Location: "account_storage", Slot: 0 },
+          "a bag item goes into the account warehouse");
+    Check(!Ok(await main.HandleAsync(Move(InventoryItem.Storage, 8102, 5), Now + 30)) && mainStore.Items.Single(i => i.WireId == 8102).Location == "bag",
+          "a soul-bound item stays out of the account warehouse (as in a trade)");
+    var alt = await Alt(AltRules.Default, "Altchar", altStore);
+    Check(alt.StoredItemKeys.Contains(8101L) && alt.StoredItemKeys.Contains(8103L), "the account's other character sees both items in its warehouse");
+    Check(Ok(await alt.HandleAsync(Move(InventoryItem.Bag, 8101, 6), Now + 40)) && altStore.Items.Single(i => i.WireId == 8101) is { Location: "bag", Slot: 6 }
+          && accountShared.All(i => i.WireId != 8101), "the other character takes it out into its own bag");
+    Check(!Ok(await main.HandleAsync(Move(InventoryItem.Bag, 8101, 7), Now + 50)) && mainStore.Items.All(i => i.WireId != 8101),
+          "the first session's stale view cannot take the same item again (revision check: no duplicate)");
+    var refreshed = await main.InventoryChangesAsync(CancellationToken.None);
+    Check(!main.StoredItemKeys.Contains(8101L) && refreshed.Any(b => Op(b) == 0x561b), "a refresh (pg_notify aion_inventory in the host) removes it from the first session's warehouse");
+    altStore.Items.Add(Row(530126003, 3, "bag", 9, 8104));
+    await alt.InventoryChangesAsync(CancellationToken.None);
+    Check(Ok(await alt.HandleAsync(Move(InventoryItem.Storage, 8104, 2), Now + 60)) && accountShared.Single(i => i.WireId == 8104).Slot == 2 && altStore.Items.Single(i => i.WireId == 8103) is { Location: "bag", Slot: 9 },
+          "a deposit onto a taken warehouse slot swaps: the item there comes to the bag slot it left");
+
+    // Player mail by command: text, Kinah, an item (the stack itself travels), to a character by name.
+    var directory = new Dictionary<string, FakeStore>(StringComparer.OrdinalIgnoreCase) { ["Mainchar"] = mainStore, ["Altchar"] = altStore };
+    mainStore.MailDirectory = directory; altStore.MailDirectory = directory;
+    mainStore.Items.Add(Row(930100001, 5000, "bag", 10, 8105));
+    await main.InventoryChangesAsync(CancellationToken.None);
+    var note = await main.PlayerMailAsync("mail", "Altchar Gear up | Your sword is in the warehouse.", CancellationToken.None);
+    Check(note.Message == "Mail sent to Altchar." && altStore.Posts.Single() is { DataId: GameSession.StaffPostDataId, Tab: 1, Params: "[Mainchar] Gear up|Your sword is in the warehouse." },
+          "//mail: a text post (Post.dat 106, title with the sender's name) to the character by name");
+    var kinahMail = await main.PlayerMailAsync("sendkinah", "altchar 1,200", CancellationToken.None);
+    Check(kinahMail.Message == "Mail sent to altchar." && mainStore.Items.Single(i => i.TemplateId == 930100001).Quantity == 3800
+          && altStore.Posts[^1] is { Tab: 2 } kinahPost && kinahPost.Attachments.SequenceEqual([(930100001, 1200L)]) && kinahMail.Packets.Any(b => Op(b) == 0x561b),
+          "//sendkinah: the Kinah leaves the sender's bag (change sent) and waits as the post's attachment");
+    Check((await main.PlayerMailAsync("sendkinah", "Altchar 999999", CancellationToken.None)).Message == "Not enough Kinah." && mainStore.Items.Single(i => i.TemplateId == 930100001).Quantity == 3800,
+          "more Kinah than the bag holds is refused and nothing is taken");
+    Check((await main.PlayerMailAsync("senditem", "", CancellationToken.None)).Message.StartsWith("Bag (slot: item x count): 2: 110160001 x1"), "//senditem alone lists the bag with slots counted from 1");
+    Check((await main.PlayerMailAsync("senditem", "Altchar 2", CancellationToken.None)).Message == "Soul-bound items cannot be mailed.", "soul-bound items are not mailed");
+    mainStore.Items.Add(Row(530126003, 10, "bag", 11, 8106, new { enchant = 0 }));
+    await main.InventoryChangesAsync(CancellationToken.None);
+    var itemMail = await main.PlayerMailAsync("senditem", "Altchar 12 4", CancellationToken.None);
+    Check(itemMail.Message == "Mail sent to Altchar." && mainStore.Items.Single(i => i.WireId == 8106).Quantity == 6 && altStore.Escrow.Values.Single().Single() is { Quantity: 4, Location: "mail" },
+          "//senditem <name> <slot> <count>: part of the stack is held for the recipient");
+    var wholeMail = await main.PlayerMailAsync("senditem", "Altchar 530126003", CancellationToken.None);
+    var sentRow = altStore.Escrow.Values.SelectMany(e => e).SingleOrDefault(e => e.WireId == 8106);
+    Check(wholeMail.Message == "Mail sent to Altchar." && mainStore.Items.All(i => i.WireId != 8106) && sentRow is { Quantity: 6 }, "an item id picks the first bag stack; without a count the whole stack (its identity kept) travels");
+    var take = await alt.HandleAsync(new PacketWriter().U16(GameSession.PostTakeRq).U8(1).I64(altStore.Posts[^1].Id).ToArray(), Now + 70);
+    Check(Ok(take) && altStore.Items.Any(i => i.WireId == 8106 && i.Location == "bag" && i.Quantity == 6), "TakePost moves the sent stack itself into the recipient's bag");
+    Check((await main.PlayerMailAsync("mail", "Nobody x | y", CancellationToken.None)).Message == "There is no character named Nobody on this server."
+          && (await main.PlayerMailAsync("mail", "Mainchar x | y", CancellationToken.None)).Message == "You cannot mail yourself."
+          && (await main.PlayerMailAsync("mail", "Altchar no bar", CancellationToken.None)).Message.StartsWith("Usage: //mail"), "unknown names, yourself and a missing '|' are refused");
+    // A fee (OURS, MailFee) is paid with each mail.
+    var feeStore = new FakeStore { MailDirectory = directory };
+    var feePayer = await Alt(AltRules.Default with { MailFee = 100 }, "Feepayer", feeStore, s => s.Items.Add(Row(930100001, 150, "bag", 0, 8201)));
+    Check((await feePayer.PlayerMailAsync("mail", "Altchar hi | there", CancellationToken.None)).Message == "Mail sent to Altchar. Fee: 100 Kinah."
+          && feeStore.Items.Single(i => i.TemplateId == 930100001).Quantity == 50
+          && (await feePayer.PlayerMailAsync("mail", "Altchar again | there", CancellationToken.None)).Message.StartsWith("Not enough Kinah (the mail costs 100"), "MailFee: paid per mail, refused without the Kinah");
+    // The chat command path: players use //mail; for staff, //Mail without a '|' stays the builder's staff mail.
+    var altPresence = new WorldPresence();
+    altPresence.Enter("Mainchar", main, null);
+    var altGm = new GmCommands(altPresence, new BuilderCommands(altPresence, new GmPolicy(), (_, _, _) => { }, data));
+    var altChat = new Aion.Application.Chat.ChatIdentity("1", "1204", "en_US");
+    var routed = altGm.HandleAsync(altChat, "Mainchar", "//mail Altchar Hello | from chat", default);
+    for (var altTick = 0; !routed.IsCompleted && altTick < 2000; altTick++) { await main.TickAsync(Now + 100 + altTick); await Task.Delay(1); }
+    Check(await routed == "Mail sent to Altchar." && altStore.Posts[^1].Params == "[Mainchar] Hello|from chat", "//mail in chat goes through GmCommands to the sender's session");
+    var usage = altGm.HandleAsync(altChat, "Mainchar", "//Mail Altchar 0 0 hello", default);
+    for (var altTick = 0; !usage.IsCompleted && altTick < 2000; altTick++) { await main.TickAsync(Now + 3000 + altTick); await Task.Delay(1); }
+    Check((await usage).StartsWith("Usage: //mail"), "a player's //mail without '|' gets the player usage, not the staff builder");
+}
+Console.WriteLine($"{checks} alt checks passed (account warehouse, player mail).");
+
 int DarkCreation(GameData d) => Enumerable.Range(1, 64).First(c => d.Profile(c, 1) is { Race: 2 });
 
 byte[] Strings(ushort opcode, params string[] values)
@@ -4139,9 +4249,93 @@ sealed class FakeStore : INativeCharacterStore
     {
         var index = Posts.FindIndex(p => p.Id == id && !p.Taken);
         if (index < 0) return Task.FromResult(false);
-        GrantLootAsync(character, Posts[index].Attachments, ct);
+        // A player's item (migration 040) travels as it is; the rest is granted.
+        if (Escrow.Remove(id, out var held))
+        {
+            Items.AddRange(held.Select(i => i with { Location = "bag", Slot = null, Revision = i.Revision + 1 }));
+            GrantLootAsync(character, Posts[index].Attachments.Take(Posts[index].Attachments.Count - held.Count).ToList(), ct);   // granted first, held items last
+        }
+        else GrantLootAsync(character, Posts[index].Attachments, ct);
         Posts[index] = Posts[index] with { Taken = true, Read = true };
         return Task.FromResult(true);
+    }
+    // Aion:Alts account warehouse (migration 040): the list is shared by the FakeStores of one account.
+    public List<ItemState> Warehouse { get; set; } = [];
+    static bool Bound(ItemState i) => i.Upgrades.ValueKind == System.Text.Json.JsonValueKind.Object && i.Upgrades.TryGetProperty("soul_bind", out _);
+    public Task<IReadOnlyList<ItemState>> AccountWarehouseAsync(Guid character, CancellationToken ct)
+    {
+        var used = Warehouse.Where(i => i.Slot is not null).Select(i => i.Slot!.Value).ToHashSet();
+        var next = 0;
+        foreach (var own in Items.Where(i => i.Location == "storage").OrderBy(i => i.Slot ?? int.MaxValue).ToList())
+        {
+            int target;
+            if (own.Slot is { } kept && used.Add(kept)) target = kept;
+            else { while (used.Contains(next)) next++; used.Add(target = next); }
+            Items.Remove(own);
+            Warehouse.Add(own with { Location = "account_storage", Slot = target, Revision = own.Revision + 1 });
+        }
+        return Task.FromResult<IReadOnlyList<ItemState>>(Warehouse.ToList());
+    }
+    public Task<bool> MoveWarehouseItemAsync(Guid character, Guid item, long revision, string location, int slot, CancellationToken ct)
+    {
+        var fromBag = Items.FirstOrDefault(i => i.InstanceId == item && i.Revision == revision && i.Location == "bag");
+        var fromWarehouse = Warehouse.FirstOrDefault(i => i.InstanceId == item && i.Revision == revision);
+        if (fromBag is null && fromWarehouse is null) return Task.FromResult(false);
+        if (fromBag is not null && (location == "bag" || Bound(fromBag))) return Task.FromResult(false);
+        var moved = (fromBag ?? fromWarehouse)!;
+        var occupant = location == "bag" ? Items.FirstOrDefault(i => i.Location == "bag" && i.Slot == slot && i.InstanceId != item)
+            : Warehouse.FirstOrDefault(i => i.Slot == slot && i.InstanceId != item);
+        if (occupant is not null && fromWarehouse is not null && Bound(occupant)) return Task.FromResult(false);
+        void Put(ItemState row, string where, int? at)
+        {
+            Items.Remove(row); Warehouse.Remove(row);
+            (where == "bag" ? Items : Warehouse).Add(row with { Location = where, Slot = at, Revision = row.Revision + 1 });
+        }
+        if (occupant is not null) Put(occupant, moved.Location, moved.Slot);
+        Put(moved, location, slot);
+        WarehouseMoves++;
+        return Task.FromResult(true);
+    }
+    public int WarehouseMoves { get; private set; }
+    // Player mail (Aion:Alts:PlayerMail): recipients by name, items held per post until taken.
+    public Dictionary<string, FakeStore> MailDirectory { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<long, List<ItemState>> Escrow { get; } = [];
+    public Task<PlayerPostResult> SendPlayerPostAsync(Guid character, PlayerPost post, CancellationToken ct)
+    {
+        if (!MailDirectory.TryGetValue(post.To.Trim(), out var to) || to.States.Count == 0) return Task.FromResult(new PlayerPostResult("unknown"));
+        if (to == this) return Task.FromResult(new PlayerPostResult("self"));
+        var attachments = new List<(int, long)>();
+        var held = new List<ItemState>();
+        var pay = post.Kinah + post.Fee;
+        if (Items.Where(i => i.Location == "bag" && i.TemplateId == 930100001).Sum(i => i.Quantity) - (post.Item is { } k && Items.FirstOrDefault(i => i.InstanceId == k) is { TemplateId: 930100001 } ki ? (post.ItemCount == 0 ? ki.Quantity : post.ItemCount) : 0) < pay)
+            return Task.FromResult(new PlayerPostResult("kinah"));
+        if (post.Item is { } item)
+        {
+            var row = Items.FirstOrDefault(i => i.InstanceId == item && i.Revision == post.ItemRevision && i.Location == "bag");
+            if (row is null) return Task.FromResult(new PlayerPostResult("item"));
+            if (Bound(row)) return Task.FromResult(new PlayerPostResult("bound"));
+            var count = post.ItemCount == 0 ? row.Quantity : post.ItemCount;
+            if (count > row.Quantity) return Task.FromResult(new PlayerPostResult("count"));
+            if (count == row.Quantity) { Items.Remove(row); held.Add(row with { Location = "mail", Slot = null }); }
+            else
+            {
+                Items[Items.IndexOf(row)] = row with { Quantity = row.Quantity - count, Revision = row.Revision + 1 };
+                held.Add(row with { InstanceId = Guid.NewGuid(), Quantity = count, Location = "mail", Slot = null, WireId = 7000 + to.Escrow.Count });
+            }
+        }
+        for (var left = pay; left > 0;)
+        {
+            var kinah = Items.First(i => i.Location == "bag" && i.TemplateId == 930100001);
+            var take = Math.Min(left, kinah.Quantity);
+            if (take == kinah.Quantity) Items.Remove(kinah); else Items[Items.IndexOf(kinah)] = kinah with { Quantity = kinah.Quantity - take, Revision = kinah.Revision + 1 };
+            left -= take;
+        }
+        if (post.Kinah > 0) attachments.Add((930100001, post.Kinah));
+        attachments.AddRange(held.Select(h => (h.TemplateId, h.Quantity)));
+        var stored = new PostRecord(to.Posts.Count + 1, 1, attachments.Count > 0 ? 2 : 1, post.DataId, post.Parameters, false, false, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(post.Days), attachments, 0);
+        to.Posts.Add(stored);
+        if (held.Count > 0) to.Escrow[stored.Id] = held;
+        return Task.FromResult(new PlayerPostResult("ok", to.States[0].Summary.CharacterId, stored));
     }
     public List<AchievementRecord> Achievements { get; } = [];
     public List<(int Group, int Step)> GroupRewards { get; } = [];
