@@ -2637,7 +2637,7 @@ checks = 0;
     var gateRefused = false;
     try { new TimeGateOptions { GatherRespawnSeconds = -1 }.Validated(); } catch (InvalidOperationException) { gateRefused = true; }
     Check(gateRefused && new TimeGateOptions { GatherRespawnSeconds = 0 }.Validated().GatherRespawnMs == 0, "gather respawn seconds must be 0-3600");
-    Check(UnlockOptions.Default is { AllSkins: false, AllPets: true, AllWings: true, CraftAlwaysSucceeds: true, PetSoulCost: 0.5 }
+    Check(UnlockOptions.Default is { AllSkins: true, AllPets: true, AllWings: true, CraftAlwaysSucceeds: true, PetSoulCost: 0.5 }
           && UnlockOptions.Default.SoulCost(5) == 3 && UnlockOptions.Default.SoulCost(75) == 38 && UnlockOptions.Default.SoulCost(1) == 1 && UnlockOptions.Default.SoulCost(0) == 0
           && UnlockOptions.Official.SoulCost(25) == 25 && new UnlockOptions { PetSoulCost = 0 }.SoulCost(25) == 1,
           "unlocks: all pets and wings on, all skins off by default, crafts always succeed, pets cost half the souls (at least 1)");
@@ -3520,7 +3520,7 @@ checks = 0;
           && lightQuests.All(c => QuestBook.Embedded.Find(c)!.Title != "???"),
           "boost quests: the 90 released Light main story quests, regional quests and the sealed dungeons' exploration quests");
     var boostStore = new FakeStore();
-    var boostSession = new GameSession(data, new GameSessionOptions { Boost = BoostOptions.Default }, new Random(3)) { Store = boostStore };
+    var boostSession = new GameSession(data, new GameSessionOptions { Boost = BoostOptions.Default with { Price = 500_000 } }, new Random(3)) { Store = boostStore };
     await boostSession.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
     await boostSession.HandleAsync(create, Now);
     await boostSession.HandleAsync(new PacketWriter().U16(0x361f).Varint(boostStore.States[0].WireId << 16).I32(0).Vec3(Vector3d.Zero).ToArray(), Now);

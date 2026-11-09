@@ -107,7 +107,7 @@ def environment(args, credentials):
 
 # Rates and host switches (OURS: the server owner's choice). Each is written only when given, so the host's defaults
 # (friends rates, PvP on, 30 s respawn, round-robin party loot, fallback loot on, no player cap, no dungeon entry limits,
-# untracked objectives done after 30 s, no time gates, no unlocks, crafts always succeed, pets at half the souls) apply otherwise.
+# untracked objectives done after 30 s, no time gates, every skin, pet and wing, crafts always succeed, pets at half the souls) apply otherwise.
 GAMEPLAY = {
     'rates_profile': 'Aion__Rates__Profile',
     'exp_rate': 'Aion__Rates__Experience',
@@ -224,13 +224,13 @@ def main(argv=None):
     gates.add_argument('--collection-rotation', choices=['on', 'off'], help='daily/weekly collections open one day or week at a time')
     gates.add_argument('--gather-respawn-seconds', type=int, help='a gathered node is back for that player after this long (0-3600, default 10)')
     unlocks = parser.add_argument_group('unlocks (unset: the host defaults)')
-    unlocks.add_argument('--all-skins', choices=['on', 'off'], help='every character gets every skin at its next world entry (default off)')
+    unlocks.add_argument('--all-skins', choices=['on', 'off'], help='every character gets every skin at its next world entry (default on)')
     unlocks.add_argument('--all-pets', choices=['on', 'off'], help='every character gets every pet at its top level, boards maxed (default on)')
     unlocks.add_argument('--all-wings', choices=['on', 'off'], help='every character gets every wing of its race (default on)')
     gates.add_argument('--revive-seconds', type=int, help='a dead player is revived at the respawn point after this long (1-600, default 5)')
     unlocks.add_argument('--boost', choices=['on', 'off'], help='//boost alt boost (default on)')
     unlocks.add_argument('--boost-level', type=int, help='the level //boost gives (default 45; also the level the account needs)')
-    unlocks.add_argument('--boost-price', type=int, help='what //boost costs in Kinah (default 500000)')
+    unlocks.add_argument('--boost-price', type=int, help='what //boost costs in Kinah (default 10000000)')
     unlocks.add_argument('--craft-always-succeeds', choices=['on', 'off'], help='crafts never fail (default on)')
     unlocks.add_argument('--pet-soul-cost', type=float, help='multiplies the souls pets cost to acquire and level (0-10, default 0.5)')
     parser.add_argument('--geolocation', default='59.9139,10.7522,NO', metavar='LAT,LON,CC',

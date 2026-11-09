@@ -96,12 +96,12 @@ var bots = (builder.Configuration.GetSection("Aion:Bots").Get<Aion.World.BotOpti
 
 builder.Services.AddSingleton(dungeonRules);
 // Aion:TimeGates (OURS, all off by default: ShopLimits, DungeonTimeLimits, CollectionRotation; GatherRespawnSeconds 10) and
-// Aion:Unlocks (OURS: AllPets and AllWings on, AllSkins off by default; CraftAlwaysSucceeds on, PetSoulCost 0.5).
+// Aion:Unlocks (OURS: AllSkins, AllPets and AllWings on by default; CraftAlwaysSucceeds on, PetSoulCost 0.5).
 var timeGates = (builder.Configuration.GetSection("Aion:TimeGates").Get<Aion.World.TimeGateOptions>() ?? Aion.World.TimeGateOptions.Default).Validated();
 var unlocks = (builder.Configuration.GetSection("Aion:Unlocks").Get<Aion.World.UnlockOptions>() ?? Aion.World.UnlockOptions.Default).Validated();
 builder.Services.AddSingleton(timeGates);
 builder.Services.AddSingleton(unlocks);
-// Aion:Boost (OURS): //boost raises an alt to Level (45) for Price Kinah (500000) once the account has a character at RequiredLevel (45).
+// Aion:Boost (OURS): //boost raises an alt to Level (45) for Price Kinah (10000000) once the account has a character at RequiredLevel (45).
 var boost = (builder.Configuration.GetSection("Aion:Boost").Get<Aion.World.BoostOptions>() ?? Aion.World.BoostOptions.Default).Validated(Aion.World.GameData.Embedded.MaxLevel);
 builder.Services.AddSingleton(boost);
 if (native.LoginPort is not null || native.GamePort is not null)

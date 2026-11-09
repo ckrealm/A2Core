@@ -50,20 +50,20 @@ public sealed record TimeGateOptions
 }
 
 /// <summary>
-/// Aion:Unlocks (OURS): alt-friendly account perks. AllPets and AllWings are on by default, AllSkins off. On, every character gets them at its next world entry
+/// Aion:Unlocks (OURS): alt-friendly account perks, all on by default. On, every character gets them at its next world entry
 /// (new and existing characters alike; once per character and perk, remembered in its settings, so a skin or pet given
 /// later is not taken back when a switch is turned off).
 /// <list type="bullet">
 /// <item>AllSkins: every skin of Skin.dat added to the character's collection.</item>
 /// <item>AllPets: every pet/mount (VehicleList) acquired at its top level, and every creature board raised to its top level.</item>
-/// <item>AllWings: every wing (feather) of the character's race registered in its wing collection.</item>
+/// <item>AllWings: every wing of the character's race registered in its wing collection.</item>
 /// </list>
 /// Aion:Unlocks also holds the profession and pet cost switches: CraftAlwaysSucceeds (default on: a craft never fails and
 /// eats its components) and PetSoulCost (multiplies the souls a pet costs to acquire and level up; default 0.5, at least 1).
 /// </summary>
 public sealed record UnlockOptions
 {
-    public bool AllSkins { get; init; }
+    public bool AllSkins { get; init; } = true;
     public bool AllPets { get; init; } = true;
     public bool AllWings { get; init; } = true;
     public bool CraftAlwaysSucceeds { get; init; } = true;
@@ -73,7 +73,7 @@ public sealed record UnlockOptions
     /// <summary>The setting names that remember a perk was given (per character).</summary>
     public const string SkinsGivenSetting = "unlocks_all_skins", PetsGivenSetting = "unlocks_all_pets", WingsGivenSetting = "unlocks_all_wings";
     public static UnlockOptions Default { get; } = new();
-    public static UnlockOptions Official { get; } = new() { AllPets = false, AllWings = false, CraftAlwaysSucceeds = false, PetSoulCost = 1 };
+    public static UnlockOptions Official { get; } = new() { AllSkins = false, AllPets = false, AllWings = false, CraftAlwaysSucceeds = false, PetSoulCost = 1 };
 
     /// <summary>A pet soul cost after <see cref="PetSoulCost"/>: at least 1 when anything was due.</summary>
     public int SoulCost(int cost) => cost <= 0 || PetSoulCost == 1 ? cost : Math.Max(1, (int)Math.Ceiling(cost * PetSoulCost));
@@ -101,7 +101,7 @@ public sealed record BoostOptions
     public bool Enabled { get; init; } = true;
     public int Level { get; init; } = 45;
     public int RequiredLevel { get; init; } = 45;
-    public long Price { get; init; } = 500_000;
+    public long Price { get; init; } = 10_000_000;
     public int QuestLevel { get; init; } = 46;
     public bool Gear { get; init; } = true;
 

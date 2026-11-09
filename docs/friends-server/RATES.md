@@ -50,19 +50,22 @@ Not gates, or not modelled, so left as they are:
 |---|---|---|
 | Crafts never fail (a failed craft used to eat the components) | `Aion__Unlocks__CraftAlwaysSucceeds` | on |
 | Souls a pet costs to acquire and to level up | `Aion__Unlocks__PetSoulCost` | x0.5 (rounded up, at least 1): 5 → 3 to acquire, 25 → 13 and 75 → 38 to level |
-| Every skin for every character | `Aion__Unlocks__AllSkins` | off |
+| Every skin for every character | `Aion__Unlocks__AllSkins` | on |
 | Every pet/mount at its top level (3), every creature board at its top level (slots open) | `Aion__Unlocks__AllPets` | on |
-| Every wing ("feather") of the character's race | `Aion__Unlocks__AllWings` | on |
+| Every wing of the character's race | `Aion__Unlocks__AllWings` | on |
 
 The unlocks apply to every character, new and existing, at its next world entry (character select), once per
 character: a setting (`unlocks_all_skins`, `unlocks_all_pets`) remembers it, and turning the switch off later takes
 nothing back. That gives 1,463 skins, 207 pets and every wing of the race. The board slots open empty; stat rolls still cost crystals.
 
+Feathers (Empyrean Traces, the 2,560 collectibles in the world) are not modelled by the server yet: it has no table or
+message for them, so they cannot be given out until the client data and a capture show how they are stored and sent.
+
 ## Alt boost (`//boost`)
 
 Type `//boost` in chat on any character to see the price and whether it is unlocked; `//boost confirm` buys it. It
 unlocks once any character of the account has reached level 45 (`Aion__Boost__RequiredLevel`). The character it is used
-on (below level 45) pays 500,000 Kinah (`Aion__Boost__Price`) and gets:
+on (below level 45) pays 10,000,000 Kinah (`Aion__Boost__Price`) and gets:
 
 - level 45 (`Aion__Boost__Level`), with the usual level-up messages and skills;
 - every released main story (Hero), regional (District) and exploration quest of its race up to recommended level 46
@@ -74,7 +77,7 @@ on (below level 45) pays 500,000 Kinah (`Aion__Boost__Price`) and gets:
 - the whole world map revealed.
 
 Then go to character select and back in so the quest journal refreshes. `Aion__Boost__Enabled=false` turns it off. The
-Kinah price is our guess at a few hours of farming at 10x Kinah; change it freely.
+Kinah price is meant to be hard to earn even at 10x Kinah (our guess, not measured); change it freely.
 
 ## Not tested in the client yet
 

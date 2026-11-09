@@ -35,8 +35,8 @@
 ## 2026-11-09 — no time gates, faster leveling, alt perks
 - **`friends` rates profile, now the host default** (Brandon's picks): experience and quest experience 5, Kinah 10, Kinah drop chance x2, drops 4, gathering/crafting/pet experience 10. New keys `Aion:Rates:KinahChance`, `GatherExperience`, `CraftExperience`, `PetExperience`. `official` and `accelerated` unchanged.
 - **Time gates, all off by default** (`Aion:TimeGates:*`): shop purchase caps, dungeon timers, daily/weekly collection rotation; gather nodes back after 10 s (was 60). Dungeon entry limits stay off. Audit of what else gates play by time: RATES.md.
-- **Professions and pets** (`Aion:Unlocks:*`): crafts always succeed (default on), pets cost half the souls (default 0.5); `AllPets` (every pet at level 3, boards maxed) and `AllWings` on by default, `AllSkins` opt-in, for every character at its next world entry, once.
+- **Professions and pets** (`Aion:Unlocks:*`): crafts always succeed (default on), pets cost half the souls (default 0.5); `AllSkins`, `AllPets` (every pet at level 3, boards maxed) and `AllWings` on by default, for every character at its next world entry, once.
 - **Death wait** 60 s → 5 s (`Aion:TimeGates:ReviveSeconds`). Odyn energy: not enforced anywhere (checked).
-- **Alt boost** `//boost` (`Aion:Boost:*`): once an account has a level 45, an alt pays 500,000 Kinah for level 45, the released MSQ, regional and sealed-dungeon quests done, a ~1,412 item level gear set and the map revealed.
+- **Alt boost** `//boost` (`Aion:Boost:*`): once an account has a level 45, an alt pays 10,000,000 Kinah for level 45, the released MSQ, regional and sealed-dungeon quests done, a ~1,412 item level gear set and the map revealed.
 - `wsl-install.sh` and `server_env.py` take all of these as options. Checks: 34 rate/rule, 229 stored session, 15 alt boost, 148 PostgreSQL repository, 520 Python tests passing.
 - Note for an existing install: a `game.env` that says `Aion__Rates__Profile=accelerated` keeps those rates; `wsl-install.sh --rates-only --rates-profile friends` switches.

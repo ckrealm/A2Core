@@ -30,9 +30,9 @@ Options:
   --max-players N (0: no cap), --respawn-seconds N (5-3600), --pvp on|off
   Time gates (default all off): --shop-limits on|off, --dungeon-timers on|off, --collection-rotation on|off,
   --dungeon-limits on|off, --gather-respawn-seconds N (0-3600, default 10), --revive-seconds N (1-600, default 5)
-  Unlocks: --all-skins on|off (default off), --all-pets on|off, --all-wings on|off (default on),
+  Unlocks: --all-skins on|off, --all-pets on|off, --all-wings on|off (default on),
   --craft-always-succeeds on|off (default on), --pet-soul-cost N (0-10, default 0.5)
-  Alt boost: --boost on|off (default on), --boost-level N (default 45), --boost-price N (Kinah, default 500000)
+  Alt boost: --boost on|off (default on), --boost-level N (default 45), --boost-price N (Kinah, default 10000000)
   --rates-only                 write game.env and restart aion-host; no install
   --skip-packages              do not run apt-get
 EOF
