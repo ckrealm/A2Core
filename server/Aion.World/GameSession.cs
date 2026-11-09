@@ -43,6 +43,8 @@ public sealed record GameSessionOptions
     public TimeGateOptions TimeGates { get; init; } = TimeGateOptions.Official;
     /// <summary>Aion:Unlocks (all skins, all pets maxed, crafting and pet costs); official-like unless the host passes its own.</summary>
     public UnlockOptions Unlocks { get; init; } = UnlockOptions.Official;
+    /// <summary>Aion:Boost (the //boost alt boost); off unless the host passes its own.</summary>
+    public BoostOptions Boost { get; init; } = BoostOptions.Off;
     /// <summary>Heal/buff/debuff effects of class skills; null: the embedded tools/data/skill-effects.json (OURS values).</summary>
     public SkillEffectTable? SkillEffects { get; init; }
 }
@@ -1632,9 +1634,9 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
                 selected = state;
                 StaffRole = state.Staff ? accountRole : null;
                 experience = state.Progress.Experience;
+                var unlocked = await GrantUnlocksAsync(store, state.Summary.CharacterId, state.Race, ct);   // Aion:Unlocks (OURS), before the loads below
                 registeredWings.Clear();
                 registeredWings.UnionWith(await store.WingsAsync(state.Summary.CharacterId, ct));
-                var unlocked = await GrantUnlocksAsync(store, state.Summary.CharacterId, ct);   // Aion:Unlocks (OURS), before the loads below
                 var extras = await store.ExtrasAsync(state.Summary.CharacterId, ct);
                 LoadSkillLevels(await store.SkillsAsync(state.Summary.CharacterId, ct));
                 LoadAchievements(await store.AchievementsAsync(state.Summary.CharacterId, ct), await store.GroupRewardsTakenAsync(state.Summary.CharacterId, ct), now);
@@ -2249,7 +2251,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         dead = true;
         diving = false;
         if (copy is { } dungeonCopy) dungeonCopy.Deaths++;
-        reviveAt = now + ReviveDelayMs;
+        reviveAt = now + options.TimeGates.ReviveMs;   // Aion:TimeGates:ReviveSeconds (OURS)
         diedAt = position;
         inCombat = false;
         var kill = GamePackets.Kill(playerKey, 0, killerKey, ServerId, "", dieType: 2);

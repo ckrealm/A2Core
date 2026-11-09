@@ -46,7 +46,8 @@ public sealed record QuestDefinition(
     [property: JsonPropertyName("next")] string? Next,
     [property: JsonPropertyName("steps")] QuestStep[] Steps,
     [property: JsonPropertyName("rewards")] QuestRewards? Rewards,
-    [property: JsonPropertyName("conditions")] QuestCondition[]? Conditions = null);
+    [property: JsonPropertyName("conditions")] QuestCondition[]? Conditions = null,
+    [property: JsonPropertyName("recommended_level")] int RecommendedLevel = 0);
 
 /// <summary>An AcquirableConditions row other than ClearQuest (those are Prerequisites): IncompleteQuest, ClearQuestStep, SubZone, CloseEnvObj, the masteries.</summary>
 public sealed record QuestCondition(

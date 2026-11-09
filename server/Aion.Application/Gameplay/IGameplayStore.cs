@@ -101,8 +101,8 @@ public interface IGameplayStore
     Task<bool> SetTitleAsync(VerifiedAccount account, Guid character, int category, int titleId, CancellationToken ct = default) => Task.FromResult(false);
     /// <summary>Skins added to the collection (a count per skin).</summary>
     Task<bool> GrantSkinsAsync(VerifiedAccount account, Guid character, IReadOnlyList<int> skins, CancellationToken ct = default) => Task.FromResult(false);
-    /// <summary>Aion:Unlocks (OURS): skins added (owned ones kept as they are) and rides owned at least at the given level, at once.</summary>
-    Task<bool> GrantUnlocksAsync(VerifiedAccount account, Guid character, IReadOnlyList<int> skins, IReadOnlyList<(int RideId, int Level)> rides, CancellationToken ct = default) =>
+    /// <summary>Aion:Unlocks (OURS): skins and wings added (owned ones kept as they are) and rides owned at least at the given level, at once.</summary>
+    Task<bool> GrantUnlocksAsync(VerifiedAccount account, Guid character, IReadOnlyList<int> skins, IReadOnlyList<(int RideId, int Level)> rides, IReadOnlyList<int> wings, CancellationToken ct = default) =>
         Task.FromResult(false);
     /// <summary>Equipped skins by ESkinEquipSlot; 0 clears the slot. Each skin must be owned.</summary>
     Task<bool> SetSkinEquipsAsync(VerifiedAccount account, Guid character, IReadOnlyDictionary<int, int> equips, CancellationToken ct = default) => Task.FromResult(false);

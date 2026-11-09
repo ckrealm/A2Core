@@ -272,14 +272,16 @@ await using(var source=NpgsqlDataSource.Create(connectionString))
     Check(await game.AdminCharacterAsync(second,Guid.NewGuid()) is null,"staff detail of unknown character is absent");
     Check(await new CharacterPersistenceService(new PostgresCharacterRepository(source)).SaveAsync(first,id,saved.Revision-1,saved.Progress) is null,"old world save cannot overwrite GM changes");
     // Aion:Unlocks: skins added once (owned ones kept), rides owned at least at the given level; only the owner may.
-    Check(await game.GrantSkinsAsync(first,id,[7001]) && await game.GrantUnlocksAsync(first,id,[7001,7002,7003],[(1001,3),(1002,1)]),"unlocks granted");
-    Check(await game.GrantUnlocksAsync(first,id,[7002],[(1002,3),(1001,1)]),"unlocks granted again");
+    Check(await game.GrantSkinsAsync(first,id,[7001]) && await game.GrantUnlocksAsync(first,id,[7001,7002,7003],[(1001,3),(1002,1)],[11,12]),"unlocks granted");
+    Check(await game.GrantUnlocksAsync(first,id,[7002],[(1002,3),(1001,1)],[12,13]),"unlocks granted again");
+    var unlockedWings=(await game.InventoryAsync(first,id))!.Wings!;
+    Check(new[]{11,12,13}.All(w=>unlockedWings.Count(x=>x==w)==1),"unlocked wings registered once each");
     var unlockedRides=(await game.RidesAsync(first,id))!.Rides;
     Check(unlockedRides.Count==2 && unlockedRides.All(r=>r.Owned && r.Level==3),"unlocked rides owned at the top level, never lowered");
     var unlockedSkins=(await game.InventoryAsync(first,id))!.Extras!.Skins;
     Check(unlockedSkins.Count==3 && unlockedSkins[7001]==1 && unlockedSkins[7002]==1,"unlocked skins added once");
-    Check(!await game.GrantUnlocksAsync(second,id,[7004],[]),"unlocks for another account's character are refused");
-    await Reject(()=>game.GrantUnlocksAsync(first,id,[0],[]),"invalid_unlocks");
+    Check(!await game.GrantUnlocksAsync(second,id,[7004],[],[]),"unlocks for another account's character are refused");
+    await Reject(()=>game.GrantUnlocksAsync(first,id,[0],[],[]),"invalid_unlocks");
     await using var reopened=NpgsqlDataSource.Create(connectionString);
     Check((await new PostgresGameplayStore(reopened).InventoryAsync(first,id))!.Items.Count==5,"inventory survives a fresh pool");
     var restoredItems=(await new PostgresGameplayStore(reopened).InventoryAsync(first,id))!.Items;

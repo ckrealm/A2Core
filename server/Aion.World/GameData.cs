@@ -305,6 +305,13 @@ public sealed class GameData
         profile is not null && classes.Classes.GetValueOrDefault(profile.Class)?.StarterWeapons.TryGetValue(
             profile.Race.ToString(System.Globalization.CultureInfo.InvariantCulture), out var weapon) == true ? weapon : null;
 
+    /// <summary>Every equippable item of Item.dat by id (the alt boost's gear set picks from them).</summary>
+    public IEnumerable<(int Id, ItemInfo Item)> Items =>
+        items.Select(p => (int.Parse(p.Key, System.Globalization.CultureInfo.InvariantCulture), p.Value));
+
+    /// <summary>The class's weapon type (EquipCategory), or null.</summary>
+    public string? ClassWeapon(string? className) => className is null ? null : classes.Classes.GetValueOrDefault(className)?.WeaponType;
+
     /// <summary>An equippable item's Item.dat summary, or null.</summary>
     public ItemInfo? Item(int? itemId) =>
         itemId is null ? null : items.GetValueOrDefault(itemId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));

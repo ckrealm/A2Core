@@ -106,11 +106,18 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
         {
             if (line.StartsWith("bot", StringComparison.OrdinalIgnoreCase) && (line.Length == 3 || char.IsWhiteSpace(line[3])))
                 return await BotAsync(actor.Session, line[3..].Trim(), ct);
+            // //boost (Aion:Boost, OURS): every player; runs on the sender's game loop.
+            if (line.StartsWith("boost", StringComparison.OrdinalIgnoreCase) && (line.Length == 5 || char.IsWhiteSpace(line[5])))
+            {
+                var boostArgs = line[5..].Trim();
+                return await actor.Session.InvokeAsync(async _ => await actor.Session.BoostCommandAsync(boostArgs, ct)).WaitAsync(TimeSpan.FromSeconds(30), ct);
+            }
             if (line.Length == 0 || line.Equals("help", StringComparison.OrdinalIgnoreCase))
                 return await builder.AllowedAsync(actor.Session, ct)
                     ? "Builder commands (in chat: //<command>; console: s <command>): " + string.Join(", ", BuilderCommands.Supported)
                         + (Bots is { Options.Enabled: true } ? "; //bot add <character> for playerbots" : "")
                     : "Commands: //report <text> sends a report to the staff."
+                        + (actor.Session.BoostEnabled ? " //boost raises an alt to the boost level once your account has a character there." : "")
                         + (Bots is { Options: { Enabled: true, PlayersMayUse: true } } ? " //bot add <character> summons one of your characters as a bot." : "");
             return await actor.Session.InvokeAsync(async now =>
             {

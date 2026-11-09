@@ -578,10 +578,10 @@ public sealed class ServiceNativeCharacterStore(string token, WorldIdentity iden
         return await game.GrantSkinsAsync(identity.Account, character, skins, ct);
     }
 
-    public async Task<bool> GrantUnlocksAsync(Guid character, IReadOnlyList<int> skins, IReadOnlyList<(int RideId, int Level)> rides, CancellationToken ct)
+    public async Task<bool> GrantUnlocksAsync(Guid character, IReadOnlyList<int> skins, IReadOnlyList<(int RideId, int Level)> rides, IReadOnlyList<int> wings, CancellationToken ct)
     {
         await ValidateAsync(ct);
-        return await game.GrantUnlocksAsync(identity.Account, character, skins, rides, ct);
+        return await game.GrantUnlocksAsync(identity.Account, character, skins, rides, wings, ct);
     }
 
     public async Task<bool> SetSkinEquipsAsync(Guid character, IReadOnlyDictionary<int, int> equips, CancellationToken ct)

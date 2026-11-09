@@ -91,7 +91,8 @@ class ServerEnvTests(unittest.TestCase):
             env = server_env.environment(self.args(root, rates_profile='friends', kinah_chance=2.5, gather_exp_rate=8,
                                                    craft_exp_rate=6, pet_exp_rate=4, shop_limits='on', dungeon_timers='off',
                                                    collection_rotation='off', gather_respawn_seconds=0, all_skins='on',
-                                                   all_pets='on', craft_always_succeeds='off', pet_soul_cost=0.25),
+                                                   all_pets='on', craft_always_succeeds='off', pet_soul_cost=0.25,
+                                                   all_wings='off', revive_seconds=3, boost='on', boost_level=40, boost_price=250000),
                                          {'aion_app': 'a', 'aion_auth': 'b'})
         self.assertEqual(env['Aion__Rates__Profile'], 'friends')
         self.assertEqual(env['Aion__Rates__KinahChance'], 2.5)
@@ -106,8 +107,14 @@ class ServerEnvTests(unittest.TestCase):
         self.assertEqual(env['Aion__Unlocks__AllPets'], 'true')
         self.assertEqual(env['Aion__Unlocks__CraftAlwaysSucceeds'], 'false')
         self.assertEqual(env['Aion__Unlocks__PetSoulCost'], 0.25)
+        self.assertEqual(env['Aion__Unlocks__AllWings'], 'false')
+        self.assertEqual(env['Aion__TimeGates__ReviveSeconds'], 3)
+        self.assertEqual(env['Aion__Boost__Enabled'], 'true')
+        self.assertEqual(env['Aion__Boost__Level'], 40)
+        self.assertEqual(env['Aion__Boost__Price'], 250000)
         for argv in (['--shop-limits', 'yes'], ['--gather-respawn-seconds', '-1'], ['--gather-respawn-seconds', '3601'],
-                     ['--pet-soul-cost', '11'], ['--kinah-chance', '101'], ['--all-pets', 'maybe']):
+                     ['--pet-soul-cost', '11'], ['--kinah-chance', '101'], ['--all-pets', 'maybe'], ['--revive-seconds', '0'],
+                     ['--boost-level', '1'], ['--boost-price', '-5'], ['--boost', 'yes']):
             with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
                 server_env.main(['--public-address', '203.0.113.5', '--data', '.', '--state', '.', '--proxy', *argv])
 

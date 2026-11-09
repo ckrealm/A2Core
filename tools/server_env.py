@@ -124,6 +124,11 @@ GAMEPLAY = {
     'gather_respawn_seconds': 'Aion__TimeGates__GatherRespawnSeconds',
     'all_skins': 'Aion__Unlocks__AllSkins',
     'all_pets': 'Aion__Unlocks__AllPets',
+    'all_wings': 'Aion__Unlocks__AllWings',
+    'revive_seconds': 'Aion__TimeGates__ReviveSeconds',
+    'boost': 'Aion__Boost__Enabled',
+    'boost_level': 'Aion__Boost__Level',
+    'boost_price': 'Aion__Boost__Price',
     'craft_always_succeeds': 'Aion__Unlocks__CraftAlwaysSucceeds',
     'pet_soul_cost': 'Aion__Unlocks__PetSoulCost',
     'max_players': 'Aion__Native__MaxPlayers',
@@ -139,7 +144,7 @@ GAMEPLAY = {
 
 
 SWITCHES = ('pvp', 'fallback_loot', 'dungeon_limits', 'shop_limits', 'dungeon_timers', 'collection_rotation',
-            'all_skins', 'all_pets', 'craft_always_succeeds')
+            'all_skins', 'all_pets', 'all_wings', 'craft_always_succeeds', 'boost')
 
 
 def gameplay(args):
@@ -220,7 +225,12 @@ def main(argv=None):
     gates.add_argument('--gather-respawn-seconds', type=int, help='a gathered node is back for that player after this long (0-3600, default 10)')
     unlocks = parser.add_argument_group('unlocks (unset: the host defaults)')
     unlocks.add_argument('--all-skins', choices=['on', 'off'], help='every character gets every skin at its next world entry (default off)')
-    unlocks.add_argument('--all-pets', choices=['on', 'off'], help='every character gets every pet at its top level, boards maxed (default off)')
+    unlocks.add_argument('--all-pets', choices=['on', 'off'], help='every character gets every pet at its top level, boards maxed (default on)')
+    unlocks.add_argument('--all-wings', choices=['on', 'off'], help='every character gets every wing of its race (default on)')
+    gates.add_argument('--revive-seconds', type=int, help='a dead player is revived at the respawn point after this long (1-600, default 5)')
+    unlocks.add_argument('--boost', choices=['on', 'off'], help='//boost alt boost (default on)')
+    unlocks.add_argument('--boost-level', type=int, help='the level //boost gives (default 45; also the level the account needs)')
+    unlocks.add_argument('--boost-price', type=int, help='what //boost costs in Kinah (default 500000)')
     unlocks.add_argument('--craft-always-succeeds', choices=['on', 'off'], help='crafts never fail (default on)')
     unlocks.add_argument('--pet-soul-cost', type=float, help='multiplies the souls pets cost to acquire and level (0-10, default 0.5)')
     parser.add_argument('--geolocation', default='59.9139,10.7522,NO', metavar='LAT,LON,CC',
@@ -244,6 +254,12 @@ def main(argv=None):
         parser.error('--dungeon-reset-hour must be between 0 and 23')
     if args.gather_respawn_seconds is not None and not 0 <= args.gather_respawn_seconds <= 3600:
         parser.error('--gather-respawn-seconds must be between 0 and 3600')
+    if args.revive_seconds is not None and not 1 <= args.revive_seconds <= 600:
+        parser.error('--revive-seconds must be between 1 and 600')
+    if args.boost_level is not None and not 2 <= args.boost_level <= 100:
+        parser.error('--boost-level must be between 2 and 100')
+    if args.boost_price is not None and not 0 <= args.boost_price <= 10_000_000_000:
+        parser.error('--boost-price must be between 0 and 10000000000')
     if args.pet_soul_cost is not None and not 0 <= args.pet_soul_cost <= 10:
         parser.error('--pet-soul-cost must be between 0 and 10')
     if args.untracked_objective_seconds is not None and not 1 <= args.untracked_objective_seconds <= 3600:

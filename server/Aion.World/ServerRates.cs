@@ -4,8 +4,8 @@ namespace Aion.World;
 
 /// <summary>
 /// Aion:Rates as configured (OURS: a server owner's choice, nothing observed). A profile presets the rates ("official": all
-/// 1.0; "accelerated": experience 5, Kinah 3, drops 3; "friends", the host default: experience 10, Kinah 10, Kinah drop
-/// chance x2, drops 3, gathering/crafting/pet experience 5); any rate set explicitly overrides the preset. Unset
+/// 1.0; "accelerated": experience 5, Kinah 3, drops 3; "friends", the host default: experience 5, Kinah 10, Kinah drop
+/// chance x2, drops 4, gathering/crafting/pet experience 10); any rate set explicitly overrides the preset. Unset
 /// QuestExperience follows the resolved Experience. <see cref="Resolve"/> checks the values and gives the rates the game uses.
 /// </summary>
 public sealed record RatesOptions
@@ -71,9 +71,9 @@ public sealed record ServerRates(string Profile, double Experience, double Kinah
     public static ServerRates Official { get; } = new(OfficialProfile, 1, 1, 1, 1);
     public static ServerRates Accelerated { get; } = new(AcceleratedProfile, 5, 3, 3, 5);
     /// <summary>OURS: the host default for a small friends server (fast leveling, plenty of Kinah, quick professions and pets).</summary>
-    public static ServerRates Friends { get; } = new(FriendsProfile, 10, 10, 3, 10)
+    public static ServerRates Friends { get; } = new(FriendsProfile, 5, 10, 4, 5)
     {
-        KinahChance = 2, GatherExperience = 5, CraftExperience = 5, PetExperience = 5,
+        KinahChance = 2, GatherExperience = 10, CraftExperience = 10, PetExperience = 10,
     };
 
     /// <summary>Multiplies the chance of a monster's Kinah drop (capped at certain).</summary>

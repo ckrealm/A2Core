@@ -94,9 +94,10 @@ sudo deploy/linux/update.sh      # rewrites aion.env with Aion__WardrobePath and
 ## Rates and rules
 
 Defaults are made for a small friends server (see docs/friends-server/RATES.md): the `friends` rates profile (experience
-and quest experience 10, Kinah 10, Kinah drop chance x2, drops 3, gathering/crafting/pet experience 5), no time gates
-(`Aion__TimeGates__*`: no shop purchase caps, no dungeon timers, every collection open, gather nodes back after 10 s; dungeon
-entry limits stay off), crafts always succeed and pets cost half the souls (`Aion__Unlocks__*`), PvP on, monsters respawn
+and quest experience 5, Kinah 10, Kinah drop chance x2, drops 4, gathering/crafting/pet experience 10), no time gates
+(`Aion__TimeGates__*`: no shop purchase caps, no dungeon timers, every collection open, gather nodes back after 10 s, revive
+after 5 s; dungeon entry limits stay off), every pet maxed and every wing for every character, crafts always succeed and
+pets cost half the souls (`Aion__Unlocks__*`), the `//boost` alt boost (`Aion__Boost__*`), PvP on, monsters respawn
 30 s after a kill, no player cap beyond 200 connections per port. `Aion__Rates__Profile=official` gives all rates 1. To change them, put the keys you want in `/etc/aion/game.env`
 (install.sh and update.sh rewrite `aion.env` but never touch this file; the service reads it last) and restart:
 
@@ -104,10 +105,9 @@ entry limits stay off), crafts always succeed and pets cost half the souls (`Aio
 sudo tee /etc/aion/game.env >/dev/null <<'ENV'
 # friends (default), official (all 1) or accelerated (experience 5, Kinah 3, drops 3); an explicit rate overrides the profile's
 Aion__Rates__Profile=friends
-Aion__Rates__Experience=15
-# every character gets every skin, and every pet at its top level, at its next world entry
+Aion__Rates__Experience=10
+# every character also gets every skin at its next world entry (pets and wings are on by default)
 Aion__Unlocks__AllSkins=true
-Aion__Unlocks__AllPets=true
 # refuse logins beyond 10 players (0 or unset: no cap)
 Aion__Native__MaxPlayers=10
 # no duels, no arena queue, no player damage

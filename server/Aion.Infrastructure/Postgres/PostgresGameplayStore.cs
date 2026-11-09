@@ -185,9 +185,9 @@ public sealed class PostgresGameplayStore(NpgsqlDataSource source) : IGameplaySt
         await t.CommitAsync(ct); return true;
     }
 
-    public async Task<bool> GrantUnlocksAsync(VerifiedAccount account, Guid character, IReadOnlyList<int> skins, IReadOnlyList<(int RideId, int Level)> rides, CancellationToken ct=default)
+    public async Task<bool> GrantUnlocksAsync(VerifiedAccount account, Guid character, IReadOnlyList<int> skins, IReadOnlyList<(int RideId, int Level)> rides, IReadOnlyList<int> wings, CancellationToken ct=default)
     {
-        if(skins.Count>100_000 || rides.Count>10_000 || skins.Any(s=>s<=0) || rides.Any(r=>r.RideId<=0 || r.Level is <1 or >100)) throw new GameplayException("invalid_unlocks");
+        if(skins.Count>100_000 || rides.Count>10_000 || wings.Count>10_000 || skins.Any(s=>s<=0) || wings.Any(w=>w<=0) || rides.Any(r=>r.RideId<=0 || r.Level is <1 or >100)) throw new GameplayException("invalid_unlocks");
         await using var c=await source.OpenConnectionAsync(ct); await using var t=await c.BeginTransactionAsync(ct);
         if(!await Own(c,t,account.AccountId,character,ct)) return false;
         if(skins.Count>0)
@@ -196,8 +196,10 @@ public sealed class PostgresGameplayStore(NpgsqlDataSource source) : IGameplaySt
             await Execute(c,t,"INSERT INTO game.character_rides(character_id,ride_id,level,owned) SELECT $1,r.id,r.lvl,true FROM unnest($2::integer[],$3::smallint[]) AS r(id,lvl) "
                 +"ON CONFLICT (character_id,ride_id) DO UPDATE SET owned=true,level=GREATEST(game.character_rides.level,EXCLUDED.level)",
                 ct,character,rides.Select(r=>r.RideId).ToArray(),rides.Select(r=>(short)r.Level).ToArray());
+        if(wings.Count>0)
+            await Execute(c,t,"INSERT INTO game.character_wings(character_id,wing_id) SELECT $1,w FROM unnest($2::integer[]) AS w ON CONFLICT DO NOTHING",ct,character,wings.Distinct().ToArray());
         await Execute(c,t,"INSERT INTO audit.events(action,character_id,actor_id,details) VALUES('unlocks_granted',$1,$2,$3)",ct,character,account.AccountId,
-            Json(new {skins=skins.Count,rides=rides.Count}));
+            Json(new {skins=skins.Count,rides=rides.Count,wings=wings.Count}));
         await t.CommitAsync(ct); return true;
     }
 

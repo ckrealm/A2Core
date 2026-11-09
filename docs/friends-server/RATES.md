@@ -9,14 +9,14 @@ startup: `journalctl -u aion-host | grep "World rates"`.
 | Setting | Key | Default | Was |
 |---|---|---|---|
 | Rates profile | `Aion__Rates__Profile` | `friends` | `official` |
-| Kill experience | `Aion__Rates__Experience` | 10 | 1 (5 with `accelerated`) |
-| Quest experience | `Aion__Rates__QuestExperience` | follows experience (10) | 1 |
+| Kill experience | `Aion__Rates__Experience` | 5 | 1 (5 with `accelerated`) |
+| Quest experience | `Aion__Rates__QuestExperience` | follows experience (5) | 1 |
 | Kinah amount | `Aion__Rates__Kinah` | 10 | 1 (3) |
 | Kinah drop chance | `Aion__Rates__KinahChance` | x2 (normal monsters 70% → 100%) | x1 |
-| Item drops (loot rolls per kill) | `Aion__Rates__Drop` | 3 | 1 (3) |
-| Gathering mastery experience | `Aion__Rates__GatherExperience` | 5 (≈ 2 gathers a level) | 1 (8 gathers a level) |
-| Crafting mastery experience | `Aion__Rates__CraftExperience` | 5 (≈ 2 crafts a level) | 1 (8 crafts a level) |
-| Pet (creature board) experience | `Aion__Rates__PetExperience` | 5 | 1 |
+| Item drops (loot rolls per kill) | `Aion__Rates__Drop` | 4 | 1 (3) |
+| Gathering mastery experience | `Aion__Rates__GatherExperience` | 10 (a level per gather) | 1 (8 gathers a level) |
+| Crafting mastery experience | `Aion__Rates__CraftExperience` | 10 (a level per craft) | 1 (8 crafts a level) |
+| Pet (creature board) experience | `Aion__Rates__PetExperience` | 10 | 1 |
 
 `Aion__Rates__Profile=official` brings every rate back to 1; `accelerated` is the old 5/3/3. Any single key overrides the
 profile. Rates are 0-100.
@@ -32,6 +32,8 @@ The audit (2026-11-09) went through every timer, reset and limit in `server/Aion
 | Dungeon timers (expeditions, raids, seals, daily, boss challenge, field events) | `Aion__TimeGates__DungeonTimeLimits` | off | no countdown, a run never fails on time |
 | Daily/weekly collection rotation | `Aion__TimeGates__CollectionRotation` | off | every collection of the season is open all season (and after it ends), with all its lists |
 | Gather node cooldown (per player) | `Aion__TimeGates__GatherRespawnSeconds` | 10 s | was 60 s; 0 = gather the same node again at once |
+| Wait after dying (the server revives you at the respawn point) | `Aion__TimeGates__ReviveSeconds` | 5 s | was 60 s |
+| Odyn (Od) energy | none | not enforced | the server never tracks or spends it: dungeon reward cubes and hunting pay without it, so it is in effect infinite |
 
 Not gates, or not modelled, so left as they are:
 
@@ -49,11 +51,30 @@ Not gates, or not modelled, so left as they are:
 | Crafts never fail (a failed craft used to eat the components) | `Aion__Unlocks__CraftAlwaysSucceeds` | on |
 | Souls a pet costs to acquire and to level up | `Aion__Unlocks__PetSoulCost` | x0.5 (rounded up, at least 1): 5 → 3 to acquire, 25 → 13 and 75 → 38 to level |
 | Every skin for every character | `Aion__Unlocks__AllSkins` | off |
-| Every pet/mount at its top level, every creature board at its top level (slots open) | `Aion__Unlocks__AllPets` | off |
+| Every pet/mount at its top level (3), every creature board at its top level (slots open) | `Aion__Unlocks__AllPets` | on |
+| Every wing ("feather") of the character's race | `Aion__Unlocks__AllWings` | on |
 
-The two unlocks apply to every character, new and existing, at its next world entry (character select), once per
+The unlocks apply to every character, new and existing, at its next world entry (character select), once per
 character: a setting (`unlocks_all_skins`, `unlocks_all_pets`) remembers it, and turning the switch off later takes
-nothing back. That gives 1,463 skins and 207 pets. The board slots open empty; stat rolls still cost crystals.
+nothing back. That gives 1,463 skins, 207 pets and every wing of the race. The board slots open empty; stat rolls still cost crystals.
+
+## Alt boost (`//boost`)
+
+Type `//boost` in chat on any character to see the price and whether it is unlocked; `//boost confirm` buys it. It
+unlocks once any character of the account has reached level 45 (`Aion__Boost__RequiredLevel`). The character it is used
+on (below level 45) pays 500,000 Kinah (`Aion__Boost__Price`) and gets:
+
+- level 45 (`Aion__Boost__Level`), with the usual level-up messages and skills;
+- every released main story (Hero), regional (District) and exploration quest of its race up to recommended level 46
+  (`Aion__Boost__QuestLevel`) marked done: the whole released MSQ, and all 82 sealed dungeons of its race open (their
+  exploration quests are the gates); no quest rewards are paid;
+- a gear set in its bag: the best level-45 item for each slot (class weapon, helmet, shoulders, torso, pants, gloves,
+  boots, cape, necklace, two earrings, two rings, bracelet; a Templar gets a shield instead of the bracelet), about
+  1,412 item level (`Aion__Boost__Gear`);
+- the whole world map revealed.
+
+Then go to character select and back in so the quest journal refreshes. `Aion__Boost__Enabled=false` turns it off. The
+Kinah price is our guess at a few hours of farming at 10x Kinah; change it freely.
 
 ## Not tested in the client yet
 
@@ -64,5 +85,8 @@ a live client. Things to watch on the first login with them on:
 - Collections with every daily/weekly book open at once (the official server sends one of each).
 - Shop limited goods: the client may keep its own count within a session and grey the item out after the cap.
 - Pet soul costs: the client may show the official cost or refuse locally before asking the server.
+- The boost: the client is told the new level live, but the quest journal and the main story NPCs refresh at the next
+  character select; the gear set must be equipped by hand.
+- The revive wait: the client may show its own countdown or respawn button; the server revives after 5 s either way.
 
 If one misbehaves, switch that key back (`true`/`false`) and restart aion-host.

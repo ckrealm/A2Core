@@ -96,11 +96,14 @@ var bots = (builder.Configuration.GetSection("Aion:Bots").Get<Aion.World.BotOpti
 
 builder.Services.AddSingleton(dungeonRules);
 // Aion:TimeGates (OURS, all off by default: ShopLimits, DungeonTimeLimits, CollectionRotation; GatherRespawnSeconds 10) and
-// Aion:Unlocks (OURS: AllSkins, AllPets off by default; CraftAlwaysSucceeds on, PetSoulCost 0.5).
+// Aion:Unlocks (OURS: AllPets and AllWings on, AllSkins off by default; CraftAlwaysSucceeds on, PetSoulCost 0.5).
 var timeGates = (builder.Configuration.GetSection("Aion:TimeGates").Get<Aion.World.TimeGateOptions>() ?? Aion.World.TimeGateOptions.Default).Validated();
 var unlocks = (builder.Configuration.GetSection("Aion:Unlocks").Get<Aion.World.UnlockOptions>() ?? Aion.World.UnlockOptions.Default).Validated();
 builder.Services.AddSingleton(timeGates);
 builder.Services.AddSingleton(unlocks);
+// Aion:Boost (OURS): //boost raises an alt to Level (45) for Price Kinah (500000) once the account has a character at RequiredLevel (45).
+var boost = (builder.Configuration.GetSection("Aion:Boost").Get<Aion.World.BoostOptions>() ?? Aion.World.BoostOptions.Default).Validated(Aion.World.GameData.Embedded.MaxLevel);
+builder.Services.AddSingleton(boost);
 if (native.LoginPort is not null || native.GamePort is not null)
 {
     if (!native.Development && !accountsReady)
@@ -261,8 +264,8 @@ builder.WebHost.ConfigureKestrel(options =>
 builder.Services.AddSingleton<WardrobeAccess>();
 var app = builder.Build();
 if (native.LoginPort is not null || native.GamePort is not null)
-    app.Logger.LogInformation("World rates: {Rates} (scheduled events multiply on top, each 0.1-10). Rules: {Rules}. Players: {Players}. Dungeons: {Dungeons}. Time gates: {TimeGates}. Unlocks: {Unlocks}.",
-        rates, rules, native.MaxPlayers is > 0 and var maxPlayers ? $"at most {maxPlayers}" : $"no cap beyond {native.MaxConnections} connections per port", dungeonRules, timeGates, unlocks);
+    app.Logger.LogInformation("World rates: {Rates} (scheduled events multiply on top, each 0.1-10). Rules: {Rules}. Players: {Players}. Dungeons: {Dungeons}. Time gates: {TimeGates}. Unlocks: {Unlocks}. Boost: {Boost}.",
+        rates, rules, native.MaxPlayers is > 0 and var maxPlayers ? $"at most {maxPlayers}" : $"no cap beyond {native.MaxConnections} connections per port", dungeonRules, timeGates, unlocks, boost);
 // Chat mutes and the chat log go through the staff tools when both exist.
 if (app.Services.GetService<Aion.Host.Authentication.ServerControl>() is { } serverControl && app.Services.GetService<ChatRelay>() is { } chatRelay)
     chatRelay.Moderation = serverControl;

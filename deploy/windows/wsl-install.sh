@@ -29,9 +29,10 @@ Options:
   --kinah-chance N, --drop-rate N, --gather-exp-rate N, --craft-exp-rate N, --pet-exp-rate N (0-100)
   --max-players N (0: no cap), --respawn-seconds N (5-3600), --pvp on|off
   Time gates (default all off): --shop-limits on|off, --dungeon-timers on|off, --collection-rotation on|off,
-  --dungeon-limits on|off, --gather-respawn-seconds N (0-3600, default 10)
-  Unlocks: --all-skins on|off, --all-pets on|off (default off), --craft-always-succeeds on|off (default on),
-  --pet-soul-cost N (0-10, default 0.5)
+  --dungeon-limits on|off, --gather-respawn-seconds N (0-3600, default 10), --revive-seconds N (1-600, default 5)
+  Unlocks: --all-skins on|off (default off), --all-pets on|off, --all-wings on|off (default on),
+  --craft-always-succeeds on|off (default on), --pet-soul-cost N (0-10, default 0.5)
+  Alt boost: --boost on|off (default on), --boost-level N (default 45), --boost-price N (Kinah, default 500000)
   --rates-only                 write game.env and restart aion-host; no install
   --skip-packages              do not run apt-get
 EOF
@@ -71,6 +72,17 @@ while [[ $# -gt 0 ]]; do
       GAME[Aion__TimeGates__GatherRespawnSeconds]="$2"; shift 2 ;;
     --all-skins) switch "$1" "$2" Aion__Unlocks__AllSkins; shift 2 ;;
     --all-pets) switch "$1" "$2" Aion__Unlocks__AllPets; shift 2 ;;
+    --all-wings) switch "$1" "$2" Aion__Unlocks__AllWings; shift 2 ;;
+    --boost) switch "$1" "$2" Aion__Boost__Enabled; shift 2 ;;
+    --revive-seconds)
+      if ! [[ "$2" =~ ^[0-9]{1,3}$ ]] || ((10#$2 < 1 || 10#$2 > 600)); then echo "--revive-seconds must be 1-600" >&2; exit 2; fi
+      GAME[Aion__TimeGates__ReviveSeconds]="$2"; shift 2 ;;
+    --boost-level)
+      if ! [[ "$2" =~ ^[0-9]{1,3}$ ]] || ((10#$2 < 2 || 10#$2 > 100)); then echo "--boost-level must be 2-100" >&2; exit 2; fi
+      GAME[Aion__Boost__Level]="$2"; GAME[Aion__Boost__RequiredLevel]="$2"; shift 2 ;;
+    --boost-price)
+      [[ "$2" =~ ^[0-9]{1,11}$ ]] || { echo "--boost-price must be a whole number of Kinah" >&2; exit 2; }
+      GAME[Aion__Boost__Price]="$2"; shift 2 ;;
     --craft-always-succeeds) switch "$1" "$2" Aion__Unlocks__CraftAlwaysSucceeds; shift 2 ;;
     --pet-soul-cost)
       if ! [[ "$2" =~ ^[0-9]+([.][0-9]+)?$ ]] || ! awk -v v="$2" 'BEGIN { exit !(v >= 0 && v <= 10) }'; then echo "--pet-soul-cost must be 0-10" >&2; exit 2; fi
@@ -117,7 +129,7 @@ write_game_env() {
   chmod 640 "$tmp"
   mv -- "$tmp" "$file"
   echo "Rates and rules in $file:"
-  grep -E '^Aion__(Rates|Rules|TimeGates|Unlocks|Dungeons|Native__MaxPlayers)' "$file" | sed 's/^/  /'
+  grep -E '^Aion__(Rates|Rules|TimeGates|Unlocks|Boost|Dungeons|Native__MaxPlayers)' "$file" | sed 's/^/  /'
 }
 
 if [[ $RATES_ONLY -eq 1 ]]; then
