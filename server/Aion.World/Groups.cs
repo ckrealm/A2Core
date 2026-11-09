@@ -10,7 +10,7 @@ namespace Aion.World;
 /// "Force", an alliance of parties) of up to <see cref="ForceParties"/> 4 parties; a raid's dungeon copy still takes only its
 /// MaxMember (10 for Ludra). <see cref="ForceWindow"/> sends the client's Force_* messages so its raid window can show the
 /// group; their opcodes and layouts are CANDIDATE (usmap layouts, opcodes from the 0x95 run anchored by the OBSERVED
-/// SocialActionStart/End_NT 0x9507/0x9508), so it is off by default and raids are formed with the //raid commands.
+/// SocialActionStart/End_NT 0x9507/0x9508), so it is off by default and raids are formed with the /raid commands.
 /// </summary>
 public sealed record GroupOptions
 {

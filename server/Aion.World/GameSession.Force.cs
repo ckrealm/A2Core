@@ -7,14 +7,14 @@ namespace Aion.World;
 // Raid groups (the client's Force: an alliance of parties; Aion:Groups, see GroupOptions). Global AION2's raid Ludra takes
 // 10 players, two parties of five. A raid group links parties: each keeps its own party window, loot, heals and buffs; the
 // group shares dungeon copies (EnterPartyDungeon) and the raid leader takes in more parties and players. Players form one
-// with "//raid" in chat (RaidCommand). With Aion:Groups:ForceWindow the client's Force_* requests are answered and its raid
+// with "/raid" in chat (RaidCommand). With Aion:Groups:ForceWindow the client's Force_* requests are answered and its raid
 // window is fed ForceInfo_NT; those opcodes and layouts are CANDIDATE (SocialOpcodes), nothing official was recorded.
 public sealed partial class GameSession
 {
     /// <summary>A raid invitation stays open this long (OURS).</summary>
     public const long ForceInviteMs = 60_000;
 
-    public const string RaidHelp = "//raid start | invite <name> | accept | decline | leave | kick <name> | leader <name> | disband | list | enter <raid>";
+    public const string RaidHelp = "/raid start | invite <name> | accept | decline | leave | kick <name> | leader <name> | disband | list | enter <raid>";
 
     Force? MyForce => Social is { } s && worldPlayer is not null ? s.ForceOf(worldPlayer) : null;
 
@@ -36,7 +36,7 @@ public sealed partial class GameSession
             p.Members.Select((m, n) => m.Session.MemberInfo((byte)n)).ToList())).ToList(),
     };
 
-    /// <summary>Everyone in the group sees it again (only with the raid window; the //raid list text is always there).</summary>
+    /// <summary>Everyone in the group sees it again (only with the raid window; the /raid list text is always there).</summary>
     void ForceChanged(Force force, PartyUpdateReason reason)
     {
         if (!options.Groups.ForceWindow) return;
@@ -62,7 +62,7 @@ public sealed partial class GameSession
         }
         if (!force.Has(force.Leader))
         {
-            force.Leader = force.Parties[0].Leader;
+            force.Leader = force.Members.FirstOrDefault(m => !m.Session.Bot) ?? force.Parties[0].Leader;
             if (options.Groups.ForceWindow) foreach (var m in force.Members) m.Send(SocialPackets.ForceNewLeader(force.Leader.Session.DbId));
         }
         ForceChanged(force, reason);
@@ -106,7 +106,7 @@ public sealed partial class GameSession
     /// <summary>
     /// The raid leader invites a player by name (a group is started when there is none). A party leader is asked to bring
     /// the whole party; a player without a party gets a seat in a party of the group with room (or a new party). The invitee
-    /// answers in the invitation window or with //raid accept. Returns the replies and the text for the inviter.
+    /// answers in the invitation window or with /raid accept. Returns the replies and the text for the inviter.
     /// </summary>
     (bool Sent, List<byte[]> Replies, string Text) ForceInviteByName(string name, long now)
     {
@@ -127,11 +127,11 @@ public sealed partial class GameSession
         var expires = now + ForceInviteMs;
         s.ForceInvites[invitee.Key] = new ForceInvite(force.Key, playerKey, expires);
         // The invitation window: the Force one when it is on; otherwise the party one, which only a player without a party
-        // can answer (a party leader in a party would be refused by its own client), so party leaders type //raid accept.
+        // can answer (a party leader in a party would be refused by its own client), so party leaders type /raid accept.
         if (options.Groups.ForceWindow) invitee.Send(SocialPackets.ForceInviteNotice(force.Key, DbId, Invitation(), expires));
         else if (theirs is null) invitee.Send(SocialPackets.PartyInviteNotice(force.Key, DbId, Invitation(), expires));
         var who = theirs is null ? invitee.Name : $"{invitee.Name}'s party ({theirs.Members.Count})";
-        return (true, replies, $"Invited {who} to the raid group. They accept in the invitation window or type //raid accept (within {ForceInviteMs / 1000} s).");
+        return (true, replies, $"Invited {who} to the raid group. They accept in the invitation window or type /raid accept (within {ForceInviteMs / 1000} s).");
     }
 
     /// <summary>Null when the group can take <paramref name="count"/> more players (a whole party when <paramref name="asParty"/>), else why not.</summary>
@@ -140,7 +140,7 @@ public sealed partial class GameSession
         var groups = options.Groups;
         if (force.Count + count > groups.ForceSize) return $"The raid group is full ({force.Count}/{groups.ForceSize}).";
         if (asParty && force.Parties.Count >= groups.ForceParties) return $"The raid group has {groups.ForceParties} parties already (Aion:Groups:ForceParties).";
-        if (!asParty && force.Parties.Count >= groups.ForceParties && force.Parties.All(p => p.Members.Count >= p.Limit)) return "Every party of the raid group is full.";
+        if (!asParty && force.Parties.Count >= groups.ForceParties && force.Parties.All(p => p.Members.Count >= p.Limit || p.Leader.Session.Bot)) return "Every party of the raid group is full.";
         return null;
     }
 
@@ -184,7 +184,7 @@ public sealed partial class GameSession
             ForceChanged(force, PartyUpdateReason.ForceJoin);
             text = $"Your party joined {force.Leader.Name}'s raid group ({force.Count} players).";
         }
-        else if (force.Parties.FirstOrDefault(p => p.Members.Count < p.Limit) is { } seat)
+        else if (force.Parties.FirstOrDefault(p => p.Members.Count < p.Limit && !p.Leader.Session.Bot) is { } seat)   // never under a bot leader
         {
             replies.AddRange(JoinParty(seat));
             text = $"You joined {seat.Leader.Name}'s party in {force.Leader.Name}'s raid group ({force.Count} players).";
@@ -222,7 +222,7 @@ public sealed partial class GameSession
     {
         if (Social is not { } s || worldPlayer is null || s.ForceOf(worldPlayer) is not { } force) return "You are not in a raid group.";
         if (force.Leader != worldPlayer) return $"Only the raid leader ({force.Leader.Name}) removes members.";
-        if (kicked == worldPlayer) return "Use //raid leave to leave.";
+        if (kicked == worldPlayer) return "Use /raid leave to leave.";
         if (!force.Has(kicked) || s.PartyOf(kicked) is not { } party) return $"{kicked.Name} is not in your raid group.";
         if (options.Groups.ForceWindow) kicked.Send(SocialPackets.ForceKickout(false));
         RemoveFromParty(party, kicked);
@@ -235,6 +235,7 @@ public sealed partial class GameSession
         if (Social is not { } s || worldPlayer is null || s.ForceOf(worldPlayer) is not { } force) return "You are not in a raid group.";
         if (force.Leader != worldPlayer) return $"Only the raid leader ({force.Leader.Name}) hands over the lead.";
         if (!force.Has(leader)) return $"{leader.Name} is not in your raid group.";
+        if (leader.Session.Bot) return "A bot cannot lead the raid group.";
         force.Leader = leader;
         if (options.Groups.ForceWindow) foreach (var m in force.Members) m.Send(SocialPackets.ForceNewLeader(leader.Session.DbId));
         return null;
@@ -257,7 +258,7 @@ public sealed partial class GameSession
         return $"Raid group of {force.Leader.Name}, {force.Count}/{options.Groups.ForceSize} players. " + string.Join("; ", parts) + ". * = party leader.";
     }
 
-    /// <summary>The raids (Dungeon.dat type Raid) this host serves, for //raid enter.</summary>
+    /// <summary>The raids (Dungeon.dat type Raid) this host serves, for /raid enter.</summary>
     static IReadOnlyList<(int Id, DungeonInfo Room)> Raids() =>
         MapEventData.DungeonsOfType("Raid").Where(d => MapEventData.Serves(d.Room.Map)).ToList();
 
@@ -280,7 +281,7 @@ public sealed partial class GameSession
     };
 
     /// <summary>
-    /// //raid enter: into a raid's copy. The official client opens raids through a window the recordings do not hold, so
+    /// /raid enter: into a raid's copy. The official client opens raids through a window the recordings do not hold, so
     /// this is the way in. A member of the group already inside takes this one into the same copy while it has room
     /// (MapEntrance MaxMember, 10 for Ludra); the entry rules (level, item level) apply to everyone but staff.
     /// </summary>
@@ -289,17 +290,17 @@ public sealed partial class GameSession
         var raids = Raids();
         if (which.Length == 0)
             return ([], "Raids: " + string.Join(", ", raids.Select(r => $"{r.Room.Name} = {RaidTitle(r.Room)} (id {r.Id}, {r.Room.MaxMember} players, level {r.Room.MinLevel}, item level {r.Room.ItemLevel})"))
-                + ". Use //raid enter <name or id>.");
-        if (RaidNamed(which) is not { } raid) return ([], $"No raid called \"{which}\". Use //raid enter to list them.");
+                + ". Use /raid enter <name or id>.");
+        if (RaidNamed(which) is not { } raid) return ([], $"No raid called \"{which}\". Use /raid enter to list them.");
         if (instanceKey != 0) return ([], "Leave the dungeon you are in first.");
         if (!IsAdmin && !MeetsEntry(raid.Room, out var why)) return ([], $"{RaidTitle(raid.Room)} refuses you: {why}.");
         var moved = EnterPartyDungeon([raid.Id], now);
         if (moved.Count == 0) return ([], $"Could not enter {RaidTitle(raid.Room)} (a daily entry limit, or you are busy or dead).");
         var mates = GroupMates().Count(m => m.Map is { Instance: not 0 } inside && inside.MapId == raid.Room.Map);
-        return (moved, mates > 0 ? $"Joining your group in {RaidTitle(raid.Room)}." : $"Entering {RaidTitle(raid.Room)}. Your raid group joins with //raid enter {raid.Room.Name}; bots follow their leader.");
+        return (moved, mates > 0 ? $"Joining your group in {RaidTitle(raid.Room)}." : $"Entering {RaidTitle(raid.Room)}. Your raid group joins with /raid enter {raid.Room.Name}; bots follow their leader.");
     }
 
-    /// <summary>"//raid ..." from chat (every player). Runs on this session's game loop; the reply text and packets.</summary>
+    /// <summary>"/raid ..." from chat (every player). Runs on this session's game loop; the reply text and packets.</summary>
     public (string Text, List<byte[]> Packets) RaidCommand(string args, long now)
     {
         if (Social is not { } s || worldPlayer is null || World is not { } world) return ("Enter the world first.", []);
@@ -313,11 +314,11 @@ public sealed partial class GameSession
             {
                 var (started, replies, why) = ForceStart();
                 return started is null ? (why!, replies) : (started.Leader == worldPlayer
-                    ? $"Raid group started ({started.Count}/{options.Groups.ForceSize}). Invite with //raid invite <name>." : ForceText(started), replies);
+                    ? $"Raid group started ({started.Count}/{options.Groups.ForceSize}). Invite with /raid invite <name>." : ForceText(started), replies);
             }
             case "invite" or "inv" or "add":
             {
-                if (rest.Length == 0) return ("//raid invite <character name>", []);
+                if (rest.Length == 0) return ("/raid invite <character name>", []);
                 var (_, replies, text) = ForceInviteByName(rest, now);
                 return (text, replies);
             }
@@ -331,15 +332,15 @@ public sealed partial class GameSession
             case "leave" or "quit":
                 return MyForce is null ? ("You are not in a raid group.", []) : ("You left the raid group and your party in it.", ForceLeave([]));
             case "kick" or "remove":
-                return Named() is { } kicked ? (ForceKick(kicked) ?? $"{kicked.Name} was removed from the raid group.", []) : ("//raid kick <character name> (online)", []);
+                return Named() is { } kicked ? (ForceKick(kicked) ?? $"{kicked.Name} was removed from the raid group.", []) : ("/raid kick <character name> (online)", []);
             case "leader" or "lead":
-                return Named() is { } leader ? (ForceSetLeader(leader) ?? $"{leader.Name} leads the raid group now.", []) : ("//raid leader <character name> (online)", []);
+                return Named() is { } leader ? (ForceSetLeader(leader) ?? $"{leader.Name} leads the raid group now.", []) : ("/raid leader <character name> (online)", []);
             case "disband" or "end":
                 return (ForceDisband() ?? "The raid group ended; the parties stay together.", []);
             case "list" or "info" or "who":
                 return (MyForce is { } mine ? ForceText(mine)
                     : s.ForceInvites.TryGetValue(playerKey, out var invite) && s.Forces.TryGetValue(invite.ForceKey, out var inviting)
-                        ? $"You are invited to {inviting.Leader.Name}'s raid group: //raid accept or //raid decline."
+                        ? $"You are invited to {inviting.Leader.Name}'s raid group: /raid accept or /raid decline."
                         : $"You are not in a raid group. {RaidHelp}", []);
             case "enter" or "go":
             {

@@ -51,6 +51,6 @@
 
 ## 2026-11-09 — 5-player parties and raid groups (branch `claude/project-thread-76gcrk`)
 - **Party size 5** (`Aion:Groups:PartySize`, default 5, 2-6): global AION2 raised parties and expeditions from 4 to 5 and the first raid from 8 to 10 at its launch; the client data agrees (expeditions MaxMember 5, raids 10). The party window is told the new size (CANDIDATE field).
-- **Raid groups** (the client's "Force", `Aion:Groups:ForceParties`, default 4 parties): `//raid invite/accept/decline/list/enter/leave/kick/leader/disband`. The group shares raid copies; `//raid enter ReforgedAbyss_Normal` takes it into Ludra (10 players). Bots fill the raid leader's group and follow it into raids.
+- **Raid groups** (the client's "Force", `Aion:Groups:ForceParties`, default 4 parties): `/raid invite/accept/decline/list/enter/leave/kick/leader/disband`. The group shares raid copies; `/raid enter ReforgedAbyss_Normal` takes it into Ludra (10 players). Bots in a party of the group follow it into raids; bots never fill raid groups by themselves.
 - `Aion:Groups:ForceWindow` (off): the client's raid window messages, CANDIDATE opcodes 0x9509.., untested against the client.
 - New checks (party of five, sixth refused, raid invites, shared Ludra copy, leave/kick/disband, Force layouts). Nothing tested in the game client yet.

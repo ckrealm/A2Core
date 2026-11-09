@@ -81,22 +81,8 @@ public sealed partial class GameSession
             party = NewParty(s, head);
             head.Send(SocialPackets.PartyInfo(Info(party), PartyUpdateReason.Create));
         }
-        // A raid leader's bots fill the group: the leader's party first, then any party of the group with room, then a party of
-        // their own (the bot leads it) while the group may have more parties (Aion:Groups:ForceParties).
-        if (s.ForceOf(head) is { } force && force.Leader == head && (party.Leader != head || party.Members.Count >= party.Limit))
-        {
-            if (force.Parties.FirstOrDefault(p => p.Members.Count < p.Limit) is { } seat) party = seat;
-            else if (force.Parties.Count < options.Groups.ForceParties)
-            {
-                var own = NewParty(s, worldPlayer);
-                force.Parties.Add(own);
-                worldPlayer.Send(SocialPackets.PartyInfo(Info(own), PartyUpdateReason.Create));
-                ForceChanged(force, PartyUpdateReason.ForceJoin);
-                return true;
-            }
-            else return false;
-        }
-        else if (party.Leader != head || party.Members.Count >= party.Limit) return false;
+        // Only the leader's own party (Aion:Groups:PartySize); bots never fill other parties of a raid group by themselves.
+        if (party.Leader != head || party.Members.Count >= party.Limit) return false;
         foreach (var reply in JoinParty(party)) worldPlayer.Send(reply);
         return true;
     }

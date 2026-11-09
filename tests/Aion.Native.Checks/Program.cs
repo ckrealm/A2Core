@@ -2265,7 +2265,7 @@ Check((await dave.HandleAsync(SocialRequests.EncodeKey(SocialOpcodes.ExchangeReq
     var (text, _) = lead.RaidCommand("invite Sana", Now + 13_300);
     var sanaInvite = (await raiders[5].TickAsync(Now + 13_301)).SingleOrDefault(b => Op(b) == SocialOpcodes.PartyInviteNt);
     Check(sanaInvite is not null && shared.Social.Forces.Count == 1 && text.Contains("Invited Sana"),
-        "//raid invite starts the raid group and shows a player without a party the invitation window");
+        "/raid invite starts the raid group and shows a player without a party the invitation window");
     var sanaJoins = await raiders[5].HandleAsync(SocialRequests.EncodePartyInviteResponse([new PartyInviteReply(BitConverter.ToInt64(sanaInvite!, 2), PartyInviteAnswer.Accept)]), Now + 13_302);
     var force = shared.Social.Forces.Values.Single();
     Check(force.Parties.Count == 2 && force.Parties[1].Leader.Name == "Sana" && force.Count == 6 && sanaJoins.Any(b => Op(b) == SocialOpcodes.PartyInfoNt),
@@ -2275,13 +2275,13 @@ Check((await dave.HandleAsync(SocialRequests.EncodeKey(SocialOpcodes.ExchangeReq
     (text, _) = lead.RaidCommand("invite Tove", Now + 13_410);
     Check((await raiders[6].TickAsync(Now + 13_411)).All(b => Op(b) != SocialOpcodes.PartyInviteNt), "a party leader gets no party window (its client would refuse it)");
     (text, _) = raiders[6].RaidCommand("accept", Now + 13_420);
-    Check(force.Parties.Count == 3 && force.Count == 8 && text.Contains("Your party joined"), "//raid accept brings Tove's whole party into the group");
+    Check(force.Parties.Count == 3 && force.Count == 8 && text.Contains("Your party joined"), "/raid accept brings Tove's whole party into the group");
     (text, _) = raiders[1].RaidCommand("invite Ugo", Now + 13_430);
     Check(text.Contains("Only the raid leader"), "only the raid leader invites");
     (text, _) = lead.RaidCommand("list", Now + 13_440);
-    Check(text.Contains("8/20") && text.Contains("party 3 (2/5)") && text.Contains("*Tove"), "//raid list shows the parties");
+    Check(text.Contains("8/20") && text.Contains("party 3 (2/5)") && text.Contains("*Tove"), "/raid list shows the parties");
     (text, _) = lead.RaidCommand("enter", Now + 13_450);
-    Check(text.Contains("ReforgedAbyss_Normal") && text.Contains("Ludra") && text.Contains("10 players"), "//raid enter lists the raids (Ludra, 10 players)");
+    Check(text.Contains("ReforgedAbyss_Normal") && text.Contains("Ludra") && text.Contains("10 players"), "/raid enter lists the raids (Ludra, 10 players)");
     var (enterText, enterMove) = lead.RaidCommand("enter ReforgedAbyss_Normal", Now + 13_460);
     Check(enterMove.Count > 0, "the raid leader enters Ludra: " + enterText);
     await lead.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now + 13_461);
@@ -2455,6 +2455,9 @@ presence.Enter("Visitor", stored, null);
 Check((await gm.HandleAsync(chatter, "player1", "//help", default)).StartsWith("Builder commands"), "configured development GM");
 Check((await gm.HandleAsync(chatter, "[GM] Player1", "//help", default)).StartsWith("Builder commands"), "chat under the displayed name finds the character");
 Check(await gm.HandleAsync(chatter, "Visitor", "//help", default) == "Commands: //report <text> sends a report to the staff. " + GameSession.RaidHelp + ".", "players get the report and raid commands as help");
+foreach (var raidLine in new[] { "/raid", "/raid list", "//raid list" })
+    Check(await gm.HandleAsync(chatter, "Visitor", raidLine, default) is { } raidReply && raidReply != "Unknown command. Use //help." && !raidReply.StartsWith("Builder"),
+        $"{raidLine} is a player command (single slash; // works too)");
 Check(await gm.HandleAsync(chatter, "Visitor", "//report the bridge is broken", default) == "Reports are not available on this server.", "no reports without staff tools");
 var reports = new List<string>();
 var reporting = new GmCommands(presence, builder) { Report = (_, name, text, _) => { reports.Add(name + ":" + text); return Task.FromResult("sent"); } };

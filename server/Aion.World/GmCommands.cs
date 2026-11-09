@@ -93,6 +93,10 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
     public async Task<string> HandleAsync(ChatIdentity sender, string userName, string content, CancellationToken ct)
     {
         var text = content.Trim();
+        // /raid (Aion:Groups): a player command, single slash (/raid works too).
+        var bare = text.TrimStart('/');
+        if (bare.StartsWith("raid", StringComparison.OrdinalIgnoreCase) && (bare.Length == 4 || char.IsWhiteSpace(bare[4])))
+            return await RaidAsync(userName, bare[4..].Trim(), ct);
         if (!text.StartsWith("//", StringComparison.Ordinal)) return "Unknown command. Use //help.";
         var line = text[2..].Trim();
         if (line.StartsWith("report", StringComparison.OrdinalIgnoreCase) && (line.Length == 6 || char.IsWhiteSpace(line[6])))
@@ -112,13 +116,6 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
                 return Market is { } market ? await market.HandleAsync(actor.Session, line[2..].Trim(), ct) : "The market is not available on this server.";
             if (line.StartsWith("bot", StringComparison.OrdinalIgnoreCase) && (line.Length == 3 || char.IsWhiteSpace(line[3])))
                 return await BotAsync(actor.Session, line[3..].Trim(), ct);
-            // //raid (Aion:Groups): raid groups of parties and the way into raids, for every player.
-            if (line.StartsWith("raid", StringComparison.OrdinalIgnoreCase) && (line.Length == 4 || char.IsWhiteSpace(line[4])))
-            {
-                if (actor.Session.Bot) return "Bots do not lead raids.";
-                var args = line[4..].Trim();
-                return await actor.Session.InvokeAsync(now => actor.Session.RaidCommand(args, now)).WaitAsync(TimeSpan.FromSeconds(10), ct);
-            }
             if (line.Length == 0 || line.Equals("help", StringComparison.OrdinalIgnoreCase))
                 return await builder.AllowedAsync(actor.Session, ct)
                     ? "Builder commands (in chat: //<command>; console: s <command>): " + string.Join(", ", BuilderCommands.Supported)
@@ -130,6 +127,22 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
                 var outcome = await builder.RunAsync(actor.Session, line, now, ct);
                 return (outcome.Message, outcome.Packets);
             }).WaitAsync(TimeSpan.FromSeconds(10), ct);
+        }
+        catch (Exception error) when (error is TimeoutException or TaskCanceledException)
+        {
+            return "The game connection did not respond.";
+        }
+    }
+
+    /// <summary>/raid (GameSession.RaidCommand): raid groups and the way into raids, for every player; runs on the sender's game loop.</summary>
+    async Task<string> RaidAsync(string userName, string args, CancellationToken ct)
+    {
+        var actor = presence.Find(userName) ?? presence.Find(Aion.Core.Characters.CharacterNames.Stored(userName));
+        if (actor is null) return "Enter the world first.";
+        if (actor.Session.Bot) return "Bots do not lead raids.";
+        try
+        {
+            return await actor.Session.InvokeAsync(now => actor.Session.RaidCommand(args, now)).WaitAsync(TimeSpan.FromSeconds(10), ct);
         }
         catch (Exception error) when (error is TimeoutException or TaskCanceledException)
         {

@@ -139,13 +139,15 @@ copies. Players run it from chat:
 
 | Command | What it does |
 |---|---|
-| `//raid invite <name>` | Starts a raid group from your party (you must lead it) and invites a player. A player without a party gets the party invitation window and takes a seat in a party of the group with room (or a new one). A party leader brings the whole party and answers with `//raid accept`. |
-| `//raid accept` / `//raid decline` | Answer a raid invitation (60 s). |
-| `//raid list` | The group's parties and members. |
-| `//raid enter` | Lists the raids. `//raid enter <name or id>` (for example `//raid enter ReforgedAbyss_Normal` for Ludra) enters one; the rest of the group runs the same command and joins the same copy while it has room. Level and item level rules apply (Ludra: level 45, item level 2,800). Bots in the group follow on their own. |
-| `//raid leave`, `//raid kick <name>`, `//raid leader <name>`, `//raid disband` | Leave (you also leave your party in it), remove a member, hand over the lead, end the group (the parties stay). |
+| `/raid invite <name>` | Starts a raid group from your party (you must lead it) and invites a player. A player without a party gets the party invitation window and takes a seat in a party of the group with room (or a new one). A party leader brings the whole party and answers with `/raid accept`. |
+| `/raid accept` / `/raid decline` | Answer a raid invitation (60 s). |
+| `/raid list` | The group's parties and members. |
+| `/raid enter` | Lists the raids. `/raid enter <name or id>` (for example `/raid enter ReforgedAbyss_Normal` for Ludra) enters one; the rest of the group runs the same command and joins the same copy while it has room. Level and item level rules apply (Ludra: level 45, item level 2,800). Bots already in a party of the group follow their leader in on their own. |
+| `/raid leave`, `/raid kick <name>`, `/raid leader <name>`, `/raid disband` | Leave (you also leave your party in it), remove a member, hand over the lead, end the group (the parties stay). |
 
-The official client opens raids and its raid window through messages that were never recorded, so this is the way in.
+Player commands take one slash (`/raid`); `//` is for staff commands (`//raid` is accepted too). The official client
+opens raids and its raid window through messages that were never recorded, so this is the way in. `/dungeon ludra`
+(the dungeon command) enters through the same path, so the raid group shares that copy too.
 `Aion__Groups__ForceWindow=true` also answers the client's own raid-window requests and sends it the Force messages
 (opcodes and layouts are CANDIDATE: from the client's struct list, placed by the observed neighbours 0x9507/0x9508).
 It is off by default because nobody has tried it against the client yet; turn it on to test, and off again if the

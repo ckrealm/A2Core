@@ -103,7 +103,7 @@ var marketReferences = market.PriceFile is { Length: > 0 } priceFile ? Aion.Worl
 
 builder.Services.AddSingleton(dungeonRules);
 // Aion:Groups: PartySize (default 5, as global AION2), ForceParties (parties in a raid group, default 4), ForceWindow (the
-// client's raid window; CANDIDATE messages, default off: raid groups are formed with //raid in chat).
+// client's raid window; CANDIDATE messages, default off: raid groups are formed with /raid in chat).
 var groups = (builder.Configuration.GetSection("Aion:Groups").Get<Aion.World.GroupOptions>() ?? Aion.World.GroupOptions.Default).Validated();
 builder.Services.AddSingleton(groups);
 if (native.LoginPort is not null || native.GamePort is not null)
