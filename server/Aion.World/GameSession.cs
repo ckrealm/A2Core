@@ -40,6 +40,8 @@ public sealed record GameSessionOptions
     public DungeonOptions Dungeons { get; init; } = DungeonOptions.Default;
     /// <summary>Heal/buff/debuff effects of class skills; null: the embedded tools/data/skill-effects.json (OURS values).</summary>
     public SkillEffectTable? SkillEffects { get; init; }
+    /// <summary>Aion:Daevanion: the boards' point rate, flat extra points, free resets and hidden boards (docs/DAEVANION.md).</summary>
+    public DaevanionOptions Daevanion { get; init; } = DaevanionOptions.Default;
 }
 
 /// <summary>
@@ -457,6 +459,11 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
             case CloseEnvObjAchievementRq: return CloseEnvObjAchievement(plain);
             case SkillLevelDownRq: return await SkillLevelDownAsync(plain, ct);
             case SkillLevelResetRq: return await SkillLevelResetAsync(plain, ct);
+            case DaevanionOpenNodeRq: return await DaevanionOpenNodeAsync(plain, ct);
+            case DaevanionCloseNodeRq: return await DaevanionCloseNodeAsync(plain, ct);
+            case DaevanionResetBoardRq: return await DaevanionResetBoardAsync(plain, ct);
+            case DaevanionOpenAllRq: return await DaevanionOpenAllAsync(plain, ct);
+            case DaevanionOpenRouteRq: return await DaevanionOpenRouteAsync(plain, ct);
             // InteractEnvObjStop_RQ {key}: a timed interaction cancelled (moved, or the client's cancel).
             case 0x363d when QuestKey(plain, 2) is { } stopKey:
                 if (pendingUse?.Key == stopKey) pendingUse = null;
@@ -1705,6 +1712,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         var kit = profile is null ? [] : data.LearnedSkills(profile.Class, level);
         learned = kit.Select(k => k.SkillId).ToHashSet();
         className = profile?.Class;
+        OpenFixedNodes();   // before the pools, the stat sheet and the passives are worked out
         var (mapId, at) = spawn ?? (GamePackets.SpawnMapId, GamePackets.SpawnPosition);
         worldMap = mapId;
         // Map geometry loads off the game loop; NPCs use it from the tick it is ready.
@@ -1830,6 +1838,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
             replies.Add(PeriodCollectionList(now));
             replies.Add(BossChallengeList());
             replies.AddRange(EntryConstants(now));
+            replies.AddRange(DaevanionAtEntry());
             replies.AddRange(AchieveSet("EquipItemLevel", EquipItemLevel(), now: now));
             if (fresh) { replies.AddRange(Achieve("LoginCharacter", now: now)); elapsedAchieveAt = now + 60_000; }
             replies.AddRange(CraftListsAtEntry());
@@ -2095,7 +2104,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         foreach (var target in chosen.Where(t => t.Hostile).ToList())
         {
             if (target.Dead) continue;
-            var hits = Combat.SkillHits(data, skill, className, level, equippedWeapon, target.Defense, rng, fixingBonus: BuffStat("FixingDamage"), skillLevel: SkillLevel(skill));
+            var hits = Combat.SkillHits(data, skill, className, level, StatWeapon, target.Defense, rng, fixingBonus: BuffStat("FixingDamage") + DaevanionStat("FixingDamage"), skillLevel: CombatSkillLevel(skill));
             replies.AddRange(HitTarget(target, skill, hits, now));
         }
         return replies;
@@ -2357,16 +2366,30 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
 
     int EquipItemLevel() => inventory.Values.Where(i => i.Container == InventoryItem.Equipped).Sum(i => i.Detail?.ItemLevel ?? 0);
 
+    /// <summary>
+    /// The item whose weapon stats this character hits with (GameData.StatWeapon, OURS): the equipped weapon, or for a Brawler's
+    /// gauntlet a Greatsword of its gear level: the character level or the mean ItemLevel of the other worn items, the higher.
+    /// </summary>
+    int? StatWeapon
+    {
+        get
+        {
+            if (data.Item(equippedWeapon) is not { Category: "Gauntlet" }) return equippedWeapon;
+            var worn = inventory.Values.Where(i => i.Container == InventoryItem.Equipped && i.Slot != 1).Select(i => data.ItemLevel(i.ItemId)).ToList();
+            return data.StatWeapon(equippedWeapon, Math.Max(level, worn.Count == 0 ? 0 : (int)worn.Average()));
+        }
+    }
+
     /// <summary>The weapon in equip slot 1; development logins (no store) keep the class starter weapon.</summary>
     int? WeaponFromInventory() =>
         inventory.Values.FirstOrDefault(i => i.Container == InventoryItem.Equipped && i.Slot == 1)?.ItemId ?? (Store is null ? data.StarterWeapon(Profile()) : null);
 
     /// <summary>Defense against NPC hits: PcStatLevel Defense plus the equipped items' ArmorDefense.</summary>
     public int Defense => data.BaseStats(className, level).GetValueOrDefault("Defense") + EquippedItems().Sum(i => i.Stat("ArmorDefense")) + EnchantStat("ArmorDefense") + BuffStat("Defense")
-        + BoardStat("Defense") + TitleStat("Defense");
+        + BoardStat("Defense") + TitleStat("Defense") + DaevanionStat("Defense") + DaevanionStat("ArmorDefense");
 
     /// <summary>The MP pool: the class and level's MPMax (progression.json mp_max, OURS; 1500 at level 1 as observed) plus buffs.</summary>
-    int MpMax => data.Progression.MpMax(className, level) + BuffStat("MPMax") + BoardStat("MPMax") + TitleStat("MPMax");
+    int MpMax => data.Progression.MpMax(className, level) + BuffStat("MPMax") + BoardStat("MPMax") + TitleStat("MPMax") + DaevanionStat("MPMax");
 
     /// <summary>
     /// Combat power (progression.json combat_power, OURS): level, attack (mean weapon damage + FixingDamage + gear
@@ -2379,7 +2402,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         var (stats, hpMax) = StatSheet();
         int Of(int type) => stats.FirstOrDefault(s => s.Type == type).Value;
         var gear = EquippedItems().ToList();
-        var weapon = data.WeaponStatsOf(equippedWeapon);
+        var weapon = data.WeaponStatsOf(StatWeapon);
         var attack = (weapon.Min + weapon.Max) / 2.0 + data.BaseStats(className, level).GetValueOrDefault("FixingDamage")
             + gear.Sum(i => i.Stat("WeaponFixingDamage"));
         return data.Progression.CombatPower(new Dictionary<string, double>
@@ -2393,21 +2416,31 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
     /// The stat sheet (0x3649 / 0x364a): the official sample's values (layout unchanged), with HPMax from PcStatLevel
     /// plus equipped HPMax, MPMax from progression.json (OURS), the weapon's damage/critical/accuracy and the armour's defense.
     /// </summary>
+    /// <summary>The Daevanion stats the stat sheet already adds by name (HPMax, MPMax, Critical and the defense).</summary>
+    static readonly string[] DaevanionCountedStats = ["HPMax", "MPMax", "Critical", "Defense", "ArmorDefense"];
+
     (IReadOnlyList<(int Type, int Value)> Stats, int HpMax) StatSheet()
     {
         var gear = EquippedItems().ToList();
         var basis = data.BaseStats(className, level);
         var hpMax = Math.Max(1, (basis.GetValueOrDefault("HPMax") is > 0 and var hp ? hp : GamePackets.SpawnHpMax) + gear.Sum(i => i.Stat("HPMax")) + EnchantStat("HPMax") + RideStat("HPMax")
-            + BuffStat("HPMax") + BoardStat("HPMax") + TitleStat("HPMax"));
-        var weapon = data.WeaponStatsOf(equippedWeapon);
+            + BuffStat("HPMax") + BoardStat("HPMax") + TitleStat("HPMax") + DaevanionStat("HPMax"));
+        var weapon = data.WeaponStatsOf(StatWeapon);
         var stats = GamePackets.DefaultStats.Select(s => s.Type switch
         {
             31 => (s.Type, weapon.Max + EnchantStat("WeaponDamage")), 33 => (s.Type, weapon.Min + EnchantStat("WeaponMinDamage")),
-            128 => (s.Type, weapon.Critical + RideStat("Critical") + BuffStat("Critical") + BoardStat("Critical") + TitleStat("Critical")),
+            128 => (s.Type, weapon.Critical + RideStat("Critical") + BuffStat("Critical") + BoardStat("Critical") + TitleStat("Critical") + DaevanionStat("Critical")),
             318 => (s.Type, weapon.Accuracy), 193 => (s.Type, hpMax), 199 => (s.Type, MpMax), 242 => (s.Type, GamePackets.SpawnSp + BuffStat("SPMax")),
             307 => (s.Type, Defense),
             _ => s,
         }).ToList();
+        // The Daevanion stats the lines above do not already count, by their EStat wire id; stats the sample lacks are appended.
+        var daevanion = DaevanionStatsById();
+        foreach (var name in DaevanionCountedStats)
+            if (DaevanionData.StatId(name) is { } counted) daevanion.Remove(counted);
+        for (var i = 0; i < stats.Count; i++)
+            if (daevanion.Remove(stats[i].Item1, out var add)) stats[i] = (stats[i].Item1, stats[i].Item2 + add);
+        stats.AddRange(daevanion.Where(p => p.Value != 0).OrderBy(p => p.Key).Select(p => (p.Key, p.Value)));
         return (stats, hpMax);
     }
 
