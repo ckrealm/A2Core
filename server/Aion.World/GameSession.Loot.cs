@@ -36,6 +36,7 @@ public sealed partial class GameSession
         var rolled = new List<(int, long)>();
         for (var i = 0; i < rolls; i++)
             rolled.AddRange(generic ? MonsterRewards.Embedded.Fallback(target.SubType, target.Level, rng) : LootTables.Embedded.Roll(target.NpcId, profileRace, rng));
+        rolled = LuckyLoot(rolled, target);   // Aion:Fun:LuckyDrops
         rolled = options.Rates.WithKinah(rolled);
         var kinah = options.Rates.KinahAmount(MonsterRewards.Embedded.Kinah(target.SubType, target.Level, rng));
         var mine = ShareLootWithParty(rolled, kinah);
@@ -102,9 +103,11 @@ public sealed partial class GameSession
         var replies = new List<byte[]>();
         if (Store is { } store && CharacterId is { } character)
         {
+            var known = BagInstances();
             var granted = await Stored(async () => await store.GrantLootAsync(character, items, ct) ? [[]] : []);
             if (granted.Count == 0) return [];
             replies.AddRange(await InventoryChangesAsync(ct, IncreaseDropItemGet, 0));
+            replies.AddRange(await EnchantLuckyLootAsync(known, ct));
             replies.AddRange(await AutoUseAsync(items.Select(i => i.ItemId), now, ct));
         }
         SharedLootReceived += items.Count;
@@ -145,6 +148,7 @@ public sealed partial class GameSession
             else replies.Add(LootPackets.LootReply(1, uid, auto));
         }
         if (taken.Count == 0) return replies;
+        var knownBefore = BagInstances();
         if (Store is { } store && CharacterId is { } character)
         {
             var granted = await Stored(async () => await store.GrantLootAsync(character, taken.Select(d => (d.ItemId, d.Count)).ToList(), ct) ? [[]] : []);
@@ -154,6 +158,7 @@ public sealed partial class GameSession
         replies.AddRange(taken.Select(d => LootPackets.LootReply(0, d.Uid, auto)));
         replies.Add(LootPackets.DropsRemoved(taken.Select(d => (d.Key, d.Uid, (long)(selected?.WireId ?? playerKey), auto)).ToList()));
         replies.AddRange(await InventoryChangesAsync(ct, IncreaseDropItemGet, 0));
+        replies.AddRange(await EnchantLuckyLootAsync(knownBefore, ct));
         replies.AddRange(await AutoUseAsync(taken.Select(d => d.ItemId), now, ct));
         return replies;
     }

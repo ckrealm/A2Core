@@ -93,6 +93,9 @@ builder.Services.AddSingleton(rates);
 builder.Services.AddSingleton(rules);
 // Playerbots (OURS, docs/PLAYERBOTS.md): Aion:Bots (Enabled, PlayersMayUse, MaxPerAccount, MaxTotal, JoinParty, TeleportBeyond).
 var bots = (builder.Configuration.GetSection("Aion:Bots").Get<Aion.World.BotOptions>() ?? new Aion.World.BotOptions()).Validated();
+// Friends-server extras (OURS, docs/friends-server/FUN.md): Aion:Fun (FieldBosses with Boss/Named respawn windows,
+// BossAnnouncements, SharedBossLoot, BuffCommand/BuffMinutes/BuffSkills, HubCommand, DuelRestore). All on by default.
+var fun = (builder.Configuration.GetSection("Aion:Fun").Get<Aion.World.FunOptions>() ?? Aion.World.FunOptions.Default).Validated();
 
 builder.Services.AddSingleton(dungeonRules);
 if (native.LoginPort is not null || native.GamePort is not null)
@@ -132,10 +135,16 @@ if (native.LoginPort is not null || native.GamePort is not null)
             presence: provider.GetRequiredService<Aion.World.WorldPresence>()));
         builder.Services.AddHostedService<PlayerBotsService>();
     }
+    if (native.GamePort is not null)
+    {
+        builder.Services.AddSingleton(new Aion.World.FunFeatures(fun));
+        builder.Services.AddHostedService<Aion.Host.Native.FunNoticeService>();
+    }
     builder.Services.AddSingleton<IChatCommandHandler>(provider =>
         new Aion.World.GmCommands(provider.GetRequiredService<Aion.World.WorldPresence>(), provider.GetRequiredService<Aion.World.BuilderCommands>())
         {
             Bots = provider.GetService<Aion.World.PlayerBots>(),
+            Fun = provider.GetService<Aion.World.FunFeatures>(),
             // "//report <text>" opens a ticket for the staff dashboard (accounts only).
             Report = provider.GetService<IStaffTools>() is { } staffTools ? async (sender, name, text, ct) =>
             {

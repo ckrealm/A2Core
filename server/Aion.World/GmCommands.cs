@@ -87,6 +87,12 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
     /// <summary>"//bot ..." (docs/PLAYERBOTS.md): staff, or every player with Aion:Bots:PlayersMayUse. Null: no playerbots on this host.</summary>
     public PlayerBots? Bots { get; init; }
 
+    /// <summary>"//buff" and "//hub" (Aion:Fun, docs/friends-server/FUN.md) for every player. Null: off on this host.</summary>
+    public FunFeatures? Fun { get; init; }
+
+    static bool Is(string line, string word) =>
+        line.StartsWith(word, StringComparison.OrdinalIgnoreCase) && (line.Length == word.Length || char.IsWhiteSpace(line[word.Length]));
+
     public async Task<string> HandleAsync(ChatIdentity sender, string userName, string content, CancellationToken ct)
     {
         var text = content.Trim();
@@ -106,11 +112,17 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
         {
             if (line.StartsWith("bot", StringComparison.OrdinalIgnoreCase) && (line.Length == 3 || char.IsWhiteSpace(line[3])))
                 return await BotAsync(actor.Session, line[3..].Trim(), ct);
+            if (Fun is { Options.BuffCommand: true } && Is(line, "buff"))
+                return await actor.Session.InvokeAsync(now => actor.Session.FunBuff(now)).WaitAsync(TimeSpan.FromSeconds(10), ct);
+            if (Fun is { Options.HubCommand: true } && Is(line, "hub"))
+                return await actor.Session.InvokeAsync(now => actor.Session.FunHub(line[3..].Trim(), now)).WaitAsync(TimeSpan.FromSeconds(10), ct);
             if (line.Length == 0 || line.Equals("help", StringComparison.OrdinalIgnoreCase))
                 return await builder.AllowedAsync(actor.Session, ct)
                     ? "Builder commands (in chat: //<command>; console: s <command>): " + string.Join(", ", BuilderCommands.Supported)
                         + (Bots is { Options.Enabled: true } ? "; //bot add <character> for playerbots" : "")
                     : "Commands: //report <text> sends a report to the staff."
+                        + (Fun is { Options.BuffCommand: true } ? " //buff gives you the food and scroll buffs." : "")
+                        + (Fun is { Options.HubCommand: true } ? " //hub teleports to a town or the Abyss." : "")
                         + (Bots is { Options: { Enabled: true, PlayersMayUse: true } } ? " //bot add <character> summons one of your characters as a bot." : "");
             return await actor.Session.InvokeAsync(async now =>
             {
