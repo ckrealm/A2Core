@@ -47,8 +47,10 @@ skills in that kit that no auto-learned SkillAcquireData row gives the class are
 having a cost. Those are the stigmas: 11 or 12 per class. Global lists 13. The 13th, added in March 2026, is not in the
 developer kit. The passives in that kit (the 7x family) stay level unlocks.
 
-The Brawler (client class `Fighter`) has 14 candidates: the active kit skills without Mastery rows. The Brawler is not
-playable yet. Making it playable is separate work, which has to check this list.
+The Brawler (client class `Fighter`) uses its recovered list instead (`params.recovered`): 13 stigmas read from the
+client's SkillAcquireData Stigma rows during the Brawler work, all from level 22: 19280000 to 19400000 and 19460000.
+19370000 and 19460000 are not in the developer kit, so they have no cast data yet. The Brawler becomes playable in its
+own PR (#10).
 
 The OURS level unlocks in `progression.json` still list these skills and give them their fallback cast data. With
 stigmas on, the server leaves them out of the level kit (`GameSession.LevelKit`).

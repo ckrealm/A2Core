@@ -76,7 +76,9 @@ def shard_totals(params, max_level):
 
 
 def build(params, rules, dev_buttons):
-    classes = {c: class_stigmas(c, rules, dev_buttons) for c in CLASSES}
+    # Recovered SkillAcquireData Stigma rows win over the developer-kit candidates where we have them.
+    recovered = params.get('recovered', {})
+    classes = {c: sorted(recovered[c]) if c in recovered else class_stigmas(c, rules, dev_buttons) for c in CLASSES}
     return {'classes': {c: s for c, s in classes.items() if s},
             'shard_totals': shard_totals(params, rules['max_level'])}
 

@@ -53,7 +53,25 @@
   "skill_level_damage": {
    "per_level": 500
   },
-  "skill_level_damage_about": "OURS: a stigma's damage and heals grow by per_level (1/10000) for each stigma level above 1 (+95% at 20). Global's per-level values and the specialties at 5/10/15/20 are not exported."
+  "skill_level_damage_about": "OURS: a stigma's damage and heals grow by per_level (1/10000) for each stigma level above 1 (+95% at 20). Global's per-level values and the specialties at 5/10/15/20 are not exported.",
+  "recovered": {
+   "Fighter": [
+    19280000,
+    19290000,
+    19300000,
+    19310000,
+    19320000,
+    19330000,
+    19350000,
+    19360000,
+    19370000,
+    19380000,
+    19390000,
+    19400000,
+    19460000
+   ]
+  },
+  "recovered_about": "Recovered data: stigma skills read from the client's SkillAcquireData Stigma rows (via the Brawler work, PR #10). These replace the CANDIDATE developer-kit list for the class. The Brawler's 13 all need level 22. 19370000 and 19460000 are not in the developer kit, so they have no cast data yet."
  },
  "generated": {
   "classes": {
@@ -164,8 +182,6 @@
     18440000
    ],
    "Fighter": [
-    19110000,
-    19270000,
     19280000,
     19290000,
     19300000,
@@ -174,10 +190,11 @@
     19330000,
     19350000,
     19360000,
+    19370000,
     19380000,
     19390000,
     19400000,
-    19440000
+    19460000
    ]
   },
   "shard_totals": {

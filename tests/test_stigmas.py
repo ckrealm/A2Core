@@ -29,6 +29,10 @@ class StigmaTests(unittest.TestCase):
         dev = {'Class_Fighter': ['LearnSkill 19000000 1', 'LearnSkill 19010000 1', 'LearnSkill 19270000 1', 'LearnSkill 19730000 1']}
         self.assertEqual(stigmas.class_stigmas('Fighter', rules, dev), [19270000])
 
+    def test_recovered_rows_replace_the_candidates(self):
+        built = stigmas.build({**PARAMS, 'recovered': {'Fighter': [19460000, 19280000]}}, {'max_level': 50, 'common_unlocks': [], 'levels': {}, 'classes': {}}, {})
+        self.assertEqual(built['classes'], {'Fighter': [19280000, 19460000]})
+
     def test_tracked_file_is_current(self):
         rules = json.loads(stigmas.CLASS_SKILLS.read_text(encoding='utf-8'))
         dev = json.loads(stigmas.DEV_MENU.read_text(encoding='utf-8'))['buttons']
