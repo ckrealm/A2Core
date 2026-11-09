@@ -1,0 +1,24 @@
+# Nightly database backup (deploy/linux/backup.sh, installed to /opt/aion/bin by install.sh); started by aion-backup.timer.
+# Settings: /etc/aion/backup.env (AION_BACKUP_KEEP=14, AION_BACKUP_DIR=/var/lib/aion/backups, AION_BACKUP_VERIFY=1,
+# AION_BACKUP_COPY_DIR, AION_BACKUP_COPY_KEEP). The unit writes only to ReadWritePaths: after setting AION_BACKUP_DIR or
+# AION_BACKUP_COPY_DIR run sudo /opt/aion/bin/backup-paths.sh (drop-in aion-backup.service.d/10-backup-paths.conf).
+# Run now: systemctl start aion-backup; result: journalctl -u aion-backup.
+[Unit]
+Description=AION2 database backup
+Requires=aion-postgres.service
+After=aion-postgres.service
+
+[Service]
+Type=oneshot
+User=aion
+Group=aion
+Environment=AION_PG_HOME=/var/lib/aion/postgres
+EnvironmentFile=-/etc/aion/backup.env
+ExecStart=/opt/aion/bin/backup.sh
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/aion/backups

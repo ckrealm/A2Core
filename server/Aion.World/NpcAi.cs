@@ -123,6 +123,9 @@ public sealed class NpcAi(Random rng, GameData? data = null)
     readonly List<(Target Victim, Target Killer)> npcKills = [];
     /// <summary>The targets of the running tick (NPC victims' defense).</summary>
     IReadOnlyDictionary<int, Target>? current;
+    /// <summary>The players of the running tick and the host's hit (a boss's area special reaches the others).</summary>
+    IReadOnlyList<(int Key, Vector3d Position)>? tickPlayers;
+    Func<int, int, List<byte[]>>? tickHit;
 
     public List<(Target Victim, Target Killer)> TakeNpcKills()
     {
@@ -491,7 +494,7 @@ public sealed class NpcAi(Random rng, GameData? data = null)
     {
         var elapsed = Math.Max(0, now - brain.LastMs) / 1000.0;
         brain.LastMs = now;
-        var budget = (brain.Run ? target.RunSpeed : target.WalkSpeed) * (1 + brain.SpeedBoost / 10000.0) * elapsed;
+        var budget = (brain.Run ? target.RunSpeed : target.WalkSpeed) * (1 + brain.SpeedBoost / 10000.0) * target.SpeedScale(now) * elapsed;   // a player's slow
         // Walk the waypoints in order; stopAt applies to the final goal only.
         while (true)
         {
@@ -651,7 +654,33 @@ public sealed class NpcAi(Random rng, GameData? data = null)
         var defense = brain.VictimIsNpc && current?.GetValueOrDefault(victim) is { } prey ? prey.Defense : DefenseOf?.Invoke(victim) ?? 0;
         var damage = Math.Max(1, (int)Math.Round(Damage(target, hit.Skill) * 1000.0 / (1000 + Math.Max(0, defense))));
         LastAttacker = target.Key;
-        return [GamePackets.NpcSkillHit(victim, target.Key, hit.SkillId, hit.ActionSeq, hit.Skill.Effect, damage), .. hitPlayer(damage)];
+        List<byte[]> replies = [GamePackets.NpcSkillHit(victim, target.Key, hit.SkillId, hit.ActionSeq, hit.Skill.Effect, damage), .. hitPlayer(damage)];
+        if (!brain.VictimIsNpc) replies.AddRange(AreaHits(target, brain, hit));
+        return replies;
+    }
+
+    /// <summary>Named bosses' area specials (tools/data/boss-area-skills.json, OURS): every NPC skill hits one victim otherwise.</summary>
+    public BossAreaSkills AreaSkills { get; set; } = BossAreaSkills.Embedded;
+
+    /// <summary>
+    /// A listed boss's area special: the other players within its radius (nearest first, up to its target count with the
+    /// victim) take their own roll of the hit, each through the same per-target hit message (0x3804) and the host's hit.
+    /// </summary>
+    List<byte[]> AreaHits(Target target, Brain brain, PendingHit hit)
+    {
+        if (tickPlayers is not { Count: > 1 } players || tickHit is null) return [];
+        if (AreaSkills.Area(target.NpcId, hit.SkillId, Basic(target)?.Id ?? 0) is not { } area) return [];
+        var primary = brain.VictimKey != 0 ? brain.VictimKey : brain.CandidateKey;
+        var reach = area.Radius + target.Radius;
+        var replies = new List<byte[]>();
+        foreach (var (key, _) in players.Where(p => p.Key != primary).Select(p => (p.Key, D: Distance(target.Position, Flat(p.Position))))
+                     .Where(p => p.D <= reach).OrderBy(p => p.D).ThenBy(p => p.Key).Take(area.MaxTargets - 1))
+        {
+            var damage = Math.Max(1, (int)Math.Round(Damage(target, hit.Skill) * 1000.0 / (1000 + Math.Max(0, DefenseOf?.Invoke(key) ?? 0))));
+            replies.Add(GamePackets.NpcSkillHit(key, target.Key, hit.SkillId, hit.ActionSeq, hit.Skill.Effect, damage));
+            replies.AddRange(tickHit(key, damage));
+        }
+        return replies;
     }
 
     static int Victim(Brain brain) => brain.VictimKey != 0 ? brain.VictimKey : PlayerKey;
@@ -949,6 +978,8 @@ public sealed class NpcAi(Random rng, GameData? data = null)
     {
         Sync(targets);
         current = targets;
+        tickPlayers = players;
+        tickHit = hitPlayer;
         var replies = new List<byte[]>();
         // The busy NPCs and those placed near a player, in key order.
         var active = new SortedSet<int>(awake);

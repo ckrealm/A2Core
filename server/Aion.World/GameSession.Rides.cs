@@ -79,7 +79,8 @@ public sealed partial class GameSession
             || Boxes.Use(row.TemplateId) is not { Effect: "RewardBox", Values: [var group, ..] })
             return Fail();
         count = (int)Math.Min(Math.Clamp(count, 1, Math.Max(1, Boxes.MaxOpen(group))), row.Quantity);
-        if (count < 1 || Boxes.Roll(group, select, count, rng) is not { } rewards) return Fail();
+        if (count < 1 || Boxes.Roll(group, select, count, rng) is not { } rolled) return Fail();
+        var rewards = options.Rates.WithKinah(rolled);   // Aion:Rates:Kinah (OURS)
         var done = await Stored(async () => await store.ConsumeAndGrantAsync(character, row.InstanceId, row.Revision, count, rewards, ct) ? [[]] : []);
         if (done.Count == 0) return Fail();
         var replies = new List<byte[]> { RidePackets.OpenBoxReply(0, uid, itemId, select, count, rewards) };
@@ -240,6 +241,7 @@ public sealed partial class GameSession
     /// <summary>A Kina chest [amount]: the Kina currency item is granted.</summary>
     async Task<List<byte[]>?> UseKinaItemAsync(INativeCharacterStore store, Guid character, ItemState row, long kina, bool reply, CancellationToken ct)
     {
+        kina = Math.Max(1, options.Rates.KinahAmount(kina));   // Aion:Rates:Kinah (OURS); a chest always pays something
         var done = await Stored(async () => await store.ConsumeAndGrantAsync(character, row.InstanceId, row.Revision, 1, [(KinaItemId, kina)], ct) ? [[]] : []);
         if (done.Count == 0) return null;
         return [.. Used(row, reply), .. await InventoryChangesAsync(ct, IncreaseItemUse, DecreaseItemUse)];

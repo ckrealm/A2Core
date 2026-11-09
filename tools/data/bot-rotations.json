@@ -1,0 +1,850 @@
+{
+ "marker": "OURS",
+ "about": "Playerbot rotations (docs/PLAYERBOTS.md); built by tools/bot_rotations.py from class-skills.json and skill-effects.json.",
+ "global_cooldown_ms": 1000,
+ "tank_hate_multiplier": 3,
+ "classes": {
+  "Gladiator": {
+   "weapon_type": "Greatsword",
+   "range": 300,
+   "roles": [
+    "dps",
+    "tank"
+   ],
+   "rotation": [
+    {
+     "skill": 11260000,
+     "name": "Defiance",
+     "level": 16,
+     "when": {
+      "target": "self",
+      "buff_missing": true,
+      "in_combat": true
+     }
+    },
+    {
+     "skill": 11100000,
+     "name": "Ruinous Blow",
+     "level": 14,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 11300000,
+     "name": "Aerial Snare",
+     "level": 12,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 11290000,
+     "name": "Mocking Blade",
+     "level": 3,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 11050000,
+     "name": "Crushing Wave",
+     "level": 8,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 11360000,
+     "name": "Rush Strike",
+     "level": 10,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 11190000,
+     "name": "Leaping Slam",
+     "level": 1,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 11200000,
+     "name": "Ankle Slice",
+     "level": 7,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 11170000,
+     "name": "Overhead Slam",
+     "level": 4,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 11010000,
+     "name": "Rending Blow",
+     "level": 1,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 11280000,
+     "name": "Sword Aura Rampage",
+     "level": 5,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 11020000,
+     "name": "Keen Strike",
+     "level": 1,
+     "when": {
+      "target": "enemy"
+     }
+    }
+   ]
+  },
+  "Templar": {
+   "weapon_type": "Sword",
+   "range": 300,
+   "roles": [
+    "tank",
+    "dps"
+   ],
+   "rotation": [
+    {
+     "skill": 12260000,
+     "name": "Defiance",
+     "level": 16,
+     "when": {
+      "target": "self",
+      "buff_missing": true,
+      "in_combat": true
+     }
+    },
+    {
+     "skill": 12090000,
+     "name": "Punishment",
+     "level": 14,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 12350000,
+     "name": "Warding Strike",
+     "level": 8,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 12300000,
+     "name": "Annihilate",
+     "level": 12,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 12430000,
+     "name": "Shield Rush",
+     "level": 10,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 12130000,
+     "name": "Poach",
+     "level": 1,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 12100000,
+     "name": "Shield Smite",
+     "level": 3,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 12270000,
+     "name": "Debilitating Smash",
+     "level": 7,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 12240000,
+     "name": "Judgment",
+     "level": 4,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 12040000,
+     "name": "Pummel",
+     "level": 1,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 12340000,
+     "name": "Flash Rampage",
+     "level": 5,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 12010000,
+     "name": "Vicious Strike",
+     "level": 1,
+     "when": {
+      "target": "enemy"
+     }
+    }
+   ]
+  },
+  "Assassin": {
+   "weapon_type": "Dagger",
+   "range": 250,
+   "roles": [
+    "dps"
+   ],
+   "rotation": [
+    {
+     "skill": 13260000,
+     "name": "Defiance",
+     "level": 16,
+     "when": {
+      "target": "self",
+      "buff_missing": true,
+      "in_combat": true
+     }
+    },
+    {
+     "skill": 13360000,
+     "name": "Infiltrate",
+     "level": 10,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 13070000,
+     "name": "Shadowstrike",
+     "level": 1,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 13220000,
+     "name": "Shadow Fall",
+     "level": 12,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 13130000,
+     "name": "Insignia Explosion",
+     "level": 14,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 13060000,
+     "name": "Ambush",
+     "level": 3,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 13050000,
+     "name": "Flash Slice",
+     "level": 8,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 13210000,
+     "name": "Whirlwind Slice",
+     "level": 7,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 13350000,
+     "name": "Heart Gore",
+     "level": 4,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 13100000,
+     "name": "Savage Roar",
+     "level": 1,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 13340000,
+     "name": "Storm Rampage",
+     "level": 5,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 13010000,
+     "name": "Quick Slice",
+     "level": 1,
+     "when": {
+      "target": "enemy"
+     }
+    }
+   ]
+  },
+  "Cleric": {
+   "weapon_type": "Mace",
+   "range": 300,
+   "roles": [
+    "heal",
+    "dps"
+   ],
+   "rotation": [
+    {
+     "skill": 17100000,
+     "name": "Healing Light",
+     "level": 10,
+     "when": {
+      "target": "ally",
+      "target_hp_below": 70
+     },
+     "roles": [
+      "heal"
+     ]
+    },
+    {
+     "skill": 17100000,
+     "name": "Healing Light",
+     "level": 10,
+     "when": {
+      "target": "ally",
+      "target_hp_below": 35
+     },
+     "roles": [
+      "dps"
+     ]
+    },
+    {
+     "skill": 17120000,
+     "name": "Radiant Recovery",
+     "level": 12,
+     "when": {
+      "target": "self",
+      "target_hp_below": 50
+     }
+    },
+    {
+     "skill": 17090000,
+     "name": "Light of Regeneration",
+     "level": 7,
+     "when": {
+      "target": "ally",
+      "target_hp_below": 90,
+      "buff_missing": true
+     },
+     "roles": [
+      "heal"
+     ]
+    },
+    {
+     "skill": 17090000,
+     "name": "Light of Regeneration",
+     "level": 7,
+     "when": {
+      "target": "self",
+      "target_hp_below": 70,
+      "buff_missing": true
+     },
+     "roles": [
+      "dps"
+     ]
+    },
+    {
+     "skill": 17240000,
+     "name": "Defiance",
+     "level": 16,
+     "when": {
+      "target": "self",
+      "buff_missing": true,
+      "in_combat": true
+     }
+    },
+    {
+     "skill": 17060000,
+     "name": "Bolt",
+     "level": 14,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 17070000,
+     "name": "Chain of Torment",
+     "level": 4,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 17080000,
+     "name": "Debilitating Mark",
+     "level": 1,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 17350000,
+     "name": "Condemnation",
+     "level": 8,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 17040000,
+     "name": "Judgment Thunder",
+     "level": 1,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 17370000,
+     "name": "Lightning Strike Scattershot",
+     "level": 5,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 17010000,
+     "name": "Earth's Retribution",
+     "level": 1,
+     "when": {
+      "target": "enemy"
+     }
+    }
+   ]
+  },
+  "Ranger": {
+   "weapon_type": "Bow",
+   "range": 1800,
+   "roles": [
+    "dps"
+   ],
+   "rotation": [
+    {
+     "skill": 14260000,
+     "name": "Defiance",
+     "level": 16,
+     "when": {
+      "target": "self",
+      "buff_missing": true,
+      "in_combat": true
+     }
+    },
+    {
+     "skill": 14010000,
+     "name": "Deadshot",
+     "level": 14,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 14070000,
+     "name": "Suppressing Arrow",
+     "level": 12,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 14080000,
+     "name": "Burst Arrow",
+     "level": 10,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 14110000,
+     "name": "Gale Arrow",
+     "level": 7,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 14130000,
+     "name": "Snare Shot",
+     "level": 1,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 14090000,
+     "name": "Marking Shot",
+     "level": 3,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 14050000,
+     "name": "Drill Dart",
+     "level": 4,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 14340000,
+     "name": "Tempest Shot",
+     "level": 1,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 14330000,
+     "name": "Arrow Scattershot",
+     "level": 5,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 14020000,
+     "name": "Snipe",
+     "level": 1,
+     "when": {
+      "target": "enemy"
+     }
+    }
+   ]
+  },
+  "Elementalist": {
+   "weapon_type": "Orb",
+   "range": 1800,
+   "roles": [
+    "dps"
+   ],
+   "rotation": [
+    {
+     "skill": 16200000,
+     "name": "Defiance",
+     "level": 16,
+     "when": {
+      "target": "self",
+      "buff_missing": true,
+      "in_combat": true
+     }
+    },
+    {
+     "skill": 16070000,
+     "name": "Soul's Cry",
+     "level": 12,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 16140000,
+     "name": "Jointstrike: Curse",
+     "level": 4,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 16040000,
+     "name": "Combustion",
+     "level": 1,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 16340000,
+     "name": "Rapid Scattershot",
+     "level": 5,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 16010000,
+     "name": "Cold Shock",
+     "level": 1,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 16300000,
+     "name": "Elemental Fusion",
+     "level": 14,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 16330000,
+     "name": "Dimensional Control",
+     "level": 8,
+     "when": {
+      "target": "enemy"
+     }
+    }
+   ]
+  },
+  "Sorcerer": {
+   "weapon_type": "Magicbook",
+   "range": 1800,
+   "roles": [
+    "dps"
+   ],
+   "rotation": [
+    {
+     "skill": 15240000,
+     "name": "Defiance",
+     "level": 16,
+     "when": {
+      "target": "self",
+      "buff_missing": true,
+      "in_combat": true
+     }
+    },
+    {
+     "skill": 15310000,
+     "name": "Wish of Concentration",
+     "level": 12,
+     "when": {
+      "target": "self",
+      "buff_missing": true,
+      "in_combat": true
+     }
+    },
+    {
+     "skill": 15110000,
+     "name": "Winter's Shackles",
+     "level": 8,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 15060000,
+     "name": "Hellfire",
+     "level": 14,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 15150000,
+     "name": "Frost",
+     "level": 7,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 15220000,
+     "name": "Frost Burst",
+     "level": 10,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 15040000,
+     "name": "Firestorm",
+     "level": 1,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 15050000,
+     "name": "Blaze",
+     "level": 4,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 15090000,
+     "name": "Ice Chain",
+     "level": 1,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 15010000,
+     "name": "Flame Scattershot",
+     "level": 5,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 15210000,
+     "name": "Flame Arrow",
+     "level": 1,
+     "when": {
+      "target": "enemy"
+     }
+    }
+   ]
+  },
+  "Chanter": {
+   "weapon_type": "Staff",
+   "range": 300,
+   "roles": [
+    "heal",
+    "dps"
+   ],
+   "rotation": [
+    {
+     "skill": 18120000,
+     "name": "Recuperation",
+     "level": 8,
+     "when": {
+      "target": "self",
+      "target_hp_below": 50
+     }
+    },
+    {
+     "skill": 18200000,
+     "name": "Defiance",
+     "level": 16,
+     "when": {
+      "target": "self",
+      "buff_missing": true,
+      "in_combat": true
+     }
+    },
+    {
+     "skill": 18290000,
+     "name": "Spinning Strike",
+     "level": 14,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 18080000,
+     "name": "Wave Blow",
+     "level": 12,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 18210000,
+     "name": "Tremor Crush",
+     "level": 10,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 18060000,
+     "name": "Impactful Crush",
+     "level": 3,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 18090000,
+     "name": "Rushing Smash",
+     "level": 1,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 18150000,
+     "name": "Heat Wave Blow",
+     "level": 7,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 18100000,
+     "name": "Dark Crush",
+     "level": 4,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 18040000,
+     "name": "Incandescent Blow",
+     "level": 1,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 18300000,
+     "name": "Gust Rampage",
+     "level": 5,
+     "when": {
+      "target": "enemy"
+     }
+    },
+    {
+     "skill": 18010000,
+     "name": "Onslaught",
+     "level": 1,
+     "when": {
+      "target": "enemy"
+     }
+    }
+   ]
+  }
+ }
+}

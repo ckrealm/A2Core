@@ -35,6 +35,8 @@ public sealed class Target
     public bool Air { get; init; }
     /// <summary>A flying monster: appears with the passive abnormal 10000001 (immunities; every official flying monster, 17 of 17).</summary>
     public bool AirMonster { get; init; }
+    /// <summary>NpcData NpcSubType (NormalMonster, EliteMonster, HeroMonster...); empty for the training dummy. Picks the generic loot and Kinah (MonsterRewards).</summary>
+    public string SubType { get; init; } = "";
     public const int AirPassiveAbnormal = 10000001;
     /// <summary>The permanent abnormals' expiry on the wire (2099-12-31 15:00 UTC, OBSERVED with 10000001).</summary>
     public const long PermanentExpiry = 0x3bb2ad57580;
@@ -49,6 +51,14 @@ public sealed class Target
     public bool Walking { get; set; }
 
     public bool Dead => Hp <= 0;
+    /// <summary>A player's debuff (skill-effects.json, OURS): extra damage taken from players' hits (1/10000) until a time.</summary>
+    public int DamageTakenBonus { get; set; }
+    public long DamageTakenUntil { get; set; }
+    /// <summary>A player's slow (skill-effects.json, OURS): the movement speed in 1/10000 of its own until a time.</summary>
+    public int SlowRatio { get; set; }
+    public long SlowUntil { get; set; }
+    public int TakenBonus(long now) => now < DamageTakenUntil ? DamageTakenBonus : 0;
+    public double SpeedScale(long now) => now < SlowUntil ? Math.Clamp(SlowRatio, 0, 10_000) / 10_000.0 : 1.0;
     /// <summary>The corpse was removed (0x3642) and the NPC waits for its respawn.</summary>
     public bool CorpseRemoved { get; set; }
 
@@ -67,6 +77,7 @@ public sealed record Hit(int Amount, bool Critical, int EffectId);
 /// Skill damage. A data-driven CANDIDATE model, not recovered retail formulas (tools/combat.py):
 /// attack = weapon roll + FixingDamage(level); raw = flat + attack * ratio / 10000 per Damage row;
 /// crit chance Critical / 1000 (capped at 0.5) for x1.5; damage = raw * 1000 / (1000 + defense), at least 1.
+/// raw is scaled by the skill level (progression.json skill_level_damage, OURS: 1 + per_level x (skill level - 1) / 10000).
 /// </summary>
 public static class Combat
 {
@@ -88,25 +99,41 @@ public static class Combat
     }
 
     public static IReadOnlyList<Hit> SkillHits(GameData data, int skillId, string? className, int level, int? weaponItem,
-        int targetDefense, Random rng, bool pvp = false)
+        int targetDefense, Random rng, bool pvp = false, int fixingBonus = 0, int skillLevel = 1)
     {
         var definition = data.Skill(skillId);
         if (definition is null) return [];
+        var levelScale = data.Progression.SkillLevelScale(skillLevel);
         var weapon = data.WeaponStatsOf(weaponItem);
-        var fixing = data.BaseStats(className, level).GetValueOrDefault("FixingDamage");
+        // A FixingDamage buff (skill-effects.json, OURS) adds to the attack like the level's own FixingDamage.
+        var fixing = data.BaseStats(className, level).GetValueOrDefault("FixingDamage") + fixingBonus;
         var criticalChance = Math.Min(CriticalCap, weapon.Critical / 1000.0);
         var hits = new List<Hit>();
         foreach (var row in definition.Damage)
         {
             var (flat, ratio) = pvp && row.Pvp is { } p ? (p.Flat, p.Ratio) : (row.Flat, row.Ratio);
             var attack = rng.Next(Math.Min(weapon.Min, weapon.Max), Math.Max(weapon.Min, weapon.Max) + 1) + fixing;
-            double raw = Roll(flat, rng) + attack * Roll(ratio, rng) / 10000.0;
+            double raw = (Roll(flat, rng) + attack * Roll(ratio, rng) / 10000.0) * levelScale;
             var critical = rng.NextDouble() < criticalChance;
             if (critical) raw *= CriticalMultiplier;
-            var amount = Math.Max(1, (int)Math.Round(raw * DefenseScale / (DefenseScale + Math.Max(0, targetDefense))));
-            hits.Add(new Hit(amount, critical, row.EffectId));
+            hits.Add(new Hit(Mitigate(raw, targetDefense), critical, row.EffectId));
         }
         return hits;
+    }
+
+    /// <summary>Raw damage after the target's defense (the CANDIDATE model above), at least 1.</summary>
+    public static int Mitigate(double raw, int targetDefense) =>
+        Math.Max(1, (int)Math.Round(raw * DefenseScale / (DefenseScale + Math.Max(0, targetDefense))));
+
+    /// <summary>
+    /// The attack a skill's ratio scales (weapon roll + FixingDamage, as in <see cref="SkillHits"/>): also the power of heals and
+    /// damage over time (skill-effects.json, OURS).
+    /// </summary>
+    public static int Power(GameData data, string? className, int level, int? weaponItem, Random rng, int fixingBonus = 0)
+    {
+        var weapon = data.WeaponStatsOf(weaponItem);
+        return rng.Next(Math.Min(weapon.Min, weapon.Max), Math.Max(weapon.Min, weapon.Max) + 1)
+            + data.BaseStats(className, level).GetValueOrDefault("FixingDamage") + fixingBonus;
     }
 
     public const int HpBaseUnit = 133;
@@ -184,6 +211,7 @@ public static class Combat
                 Function = spawn.Function, Aggro = spawn.Aggro, Skills = spawn.Skills ?? [], NoRotation = spawn.NoRotation,
                 UniqueKey = spawn.UniqueKey, SocialAction = spawn.SocialAction, SocialStart = spawn.SocialAction != 0 ? StartedAt : 0, Route = spawn.Route,
                 Air = spawn.Air, AirMonster = spawn.Air && spawn.SubType.EndsWith("Monster", StringComparison.Ordinal), DamageScale = DamageScale(spawn.SubType, spawn.Grade),
+                SubType = spawn.SubType,
             };
         }
         return targets;

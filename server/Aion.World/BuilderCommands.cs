@@ -23,7 +23,7 @@ public sealed class BuilderCommands(WorldPresence presence, GmPolicy policy, Act
     public static readonly IReadOnlyList<string> Supported =
         ["SetInvisible", "SetInvincible", "SetInvincibleHP", "NoCool", "DashVariant", "Hp", "Mp", "Sp", "FixHpPercent",
          "Teleport", "TeleportTo", "MoveMap", "LayerTest", "Dev", "AcquireItem", "SetLevel", "ClassChange", "SetAscension", "ContentsUnlock", "ContentsUnlockAll", "AcquireWingAll",
-         "QuestAdd", "QuestComplete", "QuestCompleteStep", "QuestReward", "QuestDelete", "RevealMap", "AcquireTitle", "AcquireSkin", "SetMastery", "Mail", "EnterDungeon"];
+         "QuestAdd", "QuestComplete", "QuestCompleteStep", "QuestReward", "QuestDelete", "RevealMap", "AcquireTitle", "AcquireSkin", "SetMastery", "Mail", "EnterDungeon", "ResetDungeonEntries"];
 
     /// <summary>usmap EContentsUnlockType, 1..64 (0 None, 65 Max).</summary>
     public static readonly IReadOnlyList<string> UnlockTypes =
@@ -48,6 +48,7 @@ public sealed class BuilderCommands(WorldPresence presence, GmPolicy policy, Act
         ["Teleport"] = "Teleport [MapID] [X] [Y] (Z), or Teleport [destination name]",
         ["MoveMap"] = "MoveMap [MapID]",
         ["EnterDungeon"] = "EnterDungeon <dungeon id> (Dungeon.dat; a party shares the copy)",
+        ["ResetDungeonEntries"] = "ResetDungeonEntries [character] (today's dungeon entry counts of yourself or a character in the world here, Aion:Dungeons:EntryLimits)",
         ["LayerTest"] = "LayerTest <mask> - Robin's layer with only these pieces of the seamless move: 1 self disappear, 2 move reason/effect, 4 short load, 8 environment, 16 appearance bytes (31 all, 0 none)",
         ["Dev"] = "Dev [dev menu button], or Dev [text] to list buttons",
         ["TeleportTo"] = "TeleportTo [nickname]",
@@ -161,6 +162,20 @@ public sealed class BuilderCommands(WorldPresence presence, GmPolicy policy, Act
             {
                 var moved = actor.EnterDungeonById(dungeonId, now);
                 return moved.Count == 0 ? BuilderOutcome.Fail($"EnterDungeon: {dungeonId} is unknown, unserved, or you are inside one already.") : BuilderOutcome.Ok($"Entering dungeon {dungeonId}.", moved);
+            }
+            case "ResetDungeonEntries" when args.Length == 0:
+            {
+                var cleared = await actor.ResetDungeonEntriesAsync(ct);
+                return BuilderOutcome.Ok($"Dungeon entries reset ({cleared} dungeon(s) had entries).");
+            }
+            case "ResetDungeonEntries" when args is [var whose]:
+            {
+                // Another character: on its own loop (its store owns the rows), as the other cross-player commands do.
+                var target = presence.Find(whose);
+                if (target is null) return BuilderOutcome.Fail($"{whose} is not in the world here.");
+                if (target.Session == actor) return BuilderOutcome.Ok($"Dungeon entries reset ({await actor.ResetDungeonEntriesAsync(ct)} dungeon(s) had entries).");
+                _ = target.Session.InvokeAsync(async _ => (await target.Session.ResetDungeonEntriesAsync(CancellationToken.None), new List<byte[]>()));
+                return BuilderOutcome.Ok($"Dungeon entries of {whose} reset.");
             }
             case "LayerTest" when args is [var maskText] && int.TryParse(maskText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var mask) && mask is >= 0 and <= 31:
             {

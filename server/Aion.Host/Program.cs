@@ -17,6 +17,10 @@ using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.FileProviders;
 
 var builder = WebApplication.CreateBuilder(args);
+// Counters for the staff diagnostics API (docs/DIAGNOSTICS.md); also counts logged errors per category.
+var diagnostics = new Aion.Host.Diagnostics.HostDiagnostics();
+builder.Services.AddSingleton(diagnostics);
+builder.Logging.AddProvider(diagnostics);
 // Bind and advertised addresses (loopback unless configured for a public server).
 var network = builder.Configuration.GetSection("Aion:Network").Get<NetworkOptions>() ?? new NetworkOptions();
 network.Validate();
@@ -76,6 +80,28 @@ else
 // "accounts" logins check launch tickets and store characters; "development" accepts any
 // local client with an unsaved character and must be chosen explicitly.
 var native = (builder.Configuration.GetSection("Aion:Native").Get<NativeOptions>() ?? new NativeOptions()) with { Network = network };
+if (native.MaxPlayers is < 0) throw new InvalidOperationException("Aion:Native:MaxPlayers must be 0 (no cap) or more.");
+// Base rates and host switches (OURS; server owner's choice): Aion:Rates (Profile official|accelerated, Experience, Kinah,
+// Drop, QuestExperience) and Aion:Rules (Pvp, RespawnSeconds, PartyLoot freeforall|roundrobin|killer, FallbackLoot). Scheduled dashboard events multiply on top of the rates.
+var rates = (builder.Configuration.GetSection("Aion:Rates").Get<Aion.World.RatesOptions>() ?? new Aion.World.RatesOptions()).Resolve();
+var rules = (builder.Configuration.GetSection("Aion:Rules").Get<Aion.World.WorldRules>() ?? Aion.World.WorldRules.Default).Validated();
+// Aion:Dungeons (OURS): EntryLimits (default off), DailyEntries, Entries:<dungeon id or name> overrides, ResetHour (server
+// local time), UntrackedObjectiveSeconds (the map-event objectives the server cannot follow).
+var dungeonRules = (builder.Configuration.GetSection("Aion:Dungeons").Get<Aion.World.DungeonOptions>() ?? Aion.World.DungeonOptions.Default)
+    .Validated(Aion.World.DungeonOptions.KnownDungeon);
+builder.Services.AddSingleton(rates);
+builder.Services.AddSingleton(rules);
+// Playerbots (OURS, docs/PLAYERBOTS.md): Aion:Bots (Enabled, PlayersMayUse, MaxPerAccount, MaxTotal, JoinParty, TeleportBeyond).
+var bots = (builder.Configuration.GetSection("Aion:Bots").Get<Aion.World.BotOptions>() ?? new Aion.World.BotOptions()).Validated();
+// Market (OURS, docs/MARKET.md): Aion:Market (Enabled, ListingHours, SaleTaxPercent, CrossWorld, ...), Aion:Market:Seller and
+// Aion:Market:Buyer (the market bot). Needs the game database.
+var market = (builder.Configuration.GetSection("Aion:Market").Get<Aion.World.MarketOptions>() ?? new Aion.World.MarketOptions()).Validated();
+// Aion:Market:PriceFile: reference prices (docs/MARKET.md); a bad file stops the host here with the reason.
+var marketReferences = market.PriceFile is { Length: > 0 } priceFile ? Aion.World.MarketReferencePrices.Load(priceFile)
+    : market.BundledPrices ? Aion.World.MarketReferencePrices.Embedded()
+    : ((Dictionary<int, long> ById, Dictionary<string, long> ByName)?)null;
+
+builder.Services.AddSingleton(dungeonRules);
 if (native.LoginPort is not null || native.GamePort is not null)
 {
     if (!native.Development && !accountsReady)
@@ -107,9 +133,33 @@ if (native.LoginPort is not null || native.GamePort is not null)
         return new Aion.World.BuilderCommands(provider.GetRequiredService<Aion.World.WorldPresence>(), provider.GetRequiredService<Aion.World.GmPolicy>(),
             (actor, command, result) => log.LogInformation("GM {Command} by {Actor}: {Result}", command, actor, result), Aion.World.GameData.Embedded);
     });
+    if (bots.Enabled && native.GamePort is not null)
+    {
+        builder.Services.AddSingleton(provider => new Aion.World.PlayerBots(Aion.World.GameData.Embedded, bots, provider.GetRequiredService<Aion.World.SharedWorld>(),
+            presence: provider.GetRequiredService<Aion.World.WorldPresence>()));
+        builder.Services.AddHostedService<PlayerBotsService>();
+    }
+    if (market.Enabled && native.GamePort is not null && !string.IsNullOrWhiteSpace(connectionString))
+    {
+        builder.Services.AddSingleton(market);
+        builder.Services.AddSingleton<Aion.Application.Market.IMarketStore, PostgresMarketStore>();
+        builder.Services.AddSingleton(provider => new Aion.World.MarketCommands(provider.GetRequiredService<Aion.Application.Market.IMarketStore>(), market,
+            Aion.World.MarketPricing.Embedded, provider.GetRequiredService<Aion.World.SharedWorld>()));
+        builder.Services.AddSingleton(provider =>
+        {
+            var world = provider.GetRequiredService<Aion.World.SharedWorld>();
+            var log = provider.GetRequiredService<ILoggerFactory>().CreateLogger("Aion.Market");
+            return new Aion.World.MarketBot(provider.GetRequiredService<Aion.Application.Market.IMarketStore>(), market, Aion.World.MarketPricing.Embedded,
+                mailed: (seller, post) => world.FindOnline(seller)?.Send(Aion.World.GameSession.PostReceived(post)),
+                log: message => log.LogInformation("{Message}", message), references: marketReferences);
+        });
+        builder.Services.AddHostedService<MarketBotService>();
+    }
     builder.Services.AddSingleton<IChatCommandHandler>(provider =>
         new Aion.World.GmCommands(provider.GetRequiredService<Aion.World.WorldPresence>(), provider.GetRequiredService<Aion.World.BuilderCommands>())
         {
+            Bots = provider.GetService<Aion.World.PlayerBots>(),
+            Market = provider.GetService<Aion.World.MarketCommands>(),
             // "//report <text>" opens a ticket for the staff dashboard (accounts only).
             Report = provider.GetService<IStaffTools>() is { } staffTools ? async (sender, name, text, ct) =>
             {
@@ -228,6 +278,9 @@ builder.WebHost.ConfigureKestrel(options =>
 });
 builder.Services.AddSingleton<WardrobeAccess>();
 var app = builder.Build();
+if (native.LoginPort is not null || native.GamePort is not null)
+    app.Logger.LogInformation("World rates: {Rates} (scheduled events multiply on top, each 0.1-10). Rules: {Rules}. Players: {Players}. Dungeons: {Dungeons}.",
+        rates, rules, native.MaxPlayers is > 0 and var maxPlayers ? $"at most {maxPlayers}" : $"no cap beyond {native.MaxConnections} connections per port", dungeonRules);
 // Chat mutes and the chat log go through the staff tools when both exist.
 if (app.Services.GetService<Aion.Host.Authentication.ServerControl>() is { } serverControl && app.Services.GetService<ChatRelay>() is { } chatRelay)
     chatRelay.Moderation = serverControl;

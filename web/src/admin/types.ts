@@ -85,6 +85,19 @@ export interface ServerHealth {
   worldBusy: number; mapBusy: number; worldWaitMs: number; mapWaitMs: number; windowSeconds: number; restartAt: string | null;
 }
 
+/** GET /api/admin/diagnostics (docs/DIAGNOSTICS.md): counters since the host started. */
+export interface LoginCounts { succeeded: number; failed: number; refused: number }
+export interface Diagnostics {
+  startedAt: string; uptimeSeconds: number;
+  process: { cpuPercent: number; cpuCores: number; cpuWindowSeconds: number; cores: number; workingSetMb: number; gcHeapMb: number; gcCommittedMb: number;
+    gcCollections: { gen0: number; gen1: number; gen2: number }; threads: number };
+  sessions: { login: number; game: number; characters: number };
+  databases: { name: string; configured: boolean; host: string | null; database: string | null; reachable: boolean; latencyMs: number | null; error: string | null }[];
+  logins: { web: LoginCounts; nativeLogin: LoginCounts; nativeGame: LoginCounts };
+  errors: { source: string; errors: number; critical: number; warningsWithException: number; lastType: string | null; lastAt: string | null }[];
+  unansweredOpcodes: { opcode: string; count: number; connections: number }[];
+}
+
 /** GET /api/admin/audit. */
 export interface AuditEntry { id: number; at: string; action: string; characterId: string | null; characterName: string | null; actorName: string | null; details: string }
 

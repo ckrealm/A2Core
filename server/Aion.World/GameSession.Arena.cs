@@ -69,7 +69,8 @@ public sealed partial class GameSession
         var matchingId = BitConverter.ToInt32(plain, 2);
         byte[] Reply(int result) => PacketWriter.Opcode(MatchingStartRs).U16(result).I32(matchingId).ToArray();
         var size = ArenaTeamSize(matchingId);
-        if (size == 0 || Social is not { } s || worldPlayer is null || instanceKey != 0 || ArenaOf(worldPlayer) is not null || s.ArenaQueue.Any(q => q.Player == worldPlayer)) return [Reply(1)];
+        // Aion:Rules:Pvp off: the arena queue is refused with the existing failure reply (OURS).
+        if (size == 0 || !options.Rules.Pvp || Social is not { } s || worldPlayer is null || instanceKey != 0 || ArenaOf(worldPlayer) is not null || s.ArenaQueue.Any(q => q.Player == worldPlayer)) return [Reply(1)];
         s.ArenaQueue.Add(new ArenaQueueEntry(worldPlayer, matchingId, now));
         var replies = new List<byte[]> { Reply(0), MatchingState(matchingId, MatchingStateMatching) };
         var waiting = s.ArenaQueue.Where(q => q.MatchingId == matchingId).OrderBy(q => q.SinceMs).Take(size * 2).ToList();
@@ -195,7 +196,7 @@ public sealed partial class GameSession
         if (victim is null || !match.Enemies(worldPlayer, victim) || victim.Session.resources is not { } theirs || match.RespawnAt.ContainsKey(victim.Key)) return [];
         var replies = new List<byte[]>();
         var seq = 0;
-        foreach (var hit in Combat.SkillHits(data, skill, className, level, equippedWeapon, victim.Session.Defense, rng, pvp: true))
+        foreach (var hit in Combat.SkillHits(data, skill, className, level, equippedWeapon, victim.Session.Defense, rng, pvp: true, fixingBonus: BuffStat("FixingDamage"), skillLevel: SkillLevel(skill)))
         {
             theirs.Hp = Math.Max(1, theirs.Hp - hit.Amount);
             replies.Add(GamePackets.SkillHit(victim.Key, playerKey, skill, hit.EffectId, hit.Amount, hit.Critical, ++seq));

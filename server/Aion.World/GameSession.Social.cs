@@ -469,7 +469,8 @@ public sealed partial class GameSession
     {
         if (SocialRequests.ParseDuelCallOut(plain) is not { } targetKey) return [];
         byte[] Fail() => SocialPackets.DuelCallOutReply(Failed, 0, 0);
-        if (Social is not { } s || worldPlayer?.Map is not { } map || !map.Players.TryGetValue(targetKey, out var target) || target == worldPlayer
+        // Aion:Rules:Pvp off: every challenge gets the existing failure reply (OURS).
+        if (!options.Rules.Pvp || Social is not { } s || worldPlayer?.Map is not { } map || !map.Players.TryGetValue(targetKey, out var target) || target == worldPlayer
             || s.DuelOf(worldPlayer) is not null || s.DuelOf(target) is not null || Distance2D(worldPlayer.Position, target.Position) > ExchangeRange * 2)
             return [Fail()];
         var duel = new Duel((int)s.NextId(), worldPlayer, target) { NextMs = now + 30_000 };
@@ -543,7 +544,7 @@ public sealed partial class GameSession
         var replies = new List<byte[]>();
         var seq = 0;
         // The opponent's defense counts as it does against NPC hits (it was ignored before).
-        foreach (var hit in Combat.SkillHits(data, skill, className, level, equippedWeapon, opponent.Session.Defense, rng, pvp: true))
+        foreach (var hit in Combat.SkillHits(data, skill, className, level, equippedWeapon, opponent.Session.Defense, rng, pvp: true, fixingBonus: BuffStat("FixingDamage"), skillLevel: SkillLevel(skill)))
         {
             theirs.Hp = Math.Max(1, theirs.Hp - hit.Amount);
             replies.Add(GamePackets.SkillHit(opponent.Key, playerKey, skill, hit.EffectId, hit.Amount, hit.Critical, ++seq));

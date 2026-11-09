@@ -48,6 +48,8 @@ public sealed record QuestRecord(string Code, int QuestId, long Uid, int Status,
 public sealed record AchievementRecord(int Id, int Count, DateTimeOffset? CompletedAt, int RewardedStep, DateTimeOffset UpdatedAt);
 /// <summary>A boss challenge group's progress (migration 033).</summary>
 public sealed record BossChallengeRecord(int GroupId, int ClearLevel, long BestPoint, int BestLevel, int BestTimeMs, long CumulativePoint, DateTimeOffset UpdatedAt);
+/// <summary>Entries into a dungeon in one counting day (Aion:Dungeons daily limits, OURS): the day is "yyyy-MM-dd" from the reset hour.</summary>
+public sealed record DungeonEntryRecord(int DungeonId, string Period, int Count);
 /// <summary>A period collection list's progress (migration 032).</summary>
 public sealed record CollectionRecord(int CollectionId, int ListId, int Registered, bool Rewarded);
 /// <summary>A mail (migration 030): Post.dat template, EPostType, EPostSaveTab, its message parameters and attachments.</summary>
@@ -179,6 +181,12 @@ public interface IGameplayStore
     Task<bool> SaveCollectionAsync(VerifiedAccount account, Guid character, int collectionId, int listId, int registered, bool rewarded, CancellationToken ct = default) => Task.FromResult(false);
     Task<IReadOnlyList<BossChallengeRecord>> BossChallengesAsync(VerifiedAccount account, Guid character, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<BossChallengeRecord>>([]);
     Task<bool> SaveBossChallengeAsync(VerifiedAccount account, Guid character, BossChallengeRecord record, CancellationToken ct = default) => Task.FromResult(false);
+    /// <summary>Stored dungeon entry counts (game.character_dungeon_entries).</summary>
+    Task<IReadOnlyList<DungeonEntryRecord>> DungeonEntriesAsync(VerifiedAccount account, Guid character, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<DungeonEntryRecord>>([]);
+    /// <summary>Sets one dungeon's count for its day and drops the character's rows of other days.</summary>
+    Task<bool> SaveDungeonEntryAsync(VerifiedAccount account, Guid character, DungeonEntryRecord entry, CancellationToken ct = default) => Task.FromResult(false);
+    /// <summary>Removes every dungeon entry count of the character; the number of rows removed.</summary>
+    Task<int> ResetDungeonEntriesAsync(VerifiedAccount account, Guid character, CancellationToken ct = default) => Task.FromResult(0);
     /// <summary>A character id by name (any account), for mail to offline players.</summary>
     Task<Guid?> CharacterByNameAsync(VerifiedAccount account, string name, CancellationToken ct = default) => Task.FromResult<Guid?>(null);
     /// <summary>Sorts the bag: items ordered by template, then age, on slots 0, 1, 2, ...</summary>

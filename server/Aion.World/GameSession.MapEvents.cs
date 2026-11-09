@@ -101,7 +101,7 @@ public sealed partial class GameSession : IMapEventHost
     /// when the map has no events, or for staff. Arrival: the current position under an instance layer that overlays this
     /// map, else the dungeon's start point. The official move: 0x3647 self (reason 12, effect 0x41) then 0x3621.
     /// </summary>
-    List<byte[]> EnterDungeon(int dungeonId, long now, int copy = 0)
+    List<byte[]> EnterDungeon(int dungeonId, long now, int copy = 0, DungeonCopy? joining = null)
     {
         if (MapEventData.Dungeon(dungeonId) is not { } room || resources is null || reloading || dead) return [];
         // Only served dungeon maps (their scripts, points and spawns are generated); staff may look at the rest.
@@ -109,6 +109,7 @@ public sealed partial class GameSession : IMapEventHost
         var events = MapEventData.EventsOn(room.Map);
         if (copy == 0 && !IsAdmin && events.Count > 0 && !events.Any(e => new MapEventRun(e, 0, this, now).Holds(e.Start, now))) return [];
         if (!IsAdmin && !MeetsEntry(room, out var why)) { Note($"dungeon {room.Name}: entry refused ({why})"); return []; }
+        if (!IsAdmin && !WithinEntryLimit(dungeonId, room, joining, now, out var over)) { Note($"dungeon {room.Name}: entry refused ({over})"); return []; }
         var at = position ?? spawn?.Position ?? default;
         var arrival = MapEventData.Volume(room.Map) is { } volume && volume.Base == worldMap ? at : ArrivalPoint(room) ?? at;
         instanceReturn = (worldMap, at);
@@ -195,7 +196,7 @@ public sealed partial class GameSession : IMapEventHost
                 if (member != worldPlayer && member.Map is { Instance: not 0 } inside
                     && dungeons.FirstOrDefault(id => MapEventData.Dungeon(id)?.Map == inside.MapId) is not 0 and var joined
                     && (IsAdmin || !CopyFull(inside, MapEventData.Dungeon(joined)!)))   // a full copy (sealed dungeons: one player) means a copy of one's own
-                    return EnterDungeon(joined, now, inside.Instance);
+                    return EnterDungeon(joined, now, inside.Instance, inside.Dungeon);
         var wanted = questLog?.OpenMapEventTargets().ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
         var chosen = dungeons.FirstOrDefault(id => MapEventData.Dungeon(id) is { } room && MapEventData.EventsOn(room.Map).Any(e => wanted.Contains(e.Name)));
         return EnterDungeon(chosen != 0 ? chosen : dungeons[0], now);
@@ -791,7 +792,7 @@ public sealed partial class GameSession : IMapEventHost
             else if (room is not null) session.instanceExitAt ??= mapEventNow + hold;
             // The clear reward (RewardDungeon.dat RewardLight/RewardDark by race: sealed dungeons' kina, materials, a title), once per copy.
             if (first && room is not null && (session.profileRace == 2 ? room.RewardDark : room.RewardLight) is { Length: > 0 } reward)
-                session.pendingRewards.Add(reward.Where(r => r.Length >= 2).Select(r => ((int)r[0], r[1])).ToList());
+                session.pendingRewards.Add(session.Rates.WithKinah(reward.Where(r => r.Length >= 2).Select(r => ((int)r[0], r[1]))));
             if (first && room is not null)
             {
                 var earned = session.AchieveDungeonClear(room, run.Name, CopyMembers().Count() + 1);

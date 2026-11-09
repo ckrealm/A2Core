@@ -53,6 +53,7 @@ static class MapEventChecks
         public bool SpawnerExists(string spawner) => Spawned.Contains(spawner);
         public bool PlayerDead { get; set; }
         public double? DistanceTo(string spawner) => null;
+        public long UntrackedObjectiveMs { get; set; } = MapEventRun.FallbackMs;
     }
 
     public static int Run(Action<bool, string> check)
@@ -229,6 +230,38 @@ static class MapEventChecks
             C(reached.IsSupersetOf([11, 12, 13, 14, 15, 16]) && r.StepOrder == 17
               && h.Calls.Contains("Spawn N_Common_DredgionB_01_001 0") && h.Calls.Contains("FocusCamera C_L0_Starter_HQ002_Camera_01 "),
               "HQ002 runs through the vessel (camera, spawn), both Drakan waves and Nania's talk to step 17");
+        }
+
+        // Objective tracking (Aion:Dungeons:UntrackedObjectiveSeconds): a kill-count objective the server can follow (KillNpcCreatureType)
+        // completes on its kills and never on a timer; an untracked one (ClearWave) falls back after the configured delay, logged.
+        {
+            var objectives = new[] { new MapEventObjective(1, "KillNpcCreatureType", ["Intellect", "2"]), new MapEventObjective(2, "ClearWave", ["Wave_Test"]) };
+            var waves = new MapEventDefinition(1, [], [], [new MapEventStage(1, "S1", [new MapEventStep(1, [], objectives, [])])]) { Name = "Waves" };
+            C(!objectives[0].Unsupported && objectives[0].Count == 2 && objectives[1].Unsupported, "KillNpcCreatureType is tracked (count 2 from the data); ClearWave is not");
+            var hw = new FakeHost { UntrackedObjectiveMs = 5_000 };
+            var rw = new MapEventRun(waves, 31, hw, 0);
+            rw.Start(0);
+            rw.Killed(2701001, "Mob_1", true, false, 1_000);
+            rw.Tick(1_500);
+            C(rw.Goals[0] == 1 && rw.Goals[1] == 0, "one kill counts 1 of 2");
+            rw.Killed(2701001, "Mob_2", true, false, 2_000);
+            rw.Tick(4_999);
+            C(rw.Goals[0] == 2 && rw.Goals[1] == 0 && rw.FellBack == 0 && !hw.Calls.Any(c => c.Contains("timeout")),
+              "the second kill completes the kill objective before any timer; the wave waits");
+            rw.Tick(5_000);
+            C(rw.Finished && rw.FellBack == 1 && hw.Calls.Single(c => c.Contains("timeout")).Contains("ClearWave Wave_Test of Waves stage 1 step 1 finished by timeout (untracked"),
+              "the untracked wave falls back at the configured 5 s, logged with its event, stage and step; the step completes");
+            // Without kills: the kill objective never times out, whatever the delay; the default delay is 30 s.
+            var hk = new FakeHost();
+            var rk = new MapEventRun(waves, 32, hk, 0);
+            rk.Start(0);
+            rk.Tick(MapEventRun.FallbackMs - 1);
+            C(rk.Goals[1] == 0, "the default fallback is 30 s (Aion:Dungeons:UntrackedObjectiveSeconds unset)");
+            rk.Tick(MapEventRun.FallbackMs);
+            rk.Tick(600_000);
+            C(rk.Goals[1] == 1 && rk.Goals[0] == 0 && !rk.Finished && rk.FellBack == 1, "after 10 minutes without kills the kill objective is still open: no timer");
+            rk.Killed(2701001, "Mob_1", false, false, 600_100);
+            C(rk.Goals[0] == 0, "a friendly NPC's death does not count");
         }
 
         // The vessel's and the Drakan's official NpcAppear (capture 20261019-231752 #60769, #60977): flying state 7/2, reason NpcSpawn,

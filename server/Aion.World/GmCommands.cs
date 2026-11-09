@@ -28,6 +28,14 @@ public sealed class WorldPresence
 
     public Entry? Find(string name) => byName.GetValueOrDefault(name);
 
+    /// <summary>
+    /// Aion:Native:MaxPlayers (OURS): whether a login of <paramref name="account"/> must be turned away because the host already has
+    /// that many game connections (in the world or on the character screen). An account already in the world may always come
+    /// back (a reconnect replaces its old connection); null or 0 is no cap.
+    /// </summary>
+    public bool Full(int? maxPlayers, Guid account) =>
+        maxPlayers is > 0 and var max && Connections >= max && !byName.Values.Any(e => e.AccountId == account);
+
     /// <summary>The session playing a stored character, if it is in the world.</summary>
     public Entry? FindCharacter(Guid character) => byName.Values.FirstOrDefault(e => e.Session.CharacterId == character);
 }
@@ -76,6 +84,12 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
     /// </summary>
     public Func<ChatIdentity, string, string, CancellationToken, Task<string>>? Report { get; init; }
 
+    /// <summary>"//bot ..." (docs/PLAYERBOTS.md): staff, or every player with Aion:Bots:PlayersMayUse. Null: no playerbots on this host.</summary>
+    public PlayerBots? Bots { get; init; }
+
+    /// <summary>"//ah ..." (docs/MARKET.md): the market for every player. Null: no market on this host (no game database).</summary>
+    public MarketCommands? Market { get; init; }
+
     public async Task<string> HandleAsync(ChatIdentity sender, string userName, string content, CancellationToken ct)
     {
         var text = content.Trim();
@@ -93,10 +107,17 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
         if (actor is null) return "Enter the world first.";
         try
         {
+            // //ah (Aion:Market, docs/MARKET.md): every player; "//ah help" lists its commands.
+            if (line.StartsWith("ah", StringComparison.OrdinalIgnoreCase) && (line.Length == 2 || char.IsWhiteSpace(line[2])))
+                return Market is { } market ? await market.HandleAsync(actor.Session, line[2..].Trim(), ct) : "The market is not available on this server.";
+            if (line.StartsWith("bot", StringComparison.OrdinalIgnoreCase) && (line.Length == 3 || char.IsWhiteSpace(line[3])))
+                return await BotAsync(actor.Session, line[3..].Trim(), ct);
             if (line.Length == 0 || line.Equals("help", StringComparison.OrdinalIgnoreCase))
                 return await builder.AllowedAsync(actor.Session, ct)
                     ? "Builder commands (in chat: //<command>; console: s <command>): " + string.Join(", ", BuilderCommands.Supported)
-                    : "Commands: //report <text> sends a report to the staff.";
+                        + (Bots is { Options.Enabled: true } ? "; //bot add <character> for playerbots" : "")
+                    : "Commands: //report <text> sends a report to the staff."
+                        + (Bots is { Options: { Enabled: true, PlayersMayUse: true } } ? " //bot add <character> summons one of your characters as a bot." : "");
             return await actor.Session.InvokeAsync(async now =>
             {
                 var outcome = await builder.RunAsync(actor.Session, line, now, ct);
@@ -107,5 +128,15 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
         {
             return "The game connection did not respond.";
         }
+    }
+
+    /// <summary>//bot: allowed for staff, or for everyone with Aion:Bots:PlayersMayUse; runs on the sender's game loop.</summary>
+    async Task<string> BotAsync(GameSession actor, string args, CancellationToken ct)
+    {
+        if (Bots is not { Options.Enabled: true } bots) return "Playerbots are off on this server.";
+        if (actor.Bot) return "Bots do not command bots.";
+        if (!bots.Options.PlayersMayUse && !await builder.AllowedAsync(actor, ct)) return "Playerbots are for staff on this server.";
+        return await actor.InvokeAsync(async now => (await bots.CommandAsync(actor, args, now, ct), new List<byte[]>()))
+            .WaitAsync(TimeSpan.FromSeconds(10), ct);
     }
 }

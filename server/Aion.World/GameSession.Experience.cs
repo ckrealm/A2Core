@@ -13,6 +13,8 @@ public sealed partial class GameSession
 {
     long experience;
     public long Experience => experience;
+    /// <summary>The host's base rates (Aion:Rates) this session applies.</summary>
+    public ServerRates Rates => options.Rates;
     /// <summary>OURS: a mob of the player's level gives 1/KillsPerLevel of that level's NeedExp.</summary>
     public const int KillsPerLevel = 25;
     /// <summary>NPC levels killed since the last experience update (cast replies collect them).</summary>
@@ -32,8 +34,8 @@ public sealed partial class GameSession
     async Task<List<byte[]>> KillExperienceAsync(CancellationToken ct)
     {
         if (killedLevels.Count == 0) return [];
-        // Scheduled experience events multiply kill experience (SharedWorld.ExpRate).
-        var gained = (long)Math.Round(killedLevels.Sum(KillExperience) * (options.World?.ExpRate ?? 1));
+        // The host's base rate (Aion:Rates:Experience, OURS) times the scheduled experience event (SharedWorld.ExpRate).
+        var gained = options.Rates.KillExperience(killedLevels.Sum(KillExperience), options.World?.ExpRate ?? 1);
         killedLevels.Clear();
         if (gained <= 0) return [];
         // Party members nearby share it evenly (OURS: no party bonus); each applies its share on its own loop.

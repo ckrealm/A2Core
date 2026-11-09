@@ -61,6 +61,8 @@ Certificate choices for the account site (port 8780), exactly one:
 What install.sh does:
 
 1. Installs `dotnet-sdk-10.0`, `postgresql`, `python3`, `openssl`, `nodejs`, `npm` (and `certbot` with `--domain`).
+   The web build needs Node.js ^20.19 or >=22.12: an installed Node that new (e.g. NodeSource's, which Ubuntu 24.04
+   needs, as its own is 18; `deploy/windows/wsl-install.sh` sets it up) is kept and `nodejs`/`npm` are not installed.
 2. Creates the `aion` service account and `/var/lib/aion` (state, data, database), `/etc/aion`
    (configuration, certificate), `/opt/aion` (published host, database tools).
 3. Unpacks the data archive into `/var/lib/aion/data`.
@@ -70,7 +72,8 @@ What install.sh does:
    `credentials.json`), applies migrations, imports the catalogue, installs starter profiles,
    class skills and the equipment rules (`tools/equipment_rules.py`). Later runs apply new migrations only.
 6. Writes `/etc/aion/aion.env` (`tools/server_env.py`; mode 640, contains database passwords).
-7. Installs and starts `aion-postgres.service` and `aion-host.service`.
+7. Installs and starts `aion-postgres.service` and `aion-host.service`, and enables the nightly `aion-backup.timer`
+   (`backup.sh` and `restore.sh` in `/opt/aion/bin`; see "Backups").
 
 ## Dashboard icons and 3D preview
 
@@ -88,6 +91,99 @@ sudo tar -xf ~/aion-wardrobe.tar -C /var/lib/aion/data --no-same-owner && sudo c
 sudo deploy/linux/update.sh      # rewrites aion.env with Aion__WardrobePath and restarts
 ```
 
+## Rates and rules
+
+Defaults are official-like: experience, quest experience, Kinah and drop rates 1, PvP on, monsters respawn 30 s after a
+kill, no player cap beyond 200 connections per port. To change them, put the keys you want in `/etc/aion/game.env`
+(install.sh and update.sh rewrite `aion.env` but never touch this file; the service reads it last) and restart:
+
+```bash
+sudo tee /etc/aion/game.env >/dev/null <<'ENV'
+# official (all 1) or accelerated (experience 5, Kinah 3, drops 3); an explicit rate overrides the profile's
+Aion__Rates__Profile=accelerated
+Aion__Rates__Experience=4
+# refuse logins beyond 10 players (0 or unset: no cap)
+Aion__Native__MaxPlayers=10
+# no duels, no arena queue, no player damage
+Aion__Rules__Pvp=false
+# monster respawn after a kill, 5-3600
+Aion__Rules__RespawnSeconds=15
+# a party member's kill: freeforall, roundrobin (default) or killer
+Aion__Rules__PartyLoot=roundrobin
+ENV
+sudo chown root:aion /etc/aion/game.env && sudo chmod 640 /etc/aion/game.env
+sudo systemctl restart aion-host
+journalctl -u aion-host | grep "World rates"   # the effective rates, logged at startup
+```
+
+The other keys are `Aion__Rates__Kinah`, `Aion__Rates__Drop` and `Aion__Rates__QuestExperience` (default: the experience
+rate). Rates are 0-100; an invalid value stops the host at startup with the reason. Scheduled events from the dashboard
+multiply on top (each event rate is held to 0.1-10, the product is not, and loot is capped at 100 table rolls per kill).
+Kinah rate applies to Kinah in monster drops, quest rewards, Kinah chests, reward boxes, dungeon, boss and cube rewards, achievements and
+collections; not to selling to merchants, trades, mail or staff grants. `tools/server_env.py` takes the same settings
+as options (`--rates-profile`, `--exp-rate`, `--quest-exp-rate`, `--kinah-rate`, `--drop-rate`, `--max-players`,
+`--respawn-seconds`, `--pvp on|off`, `--party-loot`, `--fallback-loot on|off`) for a hand-made environment file. Comments go on their own lines (systemd reads
+`#` after a value as part of it). The party size is not configurable: it stays 4. The server sends it to the client
+(PartyInfo LimitMember, a CANDIDATE field), and nothing recorded shows how the client's party window copes with another size.
+
+Party loot and monster Kinah are our own rules (nothing observed). `Aion__Rules__PartyLoot` shares a party member's kill
+among the members on the same map within 100 m (the members who share its experience): `roundrobin` gives the items to
+them in turn, `freeforall` gives each item to one of them at random, `killer` keeps everything with the killer. The
+killer's part lies on the ground to pick up; the others' parts go straight to their bags (a part their bag cannot
+take, because they died meanwhile or the bag is full, lies on the ground at the kill site for them instead). Every monster also pays Kinah
+(tools/data/kinah-drops.json, by level and rank, times the Kinah rate `Aion__Rates__Kinah`), split evenly among the
+same members (all to the killer with `killer`). `Aion__Rules__FallbackLoot=false` turns off the generic loot that monsters
+without a reward table in the client's data (about three in four) roll instead (tools/data/fallback-loot.json:
+equipment of the monster's level from tools/data/items.json, rebuilt by `tools/fallback_loot.py`).
+
+## Playerbots
+
+Off by default. With them on, a player types `//bot add <character>` in chat and one of their own other characters joins
+them as a bot: it follows, joins the party and fights what they fight ([docs/PLAYERBOTS.md](../../docs/PLAYERBOTS.md)).
+
+```bash
+sudo tee -a /etc/aion/game.env >/dev/null <<'ENV'
+Aion__Bots__Enabled=true
+# every player may summon bots (false: staff characters only)
+Aion__Bots__PlayersMayUse=true
+Aion__Bots__MaxPerAccount=3
+Aion__Bots__MaxTotal=20
+ENV
+sudo systemctl restart aion-host
+journalctl -u aion-host | grep "Playerbots on"
+```
+
+## Market (`//ah`)
+
+On by default: players list and buy items with `//ah` in chat, a seller bot keeps the market stocked and a buyer bot buys
+fairly priced player listings ([docs/MARKET.md](../../docs/MARKET.md) has every key).
+
+```bash
+sudo tee -a /etc/aion/game.env >/dev/null <<'ENV'
+Aion__Market__SaleTaxPercent=5
+# Light and Dark share one market
+Aion__Market__CrossWorld=true
+Aion__Market__Seller__Equipment=true
+Aion__Market__Buyer__BuyChancePercent=35
+ENV
+sudo systemctl restart aion-host
+journalctl -u aion-host | grep "Market:"
+```
+
+Dungeon entry limits are our own rule too and are off unless `Aion__Dungeons__EntryLimits=true`. Then each character may
+enter each expedition, awakening dungeon, daily dungeon and raid `Aion__Dungeons__DailyEntries` times a day (default 3;
+0 no limit); the day starts at `Aion__Dungeons__ResetHour` (server local time, default 9). `Aion__Dungeons__Entries__<id or
+name>=<n>` sets one dungeon's count (Dungeon.dat id or name, e.g. `Aion__Dungeons__Entries__KraoCave_Hard=1`; 0 lifts its
+limit; it also limits a dungeon of another type). A refused entry simply does not move the player (as for the level and
+item level rules). Going back into the party copy already counted is free. Staff are not limited; the builder command
+`ResetDungeonEntries [character]` clears today's counts of yourself or a character in the world. The client's data has no
+entry tickets or energy cost to apply, so there is none. `Aion__Dungeons__UntrackedObjectiveSeconds` (default 30) is how
+long a dungeon objective the server cannot follow yet (waves, puzzles, scores, collected items) waits before it counts as
+done; each one is logged. Some expedition and raid final bosses hit everyone within 5 m with their special attacks
+(tools/data/boss-area-skills.json, our own table until the skills' target shapes are extracted). `tools/server_env.py`
+options: `--dungeon-limits on|off`, `--dungeon-entries`, `--dungeon-entry DUNGEON=N` (repeatable), `--dungeon-reset-hour`,
+`--untracked-objective-seconds`.
+
 ## Updating
 
 Changes are made and tested on the development PC, committed and pushed to the private GitHub
@@ -104,18 +200,63 @@ address, `User root`, a dedicated key `~/.ssh/id_ed25519_aion` whose public half
 A2Core Launcher and copies the exe and its version file to `/var/lib/aion/downloads`; `-Status` shows the
 services and the last log lines.
 
-It backs up the database (`/var/lib/aion/backups`, newest 10 kept), pulls, then repeats install.sh
+It backs up the database (`/var/lib/aion/backups/before-update-*.dump`, newest 10 kept), pulls, then repeats install.sh
 with the options of the last install: rebuilds the host, applies new migrations, restarts.
 New server data (re-extracted terrain etc.): copy a new archive and run install.sh with `--data`.
 
-Restore a backup if an update goes wrong:
+Restore a backup if an update goes wrong: `sudo /opt/aion/bin/restore.sh --yes /var/lib/aion/backups/<file>.dump`
+(see "Backups").
+
+## Backups
+
+`aion-backup.timer` runs `/opt/aion/bin/backup.sh` (from `deploy/linux/backup.sh`) every night at 04:30 (plus up to
+15 minutes; `Persistent`, so a night missed while the machine was off runs at the next boot). It writes
+`/var/lib/aion/backups/nightly-<UTC time>.dump` with `postgres_dev.py backup` (pg_dump, custom format), checks it with
+`postgres_dev.py verify-backup` (a restore into a disposable database that is dropped again) and then keeps the newest
+14 `nightly-*` files. A backup that fails the check is deleted and nothing is pruned. update.sh's `before-update-*`
+and the dashboard's `aion-*` backups in the same folder have their own retention (the dashboard's: none).
 
 ```bash
-sudo systemctl stop aion-host
-sudo runuser -u aion -- env AION_PG_HOME=/var/lib/aion/postgres /usr/lib/postgresql/*/bin/pg_restore --clean --if-exists -h 127.0.0.1 -p 55432 -U aion_admin -d aion /var/lib/aion/backups/<file>.dump
+systemctl list-timers aion-backup.timer
+sudo systemctl start aion-backup && journalctl -u aion-backup -n 20     # back up now
+echo 'AION_BACKUP_KEEP=30' | sudo tee /etc/aion/backup.env             # settings: AION_BACKUP_KEEP, AION_BACKUP_VERIFY=0
+echo 'AION_PG_TIMEOUT=7200' | sudo tee -a /etc/aion/backup.env        # pg_dump/verify limit in s (default 3600, 0 = none)
+sudo systemctl disable --now aion-backup.timer                          # no nightly backups
+sudo /opt/aion/bin/backup.sh --keep 30                                  # by hand (as root or aion)
 ```
 
-(pg_restore asks for the aion_admin password from `/var/lib/aion/postgres/credentials.json`.)
+**Other folders and an off-machine copy.** The unit is sandboxed (`ProtectSystem=strict`): it may write only to
+`/var/lib/aion/backups` and the folders `backup-paths.sh` lists for it. To back up elsewhere (`AION_BACKUP_DIR`), or to
+copy every verified backup to a second place such as another disk or a network mount (`AION_BACKUP_COPY_DIR`, with its
+own retention `AION_BACKUP_COPY_KEEP`, default the same as `AION_BACKUP_KEEP`), set them in `/etc/aion/backup.env` and
+run `backup-paths.sh` once; it creates the folders and writes the drop-in
+`/etc/systemd/system/aion-backup.service.d/10-backup-paths.conf` (install.sh, and so update.sh, runs it too):
+
+```bash
+echo 'AION_BACKUP_COPY_DIR=/mnt/backup-disk/a2core' | sudo tee -a /etc/aion/backup.env
+echo 'AION_BACKUP_COPY_KEEP=30' | sudo tee -a /etc/aion/backup.env
+sudo /opt/aion/bin/backup-paths.sh
+sudo systemctl start aion-backup && journalctl -u aion-backup -n 20     # "Copied to ..." at the end
+```
+
+The copy is written as `.partial`, compared byte for byte with the local backup, then renamed; only
+`<prefix>-<time>.dump` files are pruned there. A failed copy (say the disk is not mounted) keeps the local backup,
+prunes nothing in the copy folder and fails the unit (`systemctl --failed`, `journalctl -u aion-backup`). Folders under
+`/home`, `/root` or `/run/user` are refused (the unit cannot see them: `ProtectHome`).
+
+Restore:
+
+```bash
+sudo /opt/aion/bin/restore.sh --check /var/lib/aion/backups/<file>.dump   # restore test; the live database is untouched
+sudo /opt/aion/bin/restore.sh --yes /var/lib/aion/backups/<file>.dump     # replace the live database
+sudo /opt/aion/bin/restore.sh --list-old                                  # databases kept by earlier restores
+sudo /opt/aion/bin/restore.sh --yes --drop-old aion_pre_restore_<time>
+```
+
+Every run first restores the file into a disposable database; without `--yes` (and without `--check`) it then
+refuses. `--yes` writes a safety backup of the live database (`before-restore-<time>.dump`), stops aion-host,
+restores into a new database and only then renames the live one to `aion_pre_restore_<time>` (kept) and the new one to
+`aion`, and starts aion-host again.
 
 ## Getting the code onto the server
 

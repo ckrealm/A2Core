@@ -1226,6 +1226,7 @@ Check(equipReply[0].SequenceEqual(new PacketWriter().U16(0xe248).U16(0).I64(13).
       "equip request: stored in slot 5, answered on the next opcode, item update sent");
 // A non-starter weapon becomes the combat weapon at once; armour adds its Item.dat HPMax and the stats are resent.
 var hpUnarmoured = staffSession.Resource.HpMax;
+var powerStarter = staffSession.CombatPower();
 staffStore.Items.AddRange([Stored(110120003, 1, "bag", null, 14), Stored(210130001, 1, "bag", null, 15)]);
 await staffSession.InventoryChangesAsync(default);
 await staffSession.HandleAsync(new PacketWriter().U16(0xe247).I64(14).U8(1).ToArray(), Now);
@@ -1233,6 +1234,8 @@ Check(staffSession.EquippedWeapon == 110120003 && data.WeaponType(110120003) == 
       "equipping another greatsword changes the combat weapon (type and stats from Item.dat)");
 var torso = await staffSession.HandleAsync(new PacketWriter().U16(0xe247).I64(15).U8(5).ToArray(), Now);
 Check(staffSession.Resource.HpMax == hpUnarmoured + 144 && torso.Any(b => b[0] == 0x4a && b[1] == 0x36), "armour HPMax raises the pool; 0x364a carries the new stats");
+var powerArmed = staffSession.CombatPower();
+Check(powerStarter > 0 && powerArmed > powerStarter, $"combat power grows with gear (progression.json, OURS: {powerStarter} -> {powerArmed})");
 // Pet chest: 0x5646 opens it (0x5647 result 0), the chest goes (0x561b remove), the pet item it gave is
 // used at once and its ride acquired (0x9009); then mount (0x9001/0x9002), dismount, default ride.
 staffStore.Items.Add(Stored(533700117, 1, "bag", null, 16));
@@ -2534,6 +2537,945 @@ Check(presence.Find("Player1") is not null, "leave only removes the same session
 presence.Leave("Player1", game);
 Check(presence.Find("Player1") is null && await gm.HandleAsync(chatter, "Player1", "//help", default) == "Enter the world first.", "leave");
 Console.WriteLine($"{checks} builder command checks passed.");
+// ---------- Server rates and rules (Aion:Rates, Aion:Rules, Aion:Native:MaxPlayers; OURS) ----------
+checks = 0;
+{
+    var official = new RatesOptions().Resolve();
+    Check(official == ServerRates.Official && official.Experience == 1 && official.Kinah == 1 && official.Drop == 1 && official.QuestExperience == 1,
+          "rates default to the official profile (all 1.0)");
+    var fast = new RatesOptions { Profile = "Accelerated" }.Resolve();
+    Check(fast.Profile == "accelerated" && fast.Experience == 5 && fast.Kinah == 3 && fast.Drop == 3 && fast.QuestExperience == 5,
+          "the accelerated profile presets experience 5, Kinah 3, drops 3 (quest experience follows experience)");
+    var tuned = new RatesOptions { Profile = "accelerated", Experience = 2, Drop = 1.5 }.Resolve();
+    Check(tuned.Experience == 2 && tuned.QuestExperience == 2 && tuned.Kinah == 3 && tuned.Drop == 1.5, "explicit rates override the preset; the rest stay preset");
+    Check(new RatesOptions { Experience = 3, QuestExperience = 1 }.Resolve() is { Experience: 3, QuestExperience: 1, Kinah: 1 }, "an explicit quest rate is kept apart from the kill rate");
+    foreach (var bad in new[] { new RatesOptions { Profile = "turbo" }, new RatesOptions { Experience = -1 }, new RatesOptions { Drop = 101 }, new RatesOptions { Kinah = double.NaN } })
+    {
+        var threw = false;
+        try { bad.Resolve(); } catch (InvalidOperationException) { threw = true; }
+        Check(threw, $"invalid rates are refused at startup ({bad})");
+    }
+    // Multipliers: the base rate times the event boost; the event boost alone is clamped 0.1-10, the product is not.
+    var events = new SharedWorld(data) { ExpRate = 50, DropRate = 0.01 };
+    Check(events.ExpRate == 10 && events.DropRate == 0.1, "scheduled event rates stay clamped 0.1-10");
+    Check(fast.KillExperience(100, 1) == 500 && fast.KillExperience(100, events.ExpRate) == 5000 && official.KillExperience(100, 1) == 100,
+          "kill experience: base x event (5 x 10 = 50, above the event clamp)");
+    Check(fast.QuestReward(1000) == 5000 && official.QuestReward(1000) == 1000 && fast.QuestReward(0) == 0, "quest experience: base quest rate");
+    var half = new RatesOptions { Kinah = 0.5 }.Resolve();
+    var none = new RatesOptions { Kinah = 0 }.Resolve();
+    Check(fast.KinahAmount(100) == 300 && half.KinahAmount(1) == 1 && half.KinahAmount(101) == 50 && none.KinahAmount(100) == 0 && official.KinahAmount(77) == 77,
+          "Kinah: scaled, at least 1 unless the rate is 0");
+    var rewards = fast.WithKinah([(GameSession.KinaItemId, 100L), (534660085, 2L)]);
+    Check(rewards.SequenceEqual([(GameSession.KinaItemId, 300L), (534660085, 2L)]) && none.WithKinah([(GameSession.KinaItemId, 5L), (534660085, 1L)]).SequenceEqual([(534660085, 1L)]),
+          "reward lists: only the Kinah line is scaled (a 0 line is dropped)");
+    var rollRng = new Random(3);
+    var mixed = Enumerable.Range(0, 2000).Select(_ => tuned.LootRolls(1, rollRng)).ToList();
+    Check(fast.LootRolls(1, rollRng) == 3 && official.LootRolls(1, rollRng) == 1 && mixed.All(r => r is 1 or 2) && mixed.Count(r => r == 2) is > 800 and < 1200,
+          "loot rolls: whole part of base x event, the fraction as a chance (1.5 = one or two)");
+    Check(new RatesOptions { Drop = 100 }.Resolve().LootRolls(10, rollRng) == ServerRates.MaxLootRolls && none.LootRolls(1, rollRng) == 1
+          && new RatesOptions { Drop = 0 }.Resolve().LootRolls(1, rollRng) == 0, "loot rolls are capped at 100 per kill; drop rate 0 rolls nothing");
+    // Rules: respawn seconds checked at startup, PvP default on.
+    Check(WorldRules.Default.Pvp && WorldRules.Default.RespawnMs == GameSession.RespawnMs, "rules default: PvP on, the 30 s respawn");
+    var respawnRefused = false;
+    try { new WorldRules { RespawnSeconds = 2 }.Validated(); } catch (InvalidOperationException) { respawnRefused = true; }
+    Check(respawnRefused && new WorldRules { RespawnSeconds = 5 }.Validated().RespawnMs == 5000, "respawn seconds must be 5-3600");
+    // Player cap: game connections at the cap refuse a new account, not one already in the world; no cap when unset.
+    var crowd = new WorldPresence();
+    var inWorld = Guid.NewGuid();
+    crowd.Connected(); crowd.Connected();
+    crowd.Enter("Inside", new GameSession(data, new GameSessionOptions(), new Random(1)), inWorld);
+    Check(crowd.Full(2, Guid.NewGuid()) && !crowd.Full(2, inWorld) && !crowd.Full(3, Guid.NewGuid()) && !crowd.Full(null, Guid.NewGuid()) && !crowd.Full(0, Guid.NewGuid()),
+          "MaxPlayers: logins beyond the cap are refused, a player already in may return");
+}
+{
+    // Kill experience and respawn through a session with the rates and rules set.
+    async Task<GameSession> RatedSession(GameSessionOptions options, string name = "Player1", uint creation = 1)
+    {
+        var session = new GameSession(data, options, new Random(7));
+        await session.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+        await session.HandleAsync(new PacketWriter().U16(0x361b).String(name).U8(1).U32(creation).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
+        await session.HandleAsync(select, Now);
+        await session.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+        return session;
+    }
+    var rated = await RatedSession(new GameSessionOptions { TrainingDummy = true, Rates = new RatesOptions { Experience = 2 }.Resolve(), Rules = new WorldRules { RespawnSeconds = 5 } });
+    var ratedDummy = rated.Targets[Combat.TrainingDummyKey];
+    ratedDummy.Hp = 1;
+    var expBefore = rated.Experience;
+    var ratedKill = await rated.HandleAsync(Cast(basic, Combat.TrainingDummyKey, pos), Now + 100_000);
+    var baseExp = (long)Math.Round(data.NeedExp(10) / 25.0 * 1.5);
+    Check(ratedDummy.Dead && ratedKill.Any(b => Op(b) == 0x8d07 && new PacketReader(b) { Offset = 10 }.U64() == (ulong)(baseExp * 2)),
+          "Aion:Rates:Experience 2 doubles the kill experience (0x8d07 gained)");
+    await rated.TickAsync(Now + 100_000 + 4_999);
+    Check(ratedDummy.Dead, "no respawn before Aion:Rules:RespawnSeconds");
+    await rated.TickAsync(Now + 100_000 + 5_000);
+    Check(!ratedDummy.Dead && ratedDummy.Hp == ratedDummy.HpMax, "the monster respawns after Aion:Rules:RespawnSeconds (5 s)");
+    // PvP off: duel challenges and arena queues get their failure replies; casts at other players do nothing.
+    var peaceful = new SharedWorld(data);
+    var calm = new GameSessionOptions { World = peaceful, Rules = new WorldRules { Pvp = false } };
+    var gina = await RatedSession(calm, "Gina");
+    var hank = await RatedSession(calm, "Hank");
+    await gina.TickAsync(Now + 10); await hank.TickAsync(Now + 10);
+    var refusedDuel = await gina.HandleAsync(SocialRequests.EncodeKey(SocialOpcodes.DuelCallOutRq, hank.PlayerKey), Now + 20);
+    Check(refusedDuel.Single().SequenceEqual(SocialPackets.DuelCallOutReply(1, 0, 0)) && peaceful.Social.Duels.Count == 0
+          && (await hank.TickAsync(Now + 30)).All(b => Op(b) != SocialOpcodes.DuelCallOutNt), "PvP off: a duel challenge gets the failure reply and reaches nobody");
+    var arenaRefused = await gina.HandleAsync(new PacketWriter().U16(GameSession.MatchingStartRq).I32(1).ToArray(), Now + 40);
+    Check(arenaRefused.Single().SequenceEqual(new PacketWriter().U16(GameSession.MatchingStartRs).U16(1).I32(1).ToArray()) && peaceful.Social.ArenaQueue.Count == 0,
+          "PvP off: the arena queue is refused (MatchingStart_RS result 1)");
+    var noHit = await gina.HandleAsync(Cast(basic, hank.PlayerKey, GamePackets.SpawnPosition), Now + 50);
+    Check(noHit.All(b => !(Op(b) == 0x3804 && KeyOf(b) == hank.PlayerKey)), "PvP off: a cast at another player does no damage");
+    gina.ExitSharedWorld(); hank.ExitSharedWorld();
+}
+Console.WriteLine($"{checks} server rate and rule checks passed (Aion:Rates, Aion:Rules, MaxPlayers).");
+
+// ---------- Party loot (Aion:Rules:PartyLoot), monster Kinah and the fallback table (OURS) ----------
+checks = 0;
+{
+    // Rules: the three loot settings parse, anything else stops the host; fallback loot on by default.
+    Check(WorldRules.Default.LootRule == PartyLootRule.RoundRobin && WorldRules.Default.FallbackLoot
+          && new WorldRules { PartyLoot = " FreeForAll " }.Validated().LootRule == PartyLootRule.FreeForAll
+          && new WorldRules { PartyLoot = "killer" }.Validated().LootRule == PartyLootRule.Killer && new WorldRules { PartyLoot = "round_robin" }.Validated().LootRule == PartyLootRule.RoundRobin,
+          "PartyLoot: freeforall | roundrobin (default) | killer; FallbackLoot default on");
+    var badLoot = false;
+    try { new WorldRules { PartyLoot = "needgreed" }.Validated(); } catch (InvalidOperationException) { badLoot = true; }
+    Check(badLoot, "an unknown PartyLoot setting is refused at startup");
+    Check(MonsterRewards.Split(101, 2).SequenceEqual([51L, 50L]) && MonsterRewards.Split(2, 3).SequenceEqual([1L, 1L, 0L]) && MonsterRewards.Split(0, 2).All(s => s == 0)
+          && MonsterRewards.Split(7, 0).SequenceEqual([7L]), "Kinah splits evenly, the remainder to the first shares (the killer first)");
+
+    async Task<(GameSession Session, FakeStore Store)> LootMember(SharedWorld world, WorldRules rules, string name, ServerRates? rates = null)
+    {
+        var lootStore = new FakeStore();
+        var session = new GameSession(data, new GameSessionOptions { World = world, Rules = rules, Rates = rates ?? ServerRates.Official }, new Random(13)) { Store = lootStore };
+        await session.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+        await session.HandleAsync(new PacketWriter().U16(0x361b).String(name).U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
+        await session.HandleAsync(new PacketWriter().U16(0x361f).Varint(lootStore.States[0].WireId << 16).I32(0).Vec3(Vector3d.Zero).ToArray(), Now);
+        await session.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+        return (session, lootStore);
+    }
+    async Task Join(GameSession leader, GameSession member, long at)
+    {
+        await leader.HandleAsync(SocialRequests.EncodeServerAndName(SocialOpcodes.PartyInviteRq, 1204, member.CharacterName!), at);
+        var notice = (await member.TickAsync(at + 1)).Single(b => (b[0] | b[1] << 8) == SocialOpcodes.PartyInviteNt);
+        await member.HandleAsync(SocialRequests.EncodePartyInviteResponse([new PartyInviteReply(BitConverter.ToInt64(notice, 2), PartyInviteAnswer.Accept)]), at + 2);
+        await leader.TickAsync(at + 3);
+    }
+    async Task Place(GameSession who, Vector3d at, long now, int map = GamePackets.SpawnMapId)
+    {
+        who.Teleport(map, at, now);
+        await who.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), now);
+    }
+    long KinahIn(IEnumerable<(int ItemId, long Count)> items) => items.Where(i => i.ItemId == GameSession.KinaItemId).Sum(i => i.Count);
+    long StoredKinah(FakeStore s) => s.Items.Where(i => i.TemplateId == GameSession.KinaItemId).Sum(i => i.Quantity);
+    var gearIds = MonsterRewards.Embedded.FallbackBand(45).Take(40).ToList();   // real items (items.json), each its own bag row
+    List<(int ItemId, long Count)> Gear(int n) => gearIds.Take(n).Select(i => (i, 1L)).ToList();
+    var t0 = Now + 400_000;
+
+    // Round robin between two members nearby: items alternate in join order, the turn carries over to the next kill; Kinah splits.
+    var robinWorld = new SharedWorld(data);
+    var robinRules = new WorldRules { PartyLoot = "roundrobin" };
+    var (lead, leadStore) = await LootMember(robinWorld, robinRules, "Lena");
+    var (mate, mateStore) = await LootMember(robinWorld, robinRules, "Milo");
+    await Join(lead, mate, t0);
+    var spot = GamePackets.SpawnPosition;
+    await Place(lead, spot, t0 + 10); await Place(mate, spot with { X = spot.X + 300 }, t0 + 10);
+    var leadPart = lead.ShareLootWithParty(Gear(3), 101);
+    await mate.TickAsync(t0 + 20);
+    var matePart = mateStore.Items.Where(i => gearIds.Contains(i.TemplateId)).Select(i => i.TemplateId).ToList();
+    Check(leadPart.Where(i => i.ItemId != GameSession.KinaItemId).Select(i => i.ItemId).SequenceEqual([gearIds[0], gearIds[2]]) && matePart.SequenceEqual([gearIds[1]])
+          && KinahIn(leadPart) == 51 && StoredKinah(mateStore) == 50 && mate.SharedLootReceived == 2,
+          "round robin: the leader, the member, the leader; Kinah 101 split 51/50 (the member's part granted to its bag)");
+    var nextKill = lead.ShareLootWithParty(Gear(1), 0);
+    await mate.TickAsync(t0 + 30);
+    Check(nextKill.Count == 0 && mateStore.Items.Count(i => i.TemplateId == gearIds[0]) == 1, "round robin: the turn carries over to the next kill (the member's turn)");
+    // Out of range: a member beyond PartyExpRange on the same map gets nothing; the killer keeps everything.
+    await Place(mate, spot with { X = spot.X + GameSession.PartyExpRange + 2000 }, t0 + 40);
+    var alone = lead.ShareLootWithParty(Gear(4), 90);
+    var mateLines = mateStore.Items.Count;
+    await mate.TickAsync(t0 + 50);
+    Check(alone.Count == 5 && KinahIn(alone) == 90 && mateStore.Items.Count == mateLines, "a member out of range gets no share: all items and Kinah to the killer");
+    await Place(mate, spot with { X = spot.X + 300 }, t0 + 60);
+    // A member who dies before its share is granted (or whose bag refuses it) finds the share on the ground at the kill site, not lost.
+    var deadRows = mateStore.Items.Count;
+    var deadKept = lead.ShareLootWithParty(Gear(2), 40, spot);
+    mate.NpcHitsPlayer(mate.Resource.HpMax * 10, t0 + 62, killerKey: 2001);
+    await mate.TickAsync(t0 + 63);
+    var mateGround = mate.GroundDropItems.ToList();
+    Check(mate.Dead && mateStore.Items.Count == deadRows && KinahIn(mateGround) == 20 && mateGround.Count + deadKept.Count == 4 && mate.SharedLootDropped == mateGround.Count,
+          $"a member dead when its share arrives: its items and Kinah lie on the ground at the kill site for it ({mateGround.Count} lines), nothing lost");
+    var fullWorld = new SharedWorld(data);
+    var (fullLead, _) = await LootMember(fullWorld, robinRules, "Olga");
+    var (fullMate, fullStore) = await LootMember(fullWorld, robinRules, "Pete");
+    await Join(fullLead, fullMate, t0 + 70);
+    await Place(fullLead, spot, t0 + 72); await Place(fullMate, spot with { X = spot.X + 300 }, t0 + 72);
+    fullStore.RefuseLoot = true;
+    fullLead.ShareLootWithParty(Gear(1), 10, spot);
+    await fullMate.TickAsync(t0 + 74);
+    Check(KinahIn(fullMate.GroundDropItems) == 5 && fullMate.SharedLootReceived == 0 && fullMate.SharedLootDropped > 0,
+          "a member whose bag refuses its share (full) finds it on the ground at the kill site");
+
+    // A real kill through the party: an elite monster always pays Kinah (kinah-drops.json), split between the two and scaled by Aion:Rates:Kinah.
+    var richWorld = new SharedWorld(data);
+    var rich = new RatesOptions { Kinah = 3 }.Resolve();
+    var (killer, killerStore) = await LootMember(richWorld, robinRules, "Kara", rich);
+    var (friend, friendStore) = await LootMember(richWorld, robinRules, "Finn", rich);
+    await Join(killer, friend, t0 + 100);
+    await Place(killer, spot, t0 + 105, 1010);   // the field map has elites (map 1000 only normal monsters)
+    var elite = killer.Targets!.Values.First(t => t.SubType == "EliteMonster" && t.Hostile && !t.Dead);
+    var (eliteLow, eliteHigh) = MonsterRewards.Embedded.KinahRange("EliteMonster", elite.Level);
+    await Place(killer, elite.Position with { X = elite.Position.X + 150 }, t0 + 110, 1010);
+    await Place(friend, elite.Position with { X = elite.Position.X - 150 }, t0 + 110, 1010);
+    elite.Hp = 1;
+    await killer.HandleAsync(Cast(basic, elite.Key, elite.Position), t0 + 120);
+    await friend.TickAsync(t0 + 130);
+    var killerKinah = KinahIn(killer.GroundDropItems);
+    var friendKinah = StoredKinah(friendStore);
+    Check(elite.Dead && eliteLow > 0 && friendKinah > 0 && killerKinah - friendKinah is 0 or 1 && killerKinah + friendKinah >= eliteLow * 3 && killerKinah + friendKinah <= eliteHigh * 3,
+          $"a party kill's Kinah ({killerKinah}+{friendKinah}, x3 of {eliteLow}-{eliteHigh}) is split evenly, the killer's part on the ground");
+    // Kinah rate 0: no Kinah at all.
+    var poorWorld = new SharedWorld(data);
+    var (poor, _) = await LootMember(poorWorld, new WorldRules { PartyLoot = "killer", FallbackLoot = false }, "Pia", new RatesOptions { Kinah = 0 }.Resolve());
+    var poorTarget = poor.Targets!.Values.First(t => t.SubType == "NormalMonster" && t.Hostile && !t.Dead && !LootTables.Embedded.HasLoot(t.NpcId));
+    await Place(poor, poorTarget.Position with { X = poorTarget.Position.X + 150 }, t0 + 200);
+    poorTarget.Hp = 1;
+    var poorKill = await poor.HandleAsync(Cast(basic, poorTarget.Key, poorTarget.Position), t0 + 210);
+    Check(poorTarget.Dead && poor.GroundDrops.Count == 0 && poorKill.All(b => !(b[0] == 0x1e && b[1] == 0x56)),
+          "Kinah rate 0 and FallbackLoot off: a monster without a reward table drops nothing");
+
+    // Free for all: each item to a random member nearby (both get some of 40); killer: everything to the killer.
+    var ffaWorld = new SharedWorld(data);
+    var ffaRules = new WorldRules { PartyLoot = "freeforall" };
+    var (ffaLead, _) = await LootMember(ffaWorld, ffaRules, "Fern");
+    var (ffaMate, ffaStore) = await LootMember(ffaWorld, ffaRules, "Gus");
+    await Join(ffaLead, ffaMate, t0 + 300);
+    await Place(ffaLead, spot, t0 + 310); await Place(ffaMate, spot with { X = spot.X + 300 }, t0 + 310);
+    var ffaKept = ffaLead.ShareLootWithParty(Gear(40), 0);
+    await ffaMate.TickAsync(t0 + 320);
+    Check(ffaKept.Count is > 0 and < 40 && ffaKept.Count + ffaStore.Items.Count(i => gearIds.Contains(i.TemplateId)) == 40,
+          $"free for all: every item to one member nearby at random ({ffaKept.Count} kept of 40)");
+    var soloWorld = new SharedWorld(data);
+    var soloRules = new WorldRules { PartyLoot = "killer" };
+    var (soloLead, _) = await LootMember(soloWorld, soloRules, "Hugo");
+    var (soloMate, soloStore) = await LootMember(soloWorld, soloRules, "Ines");
+    await Join(soloLead, soloMate, t0 + 400);
+    await Place(soloLead, spot, t0 + 410); await Place(soloMate, spot with { X = spot.X + 300 }, t0 + 410);
+    var soloRows = soloStore.Items.Count;
+    var soloKept = soloLead.ShareLootWithParty(Gear(5), 77);
+    await soloMate.TickAsync(t0 + 420);
+    Check(soloKept.Count == 6 && KinahIn(soloKept) == 77 && soloStore.Items.Count == soloRows && soloMate.SharedLootReceived == 0,
+          "killer: items and Kinah all to the killer, nothing to the party");
+
+    // Fallback table: only items of items.json that the band's lowest level may wear, every band filled; citizens and the dummy get nothing.
+    var fallbackItems = MonsterRewards.Embedded.FallbackItems.ToList();
+    Check(fallbackItems.Count > 0 && fallbackItems.All(i => data.Item(i) is { Race: 0 }), "fallback loot: every item is a known item of items.json for every race");
+    Check(Enumerable.Range(1, 90).All(l => MonsterRewards.Embedded.FallbackBand(l) is { Count: > 0 } band && band.All(i => data.Item(i)!.PermitLevel <= l)),
+          "fallback loot: a monster of each level 1-90 has items its level may wear");
+    var fallbackRng = new Random(21);
+    var heroRolls = Enumerable.Range(0, 400).SelectMany(_ => MonsterRewards.Embedded.Fallback("HeroMonster", 30, fallbackRng)).ToList();
+    Check(heroRolls.Count is > 100 and < 300 && heroRolls.All(r => r.Count == 1 && MonsterRewards.Embedded.FallbackBand(30).Contains(r.ItemId))
+          && Enumerable.Range(0, 200).All(_ => MonsterRewards.Embedded.Fallback("NormalCitizen", 30, fallbackRng).Count == 0 && MonsterRewards.Embedded.Fallback("", 30, fallbackRng).Count == 0)
+          && MonsterRewards.Embedded.KinahRange("", 10) == (0, 0) && MonsterRewards.Embedded.KinahRange("NormalCitizen", 10) == (0, 0),
+          "fallback loot: one band item by the rank's chance; citizens and the training dummy get no items and no Kinah");
+    // A table-less monster killed with FallbackLoot on and many rolls drops generic items of its band.
+    var genericWorld = new SharedWorld(data);
+    var (generic, _) = await LootMember(genericWorld, new WorldRules(), "Jade", new RatesOptions { Drop = 100, Kinah = 0 }.Resolve());
+    // No hero monster without a table on the start map: a level-30 hero copy of a table-less monster (half the rolls hit).
+    var plainTemplate = generic.Targets!.Values.First(t => t.SubType == "NormalMonster" && t.Hostile && !t.Dead && !LootTables.Embedded.HasLoot(t.NpcId));
+    var plain = new Target { Key = 1_990_001, Name = plainTemplate.Name, Hp = 100, HpMax = 100, Position = plainTemplate.Position, NpcId = plainTemplate.NpcId, Level = 30, SubType = "HeroMonster" };
+    genericWorld.Map(GamePackets.SpawnMapId).Targets[plain.Key] = plain;
+    await Place(generic, plain.Position with { X = plain.Position.X + 150 }, t0 + 500);
+    plain.Hp = 1;
+    await generic.HandleAsync(Cast(basic, plain.Key, plain.Position), t0 + 510);
+    var genericDrops = generic.GroundDropItems.ToList();
+    Check(plain.Dead && genericDrops.Count > 0 && genericDrops.All(d => MonsterRewards.Embedded.FallbackBand(plain.Level).Contains(d.ItemId)),
+          $"a monster without a reward table drops fallback items of its level band ({genericDrops.Count} at drop rate 100)");
+    foreach (var s in new[] { lead, mate, killer, friend, poor, ffaLead, ffaMate, soloLead, soloMate, generic }) s.ExitSharedWorld();
+}
+Console.WriteLine($"{checks} party loot checks passed (Aion:Rules:PartyLoot, monster Kinah, Aion:Rules:FallbackLoot).");
+
+// ---------- Class skills beyond damage: heals, buffs, debuffs, damage over time, resurrection (skill-effects.json, OURS) ----------
+checks = 0;
+{
+    var effectsWorld = new SharedWorld(data);
+    async Task<GameSession> ClassSession(uint creation, int level, string name, SkillEffectTable? table = null)
+    {
+        var session = new GameSession(data, new GameSessionOptions { World = effectsWorld, TrainingDummy = true, CharacterLevel = level, SkillEffects = table }, new Random(11));
+        await session.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+        await session.HandleAsync(new PacketWriter().U16(0x361b).String(name).U8(1).U32(creation).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
+        await session.HandleAsync(select, Now);
+        await session.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+        return session;
+    }
+    const int HealingLight = 17100000, Regeneration = 17090000, ClericDefiance = 17240000, ChainOfTorment = 17070000, Mark = 17080000;
+    const int WishOfConcentration = 15310000, BittercoldWind = 15280000;
+    var table = SkillEffectTable.Embedded;
+    Check(table.Of(HealingLight) is { Target: "friendly", Effects: [{ Type: "heal" }] } && table.Of(ChainOfTorment)!.Effects[0].Type == "dot" && table.Of(11010000) is null,
+          "skill-effects.json: heal, dot entries by skill id; damage-only skills have none");
+    var cleric = await ClassSession(4, 16, "Cleric");
+    var ally = await ClassSession(1, 16, "Ally");
+    var foe = await ClassSession((uint)DarkCreation(data), 16, "Foe");
+    var castAt = cleric.Position ?? GamePackets.SpawnPosition;
+    var t = Now + 1_000;
+    // Self heal: HP up, MP spent, capped at the maximum, cooldown respected.
+    cleric.SetResource('H', 10);
+    var mpBefore = cleric.Resource.Mp;
+    var selfHeal = await cleric.HandleAsync(Cast(HealingLight, cleric.PlayerKey, castAt), t);
+    Check(selfHeal[0].SequenceEqual(GamePackets.CastReply(true, HealingLight, 9)) && cleric.Resource.Hp > 10 && cleric.Resource.Hp <= cleric.Resource.HpMax
+          && cleric.Resource.Mp == mpBefore - data.Skill(HealingLight)!.Cost.Mp && selfHeal.Any(b => Op(b) == 0x8d00 && KeyOf(b) == cleric.PlayerKey),
+          "Healing Light on self restores HP (0x8d00 bars) and spends its MP");
+    Check((await cleric.HandleAsync(Cast(HealingLight, cleric.PlayerKey, castAt), t + 100)).Single().SequenceEqual(GamePackets.CastReply(false, HealingLight, 9)),
+          "a heal on cooldown is refused");
+    t += data.Skill(HealingLight)!.CooldownMs;
+    cleric.SetResource('H', cleric.Resource.HpMax - 1);
+    await cleric.HandleAsync(Cast(HealingLight, cleric.PlayerKey, castAt), t);
+    Check(cleric.Resource.Hp == cleric.Resource.HpMax, "a heal stops at max HP");
+    // A heal at a monster or an enemy player is refused (no MP, no cooldown, no HP change).
+    t += data.Skill(HealingLight)!.CooldownMs;
+    var dummyNpc = cleric.Targets[Combat.TrainingDummyKey];
+    var dummyHp = dummyNpc.Hp;
+    mpBefore = cleric.Resource.Mp;
+    Check((await cleric.HandleAsync(Cast(HealingLight, Combat.TrainingDummyKey, dummyNpc.Position), t)).Single().SequenceEqual(GamePackets.CastReply(false, HealingLight, 9))
+          && dummyNpc.Hp == dummyHp && cleric.Resource.Mp == mpBefore, "a heal at a monster is refused");
+    foe.SetResource('H', 10);
+    Check((await cleric.HandleAsync(Cast(HealingLight, foe.PlayerKey, castAt), t)).Single()[3] == 1 && foe.Resource.Hp == 10 && foe.MapId == cleric.MapId, "a heal at an enemy (the other race) is refused");
+    // Another player: the heal is applied on their own loop (WorldTurn: the caster never touches another session's state), their
+    // bars to them, then their HP to the caster.
+    await ally.TickAsync(t);
+    ally.SetResource('H', 10);
+    var allyHeal = await cleric.HandleAsync(Cast(HealingLight, ally.PlayerKey, castAt), t);
+    var hpBeforeAllyLoop = ally.Resource.Hp;
+    var allyHears = await ally.TickAsync(t + 1);
+    var casterSees = await cleric.TickAsync(t + 1);
+    Check(allyHeal[0][3] == 0 && hpBeforeAllyLoop == 10 && ally.Resource.Hp > 10 && casterSees.Any(b => b.SequenceEqual(GamePackets.NpcHp(ally.PlayerKey, ally.Resource.Hp)))
+          && allyHears.Any(b => Op(b) == 0x8d00 && KeyOf(b) == ally.PlayerKey), "Healing Light on an ally heals their session on its own loop, the caster sees their HP");
+    // Heal over time on the ally: ticks every 2 s for 10 s, then stops.
+    ally.SetResource('H', 10);
+    await cleric.HandleAsync(Cast(Regeneration, ally.PlayerKey, castAt), t + 10);
+    await ally.TickAsync(t + 10);
+    var hp0 = ally.Resource.Hp;
+    await ally.TickAsync(t + 10 + 2_000);
+    var hp1 = ally.Resource.Hp;
+    await ally.TickAsync(t + 10 + 10_000);
+    var hp5 = ally.Resource.Hp;
+    ally.SetResource('H', 10);
+    await ally.TickAsync(t + 10 + 14_000);
+    var regenPerSecond = Math.Max(1, ally.Resource.HpMax / 50);
+    Check(hp1 - hp0 > 2 * regenPerSecond && hp5 > hp1 && ally.Resource.Hp <= 10 + 4 * Math.Max(1, ally.Resource.HpMax / 50) && ally.ActiveBuffs.Count == 0,
+          "Light of Regeneration heals the ally each tick and ends with its duration");
+    // A buff: Defiance adds Defense (server-side, no client icon) and runs out.
+    t += 20_000;
+    var defense = cleric.Defense;
+    var buffed = await cleric.HandleAsync(Cast(ClericDefiance, cleric.PlayerKey, castAt), t);
+    Check(buffed[0][3] == 0 && cleric.Defense == defense + 200 && buffed.All(b => Op(b) != 0x382a), "Defiance raises Defense, kept server-side (no 0x382a)");
+    await cleric.TickAsync(t + 10_001);
+    Check(cleric.Defense == defense && cleric.BuffStatOf("Defense") == 0, "the buff expires");
+    // A FixingDamage buff raises skill damage (same rolls): Combat.SkillHits with the bonus.
+    var plainHits = Combat.SkillHits(data, 17040000, "Cleric", 16, data.StarterWeapon(data.Profile(4, 1)!), 0, new Random(3));
+    var buffHits = Combat.SkillHits(data, 17040000, "Cleric", 16, data.StarterWeapon(data.Profile(4, 1)!), 0, new Random(3), fixingBonus: 30);
+    Check(buffHits.Sum(h => h.Amount) > plainHits.Sum(h => h.Amount), "a FixingDamage buff raises the hits");
+    var sorcerer = await ClassSession(7, 16, "Sorcerer");
+    var wish = await sorcerer.HandleAsync(Cast(WishOfConcentration, sorcerer.PlayerKey, castAt), t);
+    var mpWish = sorcerer.Resource.Mp;
+    var slowed = await sorcerer.HandleAsync(Cast(BittercoldWind, Combat.TrainingDummyKey, dummyNpc.Position), t + 10);
+    Check(wish[0][3] == 0 && sorcerer.BuffStatOf("FixingDamage") == 30 && slowed[0][3] == 0
+          && sorcerer.Resource.Mp == mpWish - data.Skill(BittercoldWind)!.Cost.Mp * 7000 / 10_000, "Wish of Concentration: FixingDamage and cheaper casts (MPUseDecrease)");
+    Check(dummyNpc.SpeedScale(t + 20) == 0.5 && dummyNpc.SpeedScale(t + 10 + 6_000) == 1.0, "Bittercold Wind halves the monster's speed for 6 s");
+    // Debuff and damage over time on the dummyNpc.
+    t += 30_000;
+    dummyNpc.Hp = dummyNpc.HpMax;
+    var marked = await cleric.HandleAsync(Cast(Mark, Combat.TrainingDummyKey, dummyNpc.Position), t);
+    Check(marked[0][3] == 0 && dummyNpc.TakenBonus(t + 1) == 1500 && dummyNpc.TakenBonus(t + 10_000) == 0, "Debilitating Mark: the monster takes 15% more for 10 s");
+    var torment = await cleric.HandleAsync(Cast(ChainOfTorment, Combat.TrainingDummyKey, dummyNpc.Position), t + 20);
+    var afterCast = dummyNpc.Hp;
+    var tick1 = await cleric.TickAsync(t + 20 + 2_000);
+    var afterTick = dummyNpc.Hp;
+    await cleric.TickAsync(t + 20 + 8_000);
+    var afterAll = dummyNpc.Hp;
+    await cleric.TickAsync(t + 20 + 12_000);
+    Check(torment[0][3] == 0 && afterTick < afterCast && tick1.Any(b => Op(b) == 0x3804 && KeyOf(b) == Combat.TrainingDummyKey) && afterAll < afterTick
+          && dummyNpc.Hp == afterAll && cleric.DotCount == 0, "Chain of Torment: damage-over-time ticks every 2 s for 8 s, then stops");
+    // Resurrection (a table entry of our own: no resurrection skill is in the class data): a dead ally revives in place.
+    var reviveTable = SkillEffectTable.Parse("""{"heal_range": 2500, "skills": {"17100000": {"target": "dead_friendly", "effects": [{"type": "resurrect", "hp_ratio": [3000, 3000]}]}}}""");
+    var priest = await ClassSession(4, 16, "Priest", reviveTable);
+    t += 40_000;
+    Check((await priest.HandleAsync(Cast(HealingLight, ally.PlayerKey, castAt), t)).Single()[3] == 1, "a resurrection at a living ally is refused");
+    await ally.TickAsync(t);   // its regeneration clock up to date: the revive below runs on its loop (WorldTurn), regeneration with it
+    ally.NpcHitsPlayer(ally.Resource.HpMax * 2, t);
+    Check(ally.Dead, "the ally died");
+    var revivedAlly = await priest.HandleAsync(Cast(HealingLight, ally.PlayerKey, castAt), t + 10);
+    await ally.TickAsync(t + 10);
+    Check(revivedAlly[0][3] == 0 && !ally.Dead && ally.Resource.Hp == ally.Resource.HpMax * 3000 / 10_000, "a resurrection skill revives the dead ally with 30% HP");
+    foreach (var s in new[] { cleric, ally, foe, sorcerer, priest }) s.ExitSharedWorld();
+}
+Console.WriteLine($"{checks} class skill effect checks passed (heals, buffs, debuffs, damage over time, resurrection).");
+
+// ---------- Dungeons: daily entry limits, untracked objectives, boss area attacks (Aion:Dungeons, OURS) ----------
+checks = 0;
+{
+    // Options: off by default (nothing limited), the counting day turns at the reset hour, overrides by id or name, bad values badRefused.
+    var kraoEasy = MapEventTables.Embedded.Dungeon(600002)!;   // KraoCave_Easy (Party)
+    var storyLayer = MapEventTables.Embedded.Dungeon(2)!;       // World_L_A_Layer_01 (InstanceLayer)
+    Check(!DungeonOptions.Default.EntryLimits && DungeonOptions.Default.LimitOf(600002, kraoEasy) is null && DungeonOptions.Default.UntrackedObjectiveMs == MapEventRun.FallbackMs,
+          "Aion:Dungeons default: entry limits off, the untracked fallback 30 s");
+    var limits = new DungeonOptions { EntryLimits = true, DailyEntries = 2, ResetHour = 9, Zone = TimeZoneInfo.Utc };
+    Check(limits.LimitOf(600002, kraoEasy) == 2 && limits.LimitOf(2, storyLayer) is null, "limits on: an expedition gets DailyEntries; a story layer is not limited");
+    var tuned = limits with { Entries = new(StringComparer.OrdinalIgnoreCase) { ["kraocave_easy"] = 1, ["2"] = 4 } };
+    Check(tuned.LimitOf(600002, kraoEasy) == 1 && tuned.LimitOf(2, storyLayer) == 4 && (limits with { Entries = new() { ["600002"] = 0 } }).LimitOf(600002, kraoEasy) is null,
+          "per-dungeon overrides by name (any case) or id; an override limits any type; 0 lifts the limit");
+    var reset = new DateTimeOffset(2025, 10, 10, 9, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds();
+    Check(limits.Period(reset - 1000) == "2025-10-09" && limits.Period(reset) == "2025-10-10" && (limits with { ResetHour = 0 }).Period(reset - 1000) == "2025-10-10",
+          "the counting day turns at ResetHour (09:00 here), not at midnight");
+    foreach (var bad in new[] { limits with { DailyEntries = -1 }, limits with { ResetHour = 24 }, limits with { UntrackedObjectiveSeconds = 0 },
+                 limits with { Entries = new() { ["600002"] = -2 } }, limits with { Entries = new() { ["NoSuchDungeon"] = 1 } } })
+    {
+        var badRefused = false;
+        try { bad.Validated(DungeonOptions.KnownDungeon); } catch (InvalidOperationException) { badRefused = true; }
+        Check(badRefused, "an invalid Aion:Dungeons value stops the host at startup");
+    }
+    Check(tuned.Validated(DungeonOptions.KnownDungeon) == tuned && DungeonOptions.KnownDungeon("KraoCave_Easy") && DungeonOptions.KnownDungeon("600002"), "valid settings pass");
+
+    async Task<GameSession> Adventurer(DungeonOptions dungeons, string name, FakeStore? store = null, Action<FakeStore>? seed = null)
+    {
+        var session = new GameSession(data, new GameSessionOptions { Dungeons = dungeons }, new Random(17)) { Store = store };
+        await session.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+        await session.HandleAsync(new PacketWriter().U16(0x361b).String(name).U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
+        if (store is not null) seed?.Invoke(store);
+        await session.HandleAsync(store is null ? select : new PacketWriter().U16(0x361f).Varint(store.States[0].WireId << 16).I32(0).Vec3(Vector3d.Zero).ToArray(), Now);
+        await session.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+        return session;
+    }
+    // One run: the entry (badRefused: nothing sent), the load inside, the way out and the load back.
+    async Task<bool> Run(GameSession who, int dungeon, long at)
+    {
+        var moved = who.EnterDungeonById(dungeon, at);
+        if (moved.Count == 0) return false;
+        await who.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), at + 10);
+        var inside = who.InstanceKey != 0 && who.MapId == MapEventTables.Embedded.Dungeon(dungeon)!.Map;
+        ((IMapEventHost)who).MapExit("", "LastPosition");
+        await who.TickAsync(at + 20);
+        await who.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), at + 30);
+        return inside && who.InstanceKey == 0;
+    }
+    var noon = new DateTimeOffset(2025, 10, 9, 12, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds();
+
+    // Limits off: as before, any number of runs, nothing counted.
+    var free = await Adventurer(DungeonOptions.Default with { Zone = TimeZoneInfo.Utc }, "Free");
+    var freeRuns = 0;
+    for (var i = 0; i < 4; i++) freeRuns += await Run(free, 600002, noon + i * 1000) ? 1 : 0;
+    Check(freeRuns == 4 && free.DungeonEntriesToday(noon + 5000).Count == 0 && !free.MapEventNotes.Any(n => n.Contains("daily entries")),
+          "limits off: four runs of the same expedition, nothing counted, nothing refused");
+
+    // Limits on (2 a day): two runs, the third badRefused with the existing refusal (nothing sent, a note), still refused at 08:59
+    // the next day, open relogged at 09:00 with a fresh count.
+    var capped = await Adventurer(limits, "Capped");
+    Check(await Run(capped, 600002, noon) && await Run(capped, 600002, noon + 1000) && capped.DungeonEntriesToday(noon + 2000)[600002] == 2,
+          "limits on: two runs counted");
+    Check(capped.EnterDungeonById(600002, noon + 3000).Count == 0 && capped.InstanceKey == 0
+          && capped.MapEventNotes.Any(n => n.Contains("KraoCave_Easy: entry refused (2 of 2 daily entries used; the count resets at 09:00)")),
+          "the third entry is refused like the other entry rules: no move, the reason noted");
+    Check(capped.EnterDungeonById(600002, reset - 1000).Count == 0, "still refused one second before the reset hour");
+    Check(await Run(capped, 600002, reset) && capped.DungeonEntriesToday(reset + 100)[600002] == 1, "at the reset hour the count starts again: the run is allowed and counts 1");
+    Check(await Run(capped, 600002, reset + 1000) && capped.EnterDungeonById(600002, reset + 2000).Count == 0, "and the new day's limit applies again");
+
+    // Per-dungeon override (a story-free Abyss artifact dungeon, not limited by type) for a stored character: stored once the copy
+    // is joined, loaded at the next login (older days ignored), and reset by the GM command.
+    var single = limits with { Entries = new() { ["503001"] = 1 } };
+    var piaStore = new FakeStore();
+    var pia = await Adventurer(single, "Pia", piaStore);
+    Check(await Run(pia, 503001, noon) && pia.DungeonEntriesToday(noon)[503001] == 1, "an override limits a dungeon of any type (503001: 1 a day)");
+    await pia.TickAsync(noon + 100);
+    Check(piaStore.DungeonEntries.SequenceEqual([new DungeonEntryRecord(503001, "2025-10-09", 1)]), "the count is stored for the character's day");
+    Check(pia.EnterDungeonById(503001, noon + 200).Count == 0 && await Run(pia, 503002, noon + 300) && await Run(pia, 503002, noon + 350)
+          && !pia.DungeonEntriesToday(noon + 360).ContainsKey(503002), "the override's dungeon is refused; its neighbour (no override, not a limited type) is not counted");
+    var reloadStore = new FakeStore();
+    var relogged = await Adventurer(single, "Pia2", reloadStore, s => s.DungeonEntries.AddRange([new DungeonEntryRecord(503001, single.Period(Now), 1), new DungeonEntryRecord(600002, "2000-01-01", 9)]));
+    Check(relogged.DungeonEntriesToday(Now).GetValueOrDefault(503001) == 1 && !relogged.DungeonEntriesToday(Now).ContainsKey(600002) && relogged.EnterDungeonById(503001, Now + 10).Count == 0,
+          "stored counts come back at login: today's row refuses the entry, an older day's row is ignored");
+    // GM: ResetDungeonEntries <character> runs on that character's loop; its counts and stored rows go.
+    var dungeonPresence = new WorldPresence();
+    var dungeonBuilder = new BuilderCommands(dungeonPresence, new GmPolicy { DevelopmentNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Gamma" } }, (_, _, _) => { });
+    var gamma = await Adventurer(single, "Gamma");
+    dungeonPresence.Enter("Gamma", gamma, null);
+    dungeonPresence.Enter("Pia", pia, null);
+    Check(BuilderCommands.Supported.Contains("ResetDungeonEntries"), "ResetDungeonEntries is a builder command");
+    var resetReply = await dungeonBuilder.RunAsync(gamma, "ResetDungeonEntries Pia", noon + 400, default);
+    await pia.TickAsync(noon + 500);
+    Check(resetReply.Result == 0 && resetReply.Message == "Dungeon entries of Pia reset." && pia.DungeonEntriesToday(noon + 500).Count == 0 && piaStore.DungeonEntries.Count == 0
+          && await Run(pia, 503001, noon + 600), "the GM reset clears the character's counts and rows: the dungeon opens again");
+    Check((await dungeonBuilder.RunAsync(gamma, "ResetDungeonEntries Nobody", noon + 700, default)).Result == 1
+          && (await dungeonBuilder.RunAsync(pia, "ResetDungeonEntries", noon + 800, default)).Message == "GM permission required.", "an unknown character fails; players may not reset");
+    Check((await dungeonBuilder.RunAsync(gamma, "ResetDungeonEntries", noon + 900, default)).Message.StartsWith("Dungeon entries reset"), "without a name the GM's own counts reset");
+    // Re-entering the party copy already counted is free; a fresh copy counts.
+    var dungeonWorld = new SharedWorld(data);
+    async Task<GameSession> Member(string name)
+    {
+        var session = new GameSession(data, new GameSessionOptions { World = dungeonWorld, Dungeons = limits with { DailyEntries = 1 } }, new Random(19));
+        await session.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+        await session.HandleAsync(new PacketWriter().U16(0x361b).String(name).U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
+        await session.HandleAsync(select, Now);
+        await session.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+        return session;
+    }
+    var leader = await Member("Leader");
+    var follower = await Member("Follower");
+    await leader.HandleAsync(SocialRequests.EncodeServerAndName(SocialOpcodes.PartyInviteRq, 1204, follower.CharacterName!), noon);
+    var partyInvite = (await follower.TickAsync(noon + 1)).Single(b => (b[0] | b[1] << 8) == SocialOpcodes.PartyInviteNt);
+    await follower.HandleAsync(SocialRequests.EncodePartyInviteResponse([new PartyInviteReply(BitConverter.ToInt64(partyInvite, 2), PartyInviteAnswer.Accept)]), noon + 2);
+    await leader.TickAsync(noon + 3);
+    leader.EnterDungeonById(600002, noon + 10);
+    await leader.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), noon + 20);
+    Check(await Run(follower, 600002, noon + 30) && follower.DungeonEntriesToday(noon + 40)[600002] == 1, "a member joins the leader's copy: counted once");
+    Check(await Run(follower, 600002, noon + 50) && follower.DungeonEntriesToday(noon + 60)[600002] == 1, "back into the same copy: free, not counted again");
+    leader.ExitSharedWorld(); follower.ExitSharedWorld();
+
+    // Boss area attacks (tools/data/boss-area-skills.json, OURS): the expeditions' final bosses; their basic attack stays single-target.
+    var areas = BossAreaSkills.Embedded;
+    var finalBossSkills = data.NpcFromTemplate(2320171, "boss", [0, 0, 0], 0)!.Skills!.Where(id => data.NpcSkill(id) is not null).ToList();
+    Check(areas.Count >= 20 && areas.Of(2320171) is { Radius: 500, MaxTargets: 4 } && areas.Area(2320171, finalBossSkills[0], finalBossSkills[0]) is null
+          && areas.Area(2320171, finalBossSkills[1], finalBossSkills[0]) is not null && areas.Of(2701128) is null,
+          "the final bosses are listed (KraoCave_Hard's: 5 m, 4 players); the basic attack and unlisted NPCs keep one target");
+    var aoeAggro = new AggroShape("Circle", 1000, 0, 0, 1000, "Upper");
+    Target Boss(int npcId) => new() { Key = 3001, Name = "boss", NpcId = npcId, Hp = 5000, HpMax = 5000, Level = 7, Position = Vector3d.Zero, Aggressive = true,
+        WalkSpeed = 100, RunSpeed = 200, Radius = 120, Aggro = aoeAggro, Skills = [1220560] };
+    var party = new List<(int Key, Vector3d Position)> { (100_001, new Vector3d(200, 0, 0)), (100_002, new Vector3d(300, 200, 0)), (100_003, new Vector3d(2500, 0, 0)) };
+    (List<(int Key, int Damage)> Hits, List<byte[]> Packets) Fight(BossAreaSkills table, int npcId)
+    {
+        var bossAi = new NpcAi(new Random(2), data) { AreaSkills = table, DefenseOf = _ => 0 };
+        var boss = Boss(npcId);
+        var map = new Dictionary<int, Target> { [boss.Key] = boss };
+        var hitList = new List<(int, int)>();
+        var packets = new List<byte[]>();
+        foreach (var ms in new[] { 0L, 600L }) packets.AddRange(bossAi.Tick(map, party, ms, (key, damage) => { hitList.Add((key, damage)); return []; }));
+        return (hitList, packets);
+    }
+    var slam = new BossAreaSkills(new Dictionary<int, BossAreaSkill> { [999] = new(500, 4, [1220560]) });
+    var (areaHits, areaPackets) = Fight(slam, 999);
+    Check(areaHits.Select(h => h.Key).OrderBy(k => k).SequenceEqual([100_001, 100_002]) && areaHits.All(h => h.Damage is >= 45 and <= 55)
+          && areaPackets.Count(b => b.SequenceEqual(GamePackets.NpcSkillHit(100_001, 3001, 1220560, 1, 122056011, areaHits.First(h => h.Key == 100_001).Damage))) == 1
+          && areaPackets.Count(b => b.SequenceEqual(GamePackets.NpcSkillHit(100_002, 3001, 1220560, 1, 122056011, areaHits.First(h => h.Key == 100_002).Damage))) == 1
+          && !areaHits.Any(h => h.Key == 100_003),
+          "an area skill hits the victim and the player 3.6 m away, each with the per-target 0x3804 and its own roll; the player 23 m away is not hit");
+    var (singleHits, _) = Fight(BossAreaSkills.None, 999);
+    var (unlisted, _) = Fight(slam, 1000);
+    Check(singleHits.Select(h => h.Key).SequenceEqual([100_001]) && unlisted.Select(h => h.Key).SequenceEqual([100_001]),
+          "without a table entry (or for another NPC) the hit stays on the victim alone");
+    var (capHits, _) = Fight(new BossAreaSkills(new Dictionary<int, BossAreaSkill> { [999] = new(5000, 2, [1220560]) }), 999);
+    Check(capHits.Select(h => h.Key).OrderBy(k => k).SequenceEqual([100_001, 100_002]), "max_targets caps the players one hit reaches (2: the victim and the nearest)");
+}
+Console.WriteLine($"{checks} dungeon checks passed (entry limits, untracked objectives, boss area attacks).");
+
+// ---------- Playerbots (docs/PLAYERBOTS.md): sessions without a connection, driven by BotBrain ----------
+checks = 0;
+{
+    var botWorld = new SharedWorld(data);
+    var botStore = new FakeStore();
+    var botSessionOptions = new GameSessionOptions { World = botWorld, TrainingDummy = true };
+    long t = Now + 2_000_000;
+    byte[] Create(string name, int creation, byte slot) => new PacketWriter().U16(0x361b).String(name).U8(1).U32((uint)creation).Bytes([0x0c, 0x64]).U8(2).U8(slot).U8(0).ToArray();
+    int CreationOf(string cls) => Enumerable.Range(1, 64).First(c => data.Profile(c, 1)?.Class == cls);
+    var leader = new GameSession(data, botSessionOptions, new Random(21)) { Store = botStore };
+    await leader.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), t);
+    await leader.HandleAsync(Create("Leader", 1, 1), t);
+    await leader.HandleAsync(Create("Alt", 1, 2), t);
+    await leader.HandleAsync(Create("Ranged", CreationOf("Ranger"), 3), t);
+    await leader.HandleAsync(Create("Third", 1, 4), t);
+    await leader.HandleAsync(new PacketWriter().U16(0x361f).Varint((uint)botStore.States[0].WireId << 16).I32(0).Vec3(Vector3d.Zero).ToArray(), t);
+    await leader.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    // A second, development player watches (another client on the same map).
+    var watcher = new GameSession(data, botSessionOptions, new Random(22));
+    await watcher.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), t);
+    await watcher.HandleAsync(Create("Watcher", 1, 1), t);
+    await watcher.HandleAsync(select, t);
+    await watcher.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    Check(leader.InWorld && leader.CharacterName == "Leader" && watcher.InWorld, "a stored leader and a watching player are in the shared world");
+
+    var off = new PlayerBots(data, new BotOptions(), botWorld);
+    Check((await off.CommandAsync(leader, "add Alt", t, default)).Contains("off") && off.All.Count == 0, "Aion:Bots:Enabled false: no bots");
+    var botOptions = new BotOptions { Enabled = true, MaxPerAccount = 2, MaxTotal = 3 };
+    var botPresence = new WorldPresence();
+    var bots = new PlayerBots(data, botOptions, botWorld, presence: botPresence);
+    Check(BotRotations.Embedded.For("Gladiator") is { Range: > 0, Rotation.Length: > 2 } glad && glad.Rotation[^1].Skill == 11020000
+          && BotRotations.Embedded.Classes.Count == 8, "bot-rotations.json is embedded: every playable class, the filler last");
+    Check((await bots.CommandAsync(leader, "add Leader", t, default)).Contains("yourself") && (await bots.CommandAsync(leader, "add Nobody", t, default)).Contains("not one of your characters"),
+          "a bot is one of the summoner's other characters");
+    Check(await bots.CommandAsync(leader, "add Alt", t, default) == "Summoning Alt." && bots.All.Single().State == PlayerBot.Phase.Pending, "//bot add queues the character");
+    await watcher.TickAsync(t);
+    await bots.TickAsync(t += 50);
+    var alt = bots.All.Single();
+    var altKey = alt.Session.PlayerKey;
+    Check(alt.State == PlayerBot.Phase.InWorld && alt.Session.InWorld && alt.Session.CharacterName == "Alt" && alt.Session.Bot && botWorld.Online.ContainsKey(altKey)
+          && botPresence.Find("Alt")?.Session == alt.Session, "the bot logs in through the client's own requests (0x3613, 0x361f, 0x3622) and is in the world");
+    var seen = await watcher.TickAsync(t);
+    Check(seen.Any(b => Op(b) == 0x3645 && KeyOf(b) == altKey), "a real player sees the bot appear (0x3645 CharAppear, the shared world's own path)");
+    Check(alt.InParty && botWorld.Social.PartyOf(leader.WorldPlayer!) is { Members.Count: 2 } party && party.Leader == leader.WorldPlayer
+          && (await leader.TickAsync(t)).Any(b => Op(b) == SocialOpcodes.PartyAddMemberNt), "the bot joins the leader's party (PartyAddMember to the leader)");
+    Check((await bots.CommandAsync(leader, "add Alt", t, default)).Contains("already"), "a bot cannot be summoned twice");
+
+    // Follow: the leader runs 1500 cm east; the bot catches up along the ground within 5 s, at a speed the server accepts.
+    var start = leader.WorldPosition!.Value;
+    for (var i = 1; i <= 3; i++)
+    {
+        await leader.HandleAsync(new PacketWriter().U16(0x3701).U8(2).Vec3(start with { X = start.X + 500 * i }).U16(0).F32(0).U8(1).U64(1).ToArray(), t += 500);
+        for (var k = 0; k < 10; k++) await bots.TickAsync(t + k * 50);
+    }
+    static double Apart(Vector3d a, Vector3d b) => Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
+    var followTicks = 0;
+    while (Apart(alt.Session.WorldPosition!.Value, leader.WorldPosition!.Value) > BotBrain.FollowFar && followTicks < 100) { await bots.TickAsync(t += 50); followTicks++; }
+    Check(Apart(alt.Session.WorldPosition!.Value, leader.WorldPosition!.Value) <= BotBrain.FollowFar && alt.Session.SpeedRejects == 0 && alt.Brain!.MovesSent > 2,
+          $"the bot follows the leader within 100 ticks (took {followTicks}) without a speed reject");
+    var watched = await watcher.TickAsync(t);
+    Check(watched.Any(b => Op(b) == 0x371c && KeyOf(b) == altKey), "others see the bot run (0x3701 relayed as 0x371c, as for a player)");
+    for (var k = 0; k < 20; k++) await bots.TickAsync(t += 50);
+    Check(alt.Session.SpeedRejects == 0 && Apart(alt.Session.WorldPosition!.Value, alt.Brain!.SlotAround(leader.WorldPosition!.Value)) < BotBrain.FollowFar, "the bot settles at its follow slot");
+
+    // Assist: the leader hits the training botDummy; the bot runs to it and uses its rotation through the normal cast handler.
+    var botDummy = leader.Targets[Combat.TrainingDummyKey];
+    await leader.HandleAsync(Cast(basic, botDummy.Key, leader.WorldPosition!.Value), t += 50);
+    var hpAfterLeader = botDummy.Hp;
+    Check(leader.AttackTarget(t)?.Key == botDummy.Key, "the leader's fight is its last cast target");
+    await watcher.TickAsync(t);
+    var assistStart = t;
+    var watcherCasts = new List<byte[]>();
+    for (var k = 0; k < 240; k++)
+    {
+        await bots.TickAsync(t += 50);
+        if (k % 20 == 0) await leader.HandleAsync(Cast(basic, botDummy.Key, leader.WorldPosition!.Value), t);   // keeps the fight going (the leader's own cooldowns refuse most)
+        if (botDummy.Dead) break;
+        watcherCasts.AddRange(await watcher.TickAsync(t));
+    }
+    var castLog = alt.Brain!.CastLog;
+    Check(castLog.Count >= 3 && botDummy.Hp < hpAfterLeader || botDummy.Dead, $"the bot attacks the leader's target and it takes damage ({castLog.Count} casts, HP {hpAfterLeader} -> {botDummy.Hp})");
+    Check(watcherCasts.Any(b => Op(b) == 0x3802) && watcherCasts.Any(b => Op(b) == 0x3804), "others see the bot's skill starts and hits (0x3802, 0x3804)");
+    Check(alt.Brain.CastsSent == alt.Brain.CastsAccepted, $"every cast the bot sends is accepted: it respects cooldowns, MP and the global cooldown ({alt.Brain.CastsSent} sent)");
+    var spacingOk = castLog.Zip(castLog.Skip(1)).All(p => p.Second.At - p.First.At >= BotRotations.Embedded.GlobalCooldownMs)
+        && castLog.GroupBy(c => c.Skill).All(g => g.Zip(g.Skip(1)).All(p => p.Second.At - p.First.At >= data.Skill(g.Key)!.CooldownMs));
+    Check(spacingOk && castLog.Select(c => c.Skill).Distinct().Count() >= 2 && castLog[0].Skill == 11190000 && castLog.Count(c => c.Skill == 11190000) <= 1 + (t - assistStart) / 15000,
+          "the rotation opens with Leaping Slam (15 s cooldown), then fills; no skill is recast inside its cooldown");
+
+    // Caps: MaxPerAccount 2 per account, MaxTotal 3 on the host.
+    Check(await bots.CommandAsync(leader, "add Ranged", t, default) == "Summoning Ranged." && (await bots.CommandAsync(leader, "add Third", t, default)).Contains("MaxPerAccount"),
+          "Aion:Bots:MaxPerAccount caps one account's bots");
+    await bots.TickAsync(t += 50);
+    var ranged = bots.All.Single(b => b.Name == "Ranged");
+    Check(ranged.State == PlayerBot.Phase.InWorld && ranged.Session.ClassName == "Ranger" && ranged.Brain!.Rotation!.Range > 1000 && ranged.Brain!.Slot == 1,
+          "a second bot takes the next follow slot and its class's (ranged) rotation");
+    Check(await bots.CommandAsync(watcher, "add Devbot Cleric", t, default) == "Summoning Devbot." && (await bots.CommandAsync(watcher, "add Devbot2", t, default)).Contains("MaxTotal"),
+          "Aion:Bots:MaxTotal caps the host (a development login's bot is a new unsaved character)");
+    await bots.TickAsync(t += 50);
+    Check(bots.All.Single(b => b.Name == "Devbot").Session.ClassName == "Cleric", "a development bot takes the class asked for");
+
+    // Commands: stay / follow / passive.
+    Check((await bots.CommandAsync(leader, "stay", t, default)).StartsWith("stay") && alt.Brain.Movement == BotMovement.Stay
+          && (await bots.CommandAsync(leader, "passive Alt", t, default)).StartsWith("passive") && !alt.Brain.Assist && ranged.Brain!.Assist, "stay and passive change the strategies");
+    Check((await bots.CommandAsync(leader, "list", t, default)).Contains("Alt (InWorld, Stay, passive"), "//bot list shows the bots and their strategies");
+
+    // Dismiss: the bot leaves the world (others see it go), leaves the party and saves its position.
+    var savedBefore = botStore.Saved.Count;
+    await watcher.TickAsync(t);
+    Check(bots.Remove(leader, "Alt") == "Dismissed Alt.", "//bot remove");
+    await bots.TickAsync(t += 50);
+    var gone = await watcher.TickAsync(t);
+    Check(alt.State == PlayerBot.Phase.Gone && !botWorld.Online.ContainsKey(altKey) && alt.Session.SharedMap is null
+          && gone.Any(b => b.SequenceEqual(PlayerPackets.CharDisappear(altKey, 1))) && botPresence.Find("Alt") is null, "a dismissed bot leaves the world (0x3647 to those who saw it)");
+    Check(botStore.Saved.Count > savedBefore && botWorld.Social.PartyOf(leader.WorldPlayer!) is { } after && !after.Members.Any(m => m.Key == altKey), "it saved its position and left the party");
+
+    // GM / chat gating: //bot is staff-only unless Aion:Bots:PlayersMayUse.
+    var gmPresence = new WorldPresence();
+    gmPresence.Enter("Leader", leader, botStore.AccountId);
+    var botBuilder = new BuilderCommands(gmPresence, new GmPolicy(), (_, _, _) => { });
+    var chatId = new Aion.Application.Chat.ChatIdentity("1", "1204", "en_US");
+    Check(await new GmCommands(gmPresence, botBuilder).HandleAsync(chatId, "Leader", "//bot list", default) == "Playerbots are off on this server.", "//bot without playerbots on the host");
+    Check(await new GmCommands(gmPresence, botBuilder) { Bots = bots }.HandleAsync(chatId, "Leader", "//bot list", default) == "Playerbots are for staff on this server.",
+          "players may not use //bot unless Aion:Bots:PlayersMayUse");
+    var open = new PlayerBots(data, botOptions with { PlayersMayUse = true }, botWorld);
+    var botListed = new GmCommands(gmPresence, botBuilder) { Bots = open }.HandleAsync(chatId, "Leader", "//bot list", default);
+    await leader.TickAsync(t += 50);   // the command runs on the player's loop
+    Check((await botListed).StartsWith("No bots"), "with Aion:Bots:PlayersMayUse every player may use //bot");
+
+    // The leader leaves the world: its bots go with it (saved before its store closes).
+    leader.ExitSharedWorld();
+    await bots.OwnerLeftAsync(leader);
+    Check(bots.Of(leader).Count == 0 && !botWorld.Online.ContainsKey(ranged.Session.PlayerKey), "a leader's disconnect takes its bots out of the world");
+    await bots.TickAsync(t += 50);
+    Check(bots.All.Single().Name == "Devbot", "other players' bots stay");
+    watcher.ExitSharedWorld();
+    await bots.TickAsync(t += 50);
+    Check(bots.All.Count == 0, "a bot whose leader left the world (lobby, logout) leaves on the next tick");
+}
+// A bot whose leaving throws is still removed, and the other bots keep ticking (the bot loop never stops on one bot).
+{
+    var faultWorld = new SharedWorld(data);
+    var faultOptions = new GameSessionOptions { World = faultWorld, TrainingDummy = true };
+    long t = Now + 2_500_000;
+    var faultLead = new GameSession(data, faultOptions, new Random(41));
+    await faultLead.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), t);
+    await faultLead.HandleAsync(new PacketWriter().U16(0x361b).String("Boss").U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), t);
+    await faultLead.HandleAsync(select, t);
+    await faultLead.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    var faulty = new PlayerBots(data, new BotOptions { Enabled = true, MaxPerAccount = 3, MaxTotal = 3 }, faultWorld);
+    await faulty.CommandAsync(faultLead, "add Broken", t, default);
+    await faulty.CommandAsync(faultLead, "add Fine", t, default);
+    await faulty.TickAsync(t += 50);
+    var broken = faulty.All.Single(b => b.Name == "Broken");
+    var fine = faulty.All.Single(b => b.Name == "Fine");
+    Check(broken.State == PlayerBot.Phase.InWorld && fine.State == PlayerBot.Phase.InWorld, "two bots in the world");
+    faulty.LeaveFault = b => { if (b == broken) throw new InvalidOperationException("leave failed"); };
+    faulty.Remove(faultLead, "Broken");
+    var threw = false;
+    try { await faulty.TickAsync(t += 50); } catch (Exception) { threw = true; }
+    Check(!threw && broken.State == PlayerBot.Phase.Gone && broken.LastError == nameof(InvalidOperationException) && !faulty.All.Contains(broken),
+          "a bot whose leave throws is still removed (Gone, its error kept) and the tick does not throw");
+    var ticked = fine.Session.PlayerKey;
+    for (var k = 0; k < 5; k++) await faulty.TickAsync(t += 50);
+    Check(fine.State == PlayerBot.Phase.InWorld && faulty.All.Single() == fine && faultWorld.Online.ContainsKey(ticked), "the other bot keeps ticking in the world");
+    faulty.LeaveFault = null;
+    faultLead.ExitSharedWorld();
+    await faulty.OwnerLeftAsync(faultLead);
+}
+// Playerbots looking after their group: heals, resurrection, buffs, self-defence, a tank, looting, party dungeons.
+{
+    var supWorld = new SharedWorld(data);
+    // The table with one resurrection of our own (the class data has none): Divine Aura (17150000) revives a dead ally.
+    using var effectsStream = typeof(SkillEffectTable).Assembly.GetManifestResourceStream("skill-effects.json")!;
+    var effectsJson = System.Text.Json.Nodes.JsonNode.Parse(effectsStream)!;
+    effectsJson["skills"]!["17150000"] = System.Text.Json.Nodes.JsonNode.Parse("""{"name": "Rez", "target": "dead_friendly", "effects": [{"type": "resurrect", "hp_ratio": [5000, 5000]}]}""");
+    var supTable = SkillEffectTable.Parse(effectsJson.ToJsonString());
+    var supOptions = new GameSessionOptions { World = supWorld, TrainingDummy = true, CharacterLevel = 16, SkillEffects = supTable, Rules = WorldRules.Default with { PartyLoot = "killer" } };
+    const int ClericRez = 17150000, HealingLightSkill = 17100000, ChanterDefiance = 18200000;
+    var embeddedRotations = BotRotations.Embedded;
+    var clericRotation = embeddedRotations.For("Cleric")!;
+    var withRez = clericRotation.Rotation.ToList();
+    withRez.Insert(withRez.FindIndex(s => s.Condition.Target is "self" && s.Condition.BuffMissing == true),
+        new BotRotationStep(ClericRez, "Rez", 3, new BotCondition("dead_ally", InCombat: false)));
+    var supRotations = new BotRotations
+    {
+        GlobalCooldownMs = embeddedRotations.GlobalCooldownMs, TankHateMultiplier = embeddedRotations.TankHateMultiplier,
+        Classes = new(embeddedRotations.Classes) { ["Cleric"] = clericRotation with { Rotation = [.. withRez] } },
+    };
+    Check(embeddedRotations.TankHateMultiplier > 1 && embeddedRotations.For("Cleric")!.Rotation[0] is { Skill: HealingLightSkill, Roles: ["heal"] } clericFirst
+          && clericFirst.Condition.Target == "ally" && embeddedRotations.For("Cleric")!.Roles[0] == "heal",
+          "bot-rotations.json: the Cleric opens with its ally heal (heal role), tanks have a hate multiplier");
+    long t = Now + 3_000_000;
+    var chief = new GameSession(data, supOptions, new Random(31));
+    await chief.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), t);
+    await chief.HandleAsync(new PacketWriter().U16(0x361b).String("Chief").U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), t);
+    await chief.HandleAsync(select, t);
+    await chief.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    var squad = new PlayerBots(data, new BotOptions { Enabled = true, MaxPerAccount = 3, MaxTotal = 5 }, supWorld, supRotations);
+    foreach (var (name, cls) in new[] { ("Medic", "Cleric"), ("Chant", "Chanter"), ("Guard", "Templar") })
+        Check(await squad.CommandAsync(chief, $"add {name} {cls}", t, default) == $"Summoning {name}.", $"a {cls} bot is summoned");
+    await squad.TickAsync(t += 50);
+    var medic = squad.All.Single(b => b.Name == "Medic");
+    var chant = squad.All.Single(b => b.Name == "Chant");
+    var guard = squad.All.Single(b => b.Name == "Guard");
+    Check(squad.All.All(b => b.State == PlayerBot.Phase.InWorld && b.InParty && b.Session.Level == 16) && medic.Brain!.Role == "heal" && guard.Brain!.Role == "tank"
+          && chant.Session.ClassName == "Chanter", "a full party: the leader, a heal Cleric, a Chanter and a tank Templar");
+    async Task Run(int ticks, Func<bool>? until = null)
+    {
+        for (var k = 0; k < ticks && until?.Invoke() != true; k++)
+        {
+            await squad.TickAsync(t += 50);
+            await chief.TickAsync(t);
+        }
+    }
+    await Run(40);
+
+    // Heal: the leader drops to 30%; the heal bot casts Healing Light at it.
+    chief.SetResource('H', chief.Resource.HpMax * 30 / 100);
+    var hurtHp = chief.Resource.Hp;
+    await Run(60, () => medic.Brain!.SupportLog.Any(c => c.Skill == HealingLightSkill && c.Target == chief.PlayerKey));
+    Check(medic.Brain!.SupportLog.Any(c => c.Skill == HealingLightSkill && c.Target == chief.PlayerKey) && chief.Resource.Hp > hurtHp,
+          $"a heal Cleric bot heals its hurt leader with Healing Light (HP {hurtHp} -> {chief.Resource.Hp})");
+    Check(medic.Brain.CastsSent == medic.Brain.CastsAccepted, "every heal it sends is accepted by the session's cast handler");
+    Check(!chant.Session.HasSkillBuff(ChanterDefiance, t), "out of a fight the combat buff stays down (a heal is no fight)");
+
+    // Buff upkeep: in a fight the Chanter keeps Defiance up, recast once it ran out and is off cooldown.
+    var supDummy = chief.Targets[Combat.TrainingDummyKey];
+    async Task Fight(int ticks, Func<bool>? until = null)
+    {
+        for (var k = 0; k < ticks && until?.Invoke() != true; k++)
+        {
+            if (k % 40 == 0)
+            {
+                supDummy.Hp = supDummy.HpMax;
+                await chief.HandleAsync(Cast(11020000, supDummy.Key, chief.WorldPosition!.Value), t);   // Keen Strike, the Gladiator filler (no cooldown)
+            }
+            await squad.TickAsync(t += 50);
+            await chief.TickAsync(t);
+        }
+    }
+    await Fight(200, () => chant.Session.HasSkillBuff(ChanterDefiance, t));
+    Check(chant.Session.HasSkillBuff(ChanterDefiance, t) && chant.Session.BuffStatOf("Defense") >= 200, "in a fight the Chanter bot buffs itself (Defiance)");
+    Check(guard.Brain!.FightingKey == supDummy.Key && medic.Brain.FightingKey == supDummy.Key, "the others assist the leader's target");
+    t += data.Skill(ChanterDefiance)!.CooldownMs;
+    Check(!chant.Session.HasSkillBuff(ChanterDefiance, t), "the buff ran out");
+    await Fight(200, () => chant.Brain!.SupportLog.Count(c => c.Skill == ChanterDefiance) >= 2);
+    Check(chant.Brain!.SupportLog.Count(c => c.Skill == ChanterDefiance) >= 2 && chant.Session.HasSkillBuff(ChanterDefiance, t), "once off cooldown the Chanter puts it up again");
+
+    // Resurrection out of combat: the leader dies in the fight; the Cleric waits for the fight to end, then revives it.
+    chief.NpcHitsPlayer(chief.Resource.HpMax * 2, t);
+    Check(chief.Dead, "the leader died");
+    await Run(10);
+    Check(chief.Dead && !medic.Brain.SupportLog.Any(c => c.Skill == ClericRez), "no resurrection while the group still fights");
+    await squad.CommandAsync(chief, "passive", t, default);
+    await Run(300, () => !chief.Dead);
+    Check(!chief.Dead && medic.Brain.SupportLog.Any(c => c.Skill == ClericRez && c.Target == chief.PlayerKey) && chief.Resource.Hp == chief.Resource.HpMax / 2,
+          "out of combat the Cleric bot resurrects its dead leader (half HP)");
+    await squad.CommandAsync(chief, "assist", t, default);
+    await Run(200);   // the leader's and the bots' own fights are forgotten (GameSession.AssistMemoryMs)
+
+    // Self-defence: a monster attacks the Chanter while the leader fights nothing; the bots fight it.
+    var nearStart = chief.WorldPosition!.Value;
+    static double Apart2(Vector3d a, Vector3d b) => Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
+    // Monsters that do not attack on sight (NpcData AggroType not Aggro_A), so only the forced aggro below starts a fight.
+    bool Calm(Target m) => m.Hostile && !m.Dead && !m.Aggressive && m.RunSpeed > 0 && m.Key != Combat.TrainingDummyKey && m.HpMax > 500;
+    var monsters = chief.Targets.Values.Where(Calm).ToList();
+    var (m1, m2) = monsters.SelectMany(a => monsters.Where(b => b != a && Apart2(a.Position, b.Position) < 1200).Select(b => (a, b)))
+        .OrderBy(p => Apart2(p.a.Position, nearStart)).First();
+    chief.Teleport(chief.MapId!.Value, m1.Position with { X = m1.Position.X + 400 }, t);
+    await chief.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    await Run(60);
+    var supAi = chief.SharedMap!.Ai;
+    Check(squad.All.All(b => Apart2(b.Session.WorldPosition!.Value, chief.WorldPosition!.Value) < 1500 && b.Brain!.FightingKey is null) && !m1.Dead && !m2.Dead,
+          "the party stands by two calm monsters, nobody fighting");
+    await squad.CommandAsync(chief, "passive Medic", t, default);
+    await squad.CommandAsync(chief, "passive Guard", t, default);   // the Chanter alone, so the fight is its own
+    supAi.ForceAggro(m1, chant.Session.PlayerKey, t);
+    await Run(20, () => chant.Brain!.FightingKey == m1.Key);
+    Check(chant.Brain!.FightingKey == m1.Key && chief.AttackTarget(t) is null, "a bot attacked by a monster fights back although its leader has not engaged it");
+    var m1Hp = m1.Hp;
+    await Run(100, () => m1.Hp < m1Hp);
+    Check(m1.Hp < m1Hp, $"its rotation hurts the monster ({m1Hp} -> {m1.Hp})");
+    await Run(1200, () => m1.Dead);
+    Check(m1.Dead, "the bot kills the monster that attacked it");
+    await squad.CommandAsync(chief, "assist", t, default);
+    await Run(300, () => squad.All.All(b => b.Session.LootableDrops(t).Count == 0 && b.Brain!.FightingKey is null));   // its loot, if any, before the party moves on
+
+    // Looting (Aion:Rules:PartyLoot killer): the killer's drops lie on the ground; a bot picks its own up with 0x5620 after the fight.
+    for (var killNo = 0; killNo < 12 && !squad.All.Any(b => b.Brain!.LootsSent > 0); killNo++)
+    {
+        var prey = chief.Targets.Values.Where(m => Calm(m) && m != m2)
+            .OrderBy(m => Apart2(m.Position, chief.WorldPosition!.Value)).First();
+        if (Apart2(prey.Position, chief.WorldPosition!.Value) > 1500)
+        {
+            chief.Teleport(chief.MapId!.Value, prey.Position with { X = prey.Position.X + 300 }, t);
+            await chief.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+            await Run(40);
+        }
+        prey.Hp = Math.Min(prey.Hp, 5);
+        supAi.ForceAggro(prey, guard.Session.PlayerKey, t);
+        await Run(400, () => prey.Dead && squad.All.All(b => b.Brain!.FightingKey is null && b.Session.LootableDrops(t).Count == 0));
+    }
+    await Run(200, () => squad.All.All(b => b.Session.LootableDrops(t).Count == 0));
+    var looter = squad.All.FirstOrDefault(b => b.Brain!.LootsSent > 0);
+    Check(looter is not null && looter.Session.LootableDrops(t).Count == 0 && looter.Session.GroundDrops.Count == 0,
+          "a bot that killed a monster picks up its own drops (0x5620, the client's pick-up) once the fight is over");
+
+    // Tank: a monster hits the Cleric, another the Chanter; the tank takes the one on the healer first, and its hits count
+    // tank_hate_multiplier times in the monster's hate table, so the monster turns to it.
+    m2 = chief.Targets.Values.Where(Calm).OrderBy(m => Apart2(m.Position, chief.WorldPosition!.Value)).First();
+    var m3 = chief.Targets.Values.Where(m => Calm(m) && m != m2).OrderBy(m => Apart2(m.Position, m2.Position)).First();
+    chief.Teleport(chief.MapId!.Value, m2.Position with { X = m2.Position.X + 400 }, t);
+    await chief.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    await squad.CommandAsync(chief, "passive Medic", t, default);
+    await squad.CommandAsync(chief, "passive Chant", t, default);   // the tank's hits alone reach the monster's hate table
+    await Run(60);
+    const int Sturdy = 100_000;   // the monster's HP raised for the check, so it lives through the tank's first hits
+    m2.Hp = Sturdy;
+    supAi.ForceAggro(m2, medic.Session.PlayerKey, t);
+    supAi.ForceAggro(m3, guard.Session.PlayerKey, t);
+    await Run(10, () => guard.Brain!.FightingKey is not null);
+    Check(guard.Brain!.FightingKey == m2.Key, "the tank bot picks the monster hitting the healer, not the one hitting itself");
+    var guardCasts = guard.Brain.CastsAccepted;
+    await Run(200, () => guard.Brain.CastsAccepted > guardCasts && m2.Hp < Sturdy);
+    var dealt = Sturdy - m2.Hp;
+    var m2Brain = supAi.Brains[m2.Key];
+    Check(dealt > 0 && m2Brain.Hate.GetValueOrDefault(guard.Session.PlayerKey) == (long)Math.Round(dealt * embeddedRotations.TankHateMultiplier)
+          && m2Brain.VictimKey == guard.Session.PlayerKey, $"the tank's hits count x{embeddedRotations.TankHateMultiplier} in the hate table and the monster turns to it ({dealt} damage, {m2Brain.Hate.GetValueOrDefault(guard.Session.PlayerKey)} hate)");
+    await squad.CommandAsync(chief, "assist", t, default);
+    m2.Hp = Math.Min(m2.Hp, m2.HpMax);
+    await Run(1500, () => m2.Dead && m3.Dead);
+
+    // Party dungeons: the leader uses Krao Cave's portal on map 1010; the bots in its party follow with the same portal request.
+    var portals = WorldObjects.ObjectsOn(1010);
+    var kraoAt = portals.Select((o, i) => (o, i)).First(x => x.o.Env == 1400551);
+    chief.Teleport(1010, kraoAt.o.At with { X = kraoAt.o.At.X + 50 }, t);
+    await chief.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    await Run(40);
+    Check(squad.All.All(b => b.Session.MapId == 1010), "the bots followed the leader to map 1010");
+    await chief.HandleAsync(new PacketWriter().U16(0x3636).Varint((uint)(WorldObjects.FirstKey + kraoAt.i)).ToArray(), t);
+    await chief.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    Check(chief.MapId == 600002 && chief.InstanceKey != 0, "the leader is inside Krao Cave");
+    await Run(200, () => squad.All.All(b => b.Session.InstanceKey == chief.InstanceKey));
+    Check(squad.All.All(b => b.Session.MapId == 600002 && b.Session.InstanceKey == chief.InstanceKey && b.Note is null),
+          "the bots in its party enter the same copy through the portal (the normal entry path)");
+    Check(squad.All.All(b => b.Session.SharedMap == chief.SharedMap), "they share the leader's copy of the map");
+    await chief.HandleAsync([0x04, 0x40], t);
+    await chief.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    await Run(100, () => squad.All.All(b => b.Session.InstanceKey == 0 && b.Session.MapId == 1010));
+    Check(chief.MapId == 1010 && squad.All.All(b => b.Session.InstanceKey == 0 && b.Session.MapId == 1010), "when the leader leaves the copy, the bots leave it too (0x4004)");
+    chief.ExitSharedWorld();
+    await squad.OwnerLeftAsync(chief);
+}
+Console.WriteLine($"{checks} playerbot checks passed (Aion:Bots).");
+
+// ---------- Progression past the recovered tables (progression.json, OURS; docs/PROGRESSION.md) ----------
+checks = 0;
+{
+    var progressionWorld = new SharedWorld(data);
+    async Task<GameSession> LevelSession(uint creation, int level, string name)
+    {
+        var session = new GameSession(data, new GameSessionOptions { World = progressionWorld, TrainingDummy = true, CharacterLevel = level }, new Random(5));
+        await session.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+        await session.HandleAsync(new PacketWriter().U16(0x361b).String(name).U8(1).U32(creation).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
+        await session.HandleAsync(select, Now);
+        await session.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+        return session;
+    }
+    var progression = data.Progression;
+    // Unlocks: the recovered SkillAcquireData rows end at 25; the OURS rows go on to the level cap.
+    var oursFirst = progression.Unlocks("Gladiator")[0];
+    var known25 = data.LearnedSkills("Gladiator", 25).Select(k => k.SkillId).ToHashSet();
+    Check(oursFirst[1] > 25 && !known25.Contains(oursFirst[0]) && data.LearnedSkills("Gladiator", oursFirst[1]).Any(k => k.SkillId == oursFirst[0]),
+          $"skill {oursFirst[0]} unlocks at level {oursFirst[1]} (> 25), not before");
+    foreach (var cls in new[] { "Gladiator", "Templar", "Assassin", "Cleric", "Ranger", "Elementalist", "Sorcerer", "Chanter" })
+        Check(data.LearnedSkills(cls, data.MaxLevel).Count > data.LearnedSkills(cls, 25).Count
+              && progression.Unlocks(cls).All(u => u[1] > 25 && u[1] <= data.MaxLevel && data.Skill(u[0]) is not null)
+              && data.LearnedSkills(cls, data.MaxLevel).Count <= 127, $"{cls}: unlocks continue to the level cap, every one with cast data");
+    // Fallback damage rows: an OURS definition for an unlock past 25, and rows for a recovered skill whose export has none.
+    var fallbackActive = progression.Unlocks("Gladiator").Select(u => u[0]).First(id => data.Skill(id) is { Type: "Active", Damage.Length: > 0 });
+    Check(data.FallbackDamage(fallbackActive) && data.FallbackDamage(17150000) && data.Skill(17150000)!.Name == "Divine Aura"
+          && data.Skill(17150000)!.Damage.Length > 0 && !data.FallbackDamage(11010000), "fallback damage rows: OURS definitions and Divine Aura; recovered rows stay");
+    var gladiator30 = await LevelSession(1, 30, "Glad");
+    var progressionDummy = gladiator30.Targets[Combat.TrainingDummyKey];
+    var progressionHpBefore = progressionDummy.Hp;
+    var fallbackCast = await gladiator30.HandleAsync(Cast(fallbackActive, Combat.TrainingDummyKey, progressionDummy.Position), Now + 1_000);
+    Check(fallbackCast[0][3] == 0 && progressionDummy.Hp < progressionHpBefore && fallbackCast.Any(b => Op(b) == 0x3804 && b.AsSpan().IndexOf(BitConverter.GetBytes(fallbackActive * 100 + 11)) > 0),
+          "a level-30 Gladiator casts an OURS unlock: its fallback row hits the progressionDummy (0x3804, effect skill x 100 + 11)");
+    // Skill levels raise damage (same rolls) and heals use the same scale.
+    var weapon = data.StarterWeapon(data.Profile(1, 1)!);
+    var level1 = Combat.SkillHits(data, 11010000, "Gladiator", 30, weapon, 0, new Random(9)).Sum(h => h.Amount);
+    var level5 = Combat.SkillHits(data, 11010000, "Gladiator", 30, weapon, 0, new Random(9), skillLevel: 5).Sum(h => h.Amount);
+    var level10 = Combat.SkillHits(data, 11010000, "Gladiator", 30, weapon, 0, new Random(9), skillLevel: 10).Sum(h => h.Amount);
+    Check(level1 < level5 && level5 < level10 && progression.SkillLevelScale(1) == 1.0, $"damage grows with the skill level ({level1} < {level5} < {level10})");
+    Check(data.SkillLevelCost(fallbackActive, 2) is { Cost: 1 } cost2 && cost2.NeedLevel > oursFirst[1] - 1, "fallback skills can be levelled (OURS ladder)");
+    // MPMax: 1500 at level 1 (OBSERVED), growing with the level; the stat sheet keeps its layout.
+    var gladiator1 = await LevelSession(1, 1, "Low");
+    var cleric30 = await LevelSession(4, 30, "Healer");
+    Check(gladiator1.Resource.MpMax == GameSession.MpMaxBase && gladiator30.Resource.MpMax > gladiator1.Resource.MpMax
+          && gladiator30.Resource.MpMax == progression.MpMax("Gladiator", 30) && cleric30.Resource.MpMax > gladiator30.Resource.MpMax,
+          $"MP max differs by level and class ({gladiator1.Resource.MpMax}, {gladiator30.Resource.MpMax}, Cleric {cleric30.Resource.MpMax})");
+    var sheet30 = (await gladiator30.HandleAsync([0x48, 0x36], Now + 2_000)).Single(b => Op(b) == 0x3649);
+    var mpStat = new PacketWriter().U16(199).I32(gladiator30.Resource.MpMax).ToArray();
+    Check(sheet30.Length == GamePackets.CharAllStats(GamePackets.DefaultStats, 1).Length && sheet30.AsSpan().IndexOf(mpStat) > 0,
+          "the stat sheet keeps the official layout and carries the level's MPMax (type 199)");
+    // Combat power: monotonic in every stat, and carried by the own appearance (0x3633 _combat_power, CANDIDATE).
+    var baseStats = new Dictionary<string, double> { ["level"] = 30, ["attack"] = 100, ["defense"] = 300, ["hp_max"] = 3000, ["mp_max"] = 2950, ["critical"] = 150, ["accuracy"] = 100, ["block"] = 0, ["item_level"] = 12 };
+    Check(baseStats.Keys.All(k => progression.CombatPower(new Dictionary<string, double>(baseStats) { [k] = baseStats[k] + 50 }) > progression.CombatPower(baseStats)),
+          "combat power rises with each stat (gear never lowers it)");
+    Check(gladiator30.CombatPower() > gladiator1.CombatPower() && gladiator30.Live().CombatPower == gladiator30.CombatPower(), "combat power grows with the level and is in the admin live view");
+    foreach (var s in new[] { gladiator30, gladiator1, cleric30 }) s.ExitSharedWorld();
+}
+Console.WriteLine($"{checks} progression checks passed (unlocks past 25, fallback damage, skill-level scaling, MP max, combat power).");
 
 int DarkCreation(GameData d) => Enumerable.Range(1, 64).First(c => d.Profile(c, 1) is { Race: 2 });
 
@@ -2567,6 +3509,20 @@ void Rejects(Action action, string name)
 
 sealed class FakeStore : INativeCharacterStore
 {
+    public List<DungeonEntryRecord> DungeonEntries { get; } = [];
+    public Task<IReadOnlyList<DungeonEntryRecord>> DungeonEntriesAsync(Guid character, CancellationToken ct) => Task.FromResult<IReadOnlyList<DungeonEntryRecord>>(DungeonEntries.ToList());
+    public Task<bool> SaveDungeonEntryAsync(Guid character, DungeonEntryRecord entry, CancellationToken ct)
+    {
+        DungeonEntries.RemoveAll(e => e.Period != entry.Period || e.DungeonId == entry.DungeonId);
+        DungeonEntries.Add(entry);
+        return Task.FromResult(true);
+    }
+    public Task<int> ResetDungeonEntriesAsync(Guid character, CancellationToken ct)
+    {
+        var removed = DungeonEntries.Count;
+        DungeonEntries.Clear();
+        return Task.FromResult(removed);
+    }
     public List<CharacterState> States { get; } = [];
     public List<CreatePlayer> Created { get; } = [];
     public List<int> SavedMaps { get; } = [];
@@ -2722,8 +3678,11 @@ sealed class FakeStore : INativeCharacterStore
         }
         return Task.FromResult(true);
     }
+    /// <summary>GrantLootAsync answers false (a full bag).</summary>
+    public bool RefuseLoot { get; set; }
     public Task<bool> GrantLootAsync(Guid character, IReadOnlyList<(int TemplateId, long Count)> items, CancellationToken ct)
     {
+        if (RefuseLoot) return Task.FromResult(false);
         var wire = Math.Max(Items.Count == 0 ? 0 : Items.Max(i => i.WireId) + 1, 5000);   // granted stacks keep clear of the fixtures' hand-picked wire keys
         var empty = System.Text.Json.JsonSerializer.SerializeToElement(new { });
         foreach (var (template, quantity) in items)

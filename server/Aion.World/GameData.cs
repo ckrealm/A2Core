@@ -176,10 +176,13 @@ public sealed class GameData
     /// <summary>The skill points a character of the level has in all (Exp.dat BonusSkillPoint, cumulative; CANDIDATE).</summary>
     public int SkillPoints(int level) => levels.Value.SkillPoints?.GetValueOrDefault(level.ToString(System.Globalization.CultureInfo.InvariantCulture)) ?? 0;
 
-    /// <summary>A skill level bought with skill points (SkillAcquireData Mastery rows): its cost and the character level it needs; null when the level is not buyable.</summary>
+    /// <summary>A skill level bought with skill points (SkillAcquireData Mastery rows): its cost and the character level it needs; null when the level is not buyable. Fallback skills (progression.json, OURS) take their OURS ladder.</summary>
     public (int Cost, int NeedLevel)? SkillLevelCost(int skillId, int level) =>
-        classes.Levels?.GetValueOrDefault(skillId.ToString(System.Globalization.CultureInfo.InvariantCulture))?.FirstOrDefault(row => row.Length >= 3 && row[0] == level) is { } found
-            ? (found[1], found[2]) : null;
+        (classes.Levels?.GetValueOrDefault(skillId.ToString(System.Globalization.CultureInfo.InvariantCulture)) ?? Progression.Levels(skillId))
+            ?.FirstOrDefault(row => row.Length >= 3 && row[0] == level) is { } found ? (found[1], found[2]) : null;
+
+    /// <summary>The OURS progression table (tools/data/progression.json).</summary>
+    public ProgressionTable Progression => ProgressionTable.Embedded;
 
     readonly Dictionary<string, ItemInfo> items;
 
@@ -268,17 +271,34 @@ public sealed class GameData
 
     public StarterProfile? Profile(int creationId, int gender) => profiles.GetValueOrDefault($"{creationId}:{gender}");
 
-    /// <summary>Skills known at a level: (skill, highest skill level), sorted by skill ID.</summary>
+    /// <summary>
+    /// Skills known at a level: (skill, highest skill level), sorted by skill ID. The recovered SkillAcquireData unlocks end at
+    /// level 25; the class's OURS unlocks (progression.json) follow up to the level cap.
+    /// </summary>
     public IReadOnlyList<(int SkillId, int Level)> LearnedSkills(string className, int level)
     {
         var known = new SortedDictionary<int, int>();
-        var unlocks = (classes.Classes.GetValueOrDefault(className)?.Unlocks ?? []).Concat(classes.CommonUnlocks);
+        var unlocks = (classes.Classes.GetValueOrDefault(className)?.Unlocks ?? []).Concat(classes.CommonUnlocks).Concat(Progression.Unlocks(className));
         foreach (var u in unlocks)
             if (u[1] <= level) known[u[0]] = Math.Max(known.GetValueOrDefault(u[0]), u[2]);
         return known.Select(k => (k.Key, k.Value)).ToList();
     }
 
-    public SkillDefinition? Skill(int skillId) => classes.Skills.GetValueOrDefault(skillId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    /// <summary>
+    /// A skill's cast data: the recovered Skill.dat summary (with OURS Damage rows when its export has none and progression.json
+    /// lists a fallback), else the OURS fallback definition of a skill unlocked after level 25, else null.
+    /// </summary>
+    public SkillDefinition? Skill(int skillId)
+    {
+        if (classes.Skills.GetValueOrDefault(skillId.ToString(System.Globalization.CultureInfo.InvariantCulture)) is { } recovered)
+            return recovered.Damage.Length == 0 && Progression.FallbackDamage(skillId) is { Length: > 0 } rows ? recovered with { Damage = rows } : recovered;
+        return Progression.FallbackSkill(skillId);
+    }
+
+    /// <summary>Whether a skill's Damage rows are an OURS fallback (progression.json), not the export's.</summary>
+    public bool FallbackDamage(int skillId) => Skill(skillId) is { Damage.Length: > 0 }
+        && (Progression.FallbackDamage(skillId) is not null && classes.Skills.ContainsKey(skillId.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            || Progression.FallbackSkill(skillId) is not null && !classes.Skills.ContainsKey(skillId.ToString(System.Globalization.CultureInfo.InvariantCulture)));
 
     /// <summary>Level-one weapon of the class's weapon type for race 1 (Light) or 2 (Dark).</summary>
     public int? StarterWeapon(StarterProfile? profile) =>

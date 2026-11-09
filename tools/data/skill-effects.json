@@ -1,0 +1,25 @@
+{
+  "source": "OURS: a hand-made table, not extracted data. tools/data/class-skills.json keeps only the Damage rows of Skill.dat (tools/class_skills.py damage_rows); the heal, heal-over-time, stat and debuff rows of the same SkillEffect list were never exported, so every value here is our choice until they are.",
+  "regenerate": "With the client: research/local/game-catalog-v2/entries.jsonl (kind 'skills') carries each skill's SkillEffect rows under relationships.effects[].rows (EffectType + EffectValueList), the rows tools/class_skills.py reads for Damage. Extending damage_rows to the heal/abnormal EffectTypes (and tools/box_data.py _abnormals to the class skills' Abnormal_True ids: SkillAbnormal table-000 / SkillAbnormalEffect table-001) would replace this table with extracted values; the server reads the same fields from here.",
+  "formula": "heal = roll(flat) + power * roll(ratio) / 10000 + target HPMax * roll(hp_ratio) / 10000, power = the caster's weapon roll + FixingDamage (the attack of Combat.SkillHits). A dot tick is roll(flat) + power * roll(ratio) / 10000 against the NPC's defense like a hit.",
+  "targets": "self: the caster. friendly: the selected player when on the map, alive, within heal_range and not an enemy (same race or same party), else the caster; a selected hostile NPC or enemy player refuses the cast. enemy: the selected hostile NPC. dead_friendly: a dead friendly player in range.",
+  "heal_range": 2500,
+  "skills": {
+    "17100000": { "name": "Healing Light", "target": "friendly", "effects": [ { "type": "heal", "flat": [100, 120], "ratio": [10000, 10000], "hp_ratio": [1500, 1500] } ] },
+    "17120000": { "name": "Radiant Recovery", "target": "self", "effects": [ { "type": "heal", "flat": [150, 180], "ratio": [15000, 15000], "hp_ratio": [2500, 2500] } ] },
+    "17090000": { "name": "Light of Regeneration", "target": "friendly", "effects": [ { "type": "hot", "duration_ms": 10000, "interval_ms": 2000, "flat": [20, 20], "ratio": [3000, 3000], "hp_ratio": [300, 300] } ] },
+    "18120000": { "name": "Recuperation", "target": "self", "effects": [ { "type": "heal", "flat": [120, 140], "ratio": [12000, 12000], "hp_ratio": [2000, 2000] } ] },
+    "15310000": { "name": "Wish of Concentration", "target": "self", "effects": [ { "type": "buff", "duration_ms": 15000, "stats": { "FixingDamage": 30, "MPUseDecrease": 3000 } } ] },
+    "11260000": { "name": "Defiance", "target": "self", "effects": [ { "type": "buff", "duration_ms": 10000, "stats": { "Defense": 200 } } ] },
+    "12260000": { "name": "Defiance", "target": "self", "effects": [ { "type": "buff", "duration_ms": 10000, "stats": { "Defense": 200 } } ] },
+    "13260000": { "name": "Defiance", "target": "self", "effects": [ { "type": "buff", "duration_ms": 10000, "stats": { "Defense": 200 } } ] },
+    "14260000": { "name": "Defiance", "target": "self", "effects": [ { "type": "buff", "duration_ms": 10000, "stats": { "Defense": 200 } } ] },
+    "15240000": { "name": "Defiance", "target": "self", "effects": [ { "type": "buff", "duration_ms": 10000, "stats": { "Defense": 200 } } ] },
+    "16200000": { "name": "Defiance", "target": "self", "effects": [ { "type": "buff", "duration_ms": 10000, "stats": { "Defense": 200 } } ] },
+    "17240000": { "name": "Defiance", "target": "self", "effects": [ { "type": "buff", "duration_ms": 10000, "stats": { "Defense": 200 } } ] },
+    "18200000": { "name": "Defiance", "target": "self", "effects": [ { "type": "buff", "duration_ms": 10000, "stats": { "Defense": 200 } } ] },
+    "17080000": { "name": "Debilitating Mark", "target": "enemy", "effects": [ { "type": "debuff", "duration_ms": 10000, "damage_taken": 1500 } ] },
+    "17070000": { "name": "Chain of Torment", "target": "enemy", "effects": [ { "type": "dot", "duration_ms": 8000, "interval_ms": 2000, "flat": [20, 20], "ratio": [3000, 3000] } ] },
+    "15280000": { "name": "Bittercold Wind", "target": "enemy", "effects": [ { "type": "debuff", "duration_ms": 6000, "speed": 5000 } ] }
+  }
+}

@@ -10,6 +10,11 @@ knows every auto-learned acquisition for its class and for all classes
 (ECharacterClass::None) whose NeedCharacterLevel is at most the character level,
 without ascension or other prerequisites. Skill-point upgrades (skill levels 2+),
 stigma-point skills and ascension skills are separate systems and stay locked.
+
+The auto-learned rows end at level 25. The rest of each class kit (the skills the client's
+developer button Class_<class> teaches) unlocks by level from 26 to the cap through the OURS
+table tools/data/progression.json (tools/progression.py); `install` seeds both into
+game.skill_unlocks (docs/PROGRESSION.md).
 """
 import json
 from collections import Counter
@@ -18,6 +23,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / 'tools/data/class-skills.json'
+PROGRESSION = ROOT / 'tools/data/progression.json'
 TABLES = ROOT / 'research/local/starter-skills-tables'
 CATALOG = ROOT / 'research/local/game-catalog-v2/entries.jsonl'
 COMMON = 'None'
@@ -33,6 +39,10 @@ def damage_rows(entry):
     Candidate reading of EffectValueList (not a recovered formula): [0..1] flat damage
     min/max, [2..3] weapon-attack ratio min/max in 1/10000, [4] kept raw; [21..24] the
     same four values again, read as the player-vs-player variant.
+
+    Only Damage rows are kept: the heal, Abnormal_True (buff/debuff) and other EffectTypes of the same
+    relationships.effects rows are not exported yet, so the server's heals and buffs come from the hand-made
+    tools/data/skill-effects.json (OURS). Exporting those rows here would let that table be generated.
     """
     rows = []
     for group in entry.get('relationships', {}).get('effects', []):
@@ -130,18 +140,34 @@ def data():
     return json.loads(DATA.read_text(encoding='utf-8'))
 
 
+@lru_cache(maxsize=1)
+def progression():
+    """The OURS part of the kit (tools/data/progression.json 'generated', written by tools/progression.py)."""
+    return json.loads(PROGRESSION.read_text(encoding='utf-8')).get('generated', {})
+
+
+def class_unlocks(class_name):
+    """[skill, need level, skill level] of a class: the recovered rows (to level 25), then the OURS rows to the cap."""
+    return data()['classes'].get(class_name, {}).get('unlocks', []) + progression().get('unlocks', {}).get(class_name, [])
+
+
 def learned_skills(class_name, level):
     """[(skill_id, skill_level)] known at `level`, sorted by skill ID."""
     known = {}
     rules = data()
-    for skill, need, skill_level in rules['classes'].get(class_name, {}).get('unlocks', []) + rules['common_unlocks']:
+    for skill, need, skill_level in class_unlocks(class_name) + rules['common_unlocks']:
         if need <= level:
             known[skill] = max(known.get(skill, 0), skill_level)
     return sorted(known.items())
 
 
 def skill(skill_id):
-    return data()['skills'].get(str(skill_id))
+    """Recovered cast data (with OURS Damage rows where the export has none), else an OURS fallback definition."""
+    recovered = data()['skills'].get(str(skill_id))
+    if recovered is None:
+        return progression().get('skills', {}).get(str(skill_id))
+    rows = progression().get('damage', {}).get(str(skill_id))
+    return dict(recovered, damage=rows) if rows and not recovered['damage'] else recovered
 
 
 def starter_weapon(class_name, race):
@@ -168,7 +194,7 @@ def unlock_rows():
     rows = []
     for creation, name in sorted(classes.items()):
         lowest = {}
-        for skill_id, need, skill_level in data()['classes'].get(name, {}).get('unlocks', []) + data()['common_unlocks']:
+        for skill_id, need, skill_level in class_unlocks(name) + data()['common_unlocks']:
             if skill_id not in lowest or need < lowest[skill_id][0]:
                 lowest[skill_id] = (need, skill_level)
         rows += [(creation, skill_id, need, skill_level) for skill_id, (need, skill_level) in sorted(lowest.items())]
@@ -202,6 +228,13 @@ def main(argv=None):
         for name, cls in result['classes'].items():
             print(f"{name}: {len(cls['unlocks'])} unlocks, weapon {cls['weapon_type']} {cls['starter_weapons']}")
         print(f"{len(result['common_unlocks'])} common unlocks, {len(result['skills'])} skills, max level {result['max_level']}")
+        # The OURS unlocks and fallbacks past level 25 derive from this table: keep them in step.
+        try:
+            from . import progression as ours
+        except ImportError:
+            import progression as ours
+        ours.regenerate()
+        print('progression.json regenerated (OURS unlocks past level 25, fallback skills)')
         return
     try:
         from .postgres_dev import sql, literal
@@ -215,7 +248,15 @@ def main(argv=None):
     found = {int(v) for v in sql(f'SELECT template_id FROM catalog.skills WHERE build_id={literal(build_id)};').stdout.split()}
     missing = sorted({s for _, s, _, _ in rows} - found)
     if missing:
-        raise SystemExit(f'Catalogue build lacks {len(missing)} unlock skills, e.g. {missing[:5]}')
+        # OURS unlocks (tools/data/progression.json) come from the client's developer kits; a catalogue without one
+        # of them only loses that unlock. Recovered unlocks stay strict.
+        ours = {s for unlocks in json.loads((ROOT / 'tools/data/progression.json').read_text(encoding='utf-8'))
+                .get('generated', {}).get('unlocks', {}).values() for s, *_ in unlocks}
+        strict = [s for s in missing if s not in ours]
+        if strict:
+            raise SystemExit(f'Catalogue build lacks {len(strict)} unlock skills, e.g. {strict[:5]}')
+        print(f'Warning: skipping {len(missing)} OURS unlock skills the catalogue lacks: {missing[:10]}')
+        rows = [r for r in rows if r[1] not in set(missing)]
     synced = sql(install_statements(build_id, rows)).stdout.split()
     print(f'Installed {len(rows)} unlock rows for {len({c for c, *_ in rows})} creation IDs; '
           f'resynced {synced[-1] if synced else 0} characters.')

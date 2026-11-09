@@ -25,7 +25,8 @@ Not included: the client archive key. You only need it to extract new or updated
 |---|---|
 | `server/` | The .NET 10 host: account site and API, platform bootstrap, login (3700), game (13328), chat, NCGuard sink. `Aion.World` is the game logic, `Aion.Protocol` the packet layer. |
 | `launcher/` | The Windows launcher (WinForms, single-file exe). See `launcher/README.md`. |
-| `deploy/linux/` | `install.sh` / `update.sh` and systemd units for an Ubuntu server. See `deploy/linux/README.md`. |
+| `deploy/linux/` | `install.sh` / `update.sh`, `backup.sh` / `restore.sh` and systemd units for an Ubuntu server. See `deploy/linux/README.md`. |
+| `deploy/windows/` | Hosting on a Windows 11 PC for friends over Tailscale (WSL2 Ubuntu 24.04). See `deploy/windows/README.md`. |
 | `database/` | PostgreSQL migrations. |
 | `web/` | The account page and staff dashboard (React), built into the host. |
 | `tools/` | Python and .NET tools: client data extraction (`WorldProbe`, `TerrainProbe`, `NavProbe`, `AssetProbe`, ...), table builders (`quests.py`, `world_npcs.py`, `world_objects.py`, `map_events.py`, ...), database setup (`postgres_dev.py`), packet tools. |

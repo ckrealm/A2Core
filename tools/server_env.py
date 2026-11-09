@@ -3,7 +3,7 @@
 Reads the database credentials made by `postgres_dev.py setup` (AION_PG_HOME) and the
 server data directory unpacked from `pack_server_data.py`, and prints KEY=VALUE lines:
 database connections, bind/public addresses, HTTPS, the native ports, chat, the platform
-bootstrap and the NCGuard sink. Contains passwords: write it to a file only root and the
+bootstrap, the NCGuard sink and, when given, the rates and host rules. Contains passwords: write it to a file only root and the
 service account can read.
 """
 import argparse
@@ -101,7 +101,58 @@ def environment(args, credentials):
     env['Aion__Web__StaffPath'] = getattr(args, 'staff_path', None) or '/' + ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(16))
     for index, map_id in enumerate(args.preload):
         env[f'Aion__Native__PreloadMaps__{index}'] = map_id
+    env.update(gameplay(args))
     return env
+
+
+# Rates and host switches (OURS: the server owner's choice). Each is written only when given, so the host's defaults
+# (official rates, PvP on, 30 s respawn, round-robin party loot, fallback loot on, no player cap, no dungeon entry limits,
+# untracked objectives done after 30 s) apply otherwise.
+GAMEPLAY = {
+    'rates_profile': 'Aion__Rates__Profile',
+    'exp_rate': 'Aion__Rates__Experience',
+    'quest_exp_rate': 'Aion__Rates__QuestExperience',
+    'kinah_rate': 'Aion__Rates__Kinah',
+    'drop_rate': 'Aion__Rates__Drop',
+    'max_players': 'Aion__Native__MaxPlayers',
+    'respawn_seconds': 'Aion__Rules__RespawnSeconds',
+    'pvp': 'Aion__Rules__Pvp',
+    'party_loot': 'Aion__Rules__PartyLoot',
+    'fallback_loot': 'Aion__Rules__FallbackLoot',
+    'dungeon_limits': 'Aion__Dungeons__EntryLimits',
+    'dungeon_entries': 'Aion__Dungeons__DailyEntries',
+    'dungeon_reset_hour': 'Aion__Dungeons__ResetHour',
+    'untracked_objective_seconds': 'Aion__Dungeons__UntrackedObjectiveSeconds',
+}
+
+
+def gameplay(args):
+    env = {}
+    for name, key in GAMEPLAY.items():
+        value = getattr(args, name, None)
+        if value is None:
+            continue
+        if name in ('pvp', 'fallback_loot', 'dungeon_limits'):
+            value = 'true' if value == 'on' else 'false'
+        env[key] = value
+    # Per-dungeon daily entries (Dungeon.dat id or name = count, 0 no limit): Aion:Dungeons:Entries:<dungeon>.
+    for dungeon, count in getattr(args, 'dungeon_entry', None) or []:
+        env[f'Aion__Dungeons__Entries__{dungeon}'] = count
+    return env
+
+
+def dungeon_entry(text):
+    name, _, count = text.partition('=')
+    if not name or not all(c.isalnum() or c in '_-' for c in name) or not count.isdigit() or int(count) > 1000:
+        raise argparse.ArgumentTypeError('a dungeon entry override is <Dungeon.dat id or name>=<0-1000>')
+    return name, int(count)
+
+
+def rate(text):
+    value = float(text)
+    if not 0 <= value <= 100:
+        raise argparse.ArgumentTypeError('a rate must be between 0 and 100')
+    return value
 
 
 def main(argv=None):
@@ -118,6 +169,29 @@ def main(argv=None):
     parser.add_argument('--staff-path', help='staff dashboard address, e.g. /k3x9... (default: a new random one)')
     parser.add_argument('--max-connections', type=int, default=200, help='per native port')
     parser.add_argument('--preload', type=int, nargs='*', default=[1000], help='maps loaded at startup')
+    rates = parser.add_argument_group('rates and rules (unset: the host defaults)')
+    rates.add_argument('--rates-profile', choices=['official', 'accelerated'],
+                       help='official: all rates 1; accelerated: experience 5, Kinah 3, drops 3 (explicit rates override)')
+    rates.add_argument('--exp-rate', type=rate, help='kill experience multiplier')
+    rates.add_argument('--quest-exp-rate', type=rate, help='quest experience multiplier (default: the experience rate)')
+    rates.add_argument('--kinah-rate', type=rate, help='Kinah gained from quests, drops, chests and rewards')
+    rates.add_argument('--drop-rate', type=rate, help='loot table rolls per kill')
+    rates.add_argument('--max-players', type=int, help='refuse logins beyond this many players (0: no cap)')
+    rates.add_argument('--respawn-seconds', type=int, help='monster respawn after a kill (5-3600, default 30)')
+    rates.add_argument('--pvp', choices=['on', 'off'], help='duels, arenas and Abyss player damage (default on)')
+    rates.add_argument('--party-loot', choices=['freeforall', 'roundrobin', 'killer'],
+                       help="a party member's kill: items to a random member nearby, to members in turn (default), or all to the killer")
+    rates.add_argument('--fallback-loot', choices=['on', 'off'],
+                       help='monsters without a reward table drop generic items of their level (default on)')
+    dungeons = parser.add_argument_group('dungeons (unset: the host defaults, entry limits off)')
+    dungeons.add_argument('--dungeon-limits', choices=['on', 'off'],
+                          help='daily entry limits for expeditions, awakening, daily dungeons and raids (default off)')
+    dungeons.add_argument('--dungeon-entries', type=int, help='entries a day per limited dungeon (default 3; 0 no limit)')
+    dungeons.add_argument('--dungeon-entry', type=dungeon_entry, action='append', metavar='DUNGEON=N',
+                          help='entries a day for one dungeon (Dungeon.dat id or name; 0 no limit); repeatable')
+    dungeons.add_argument('--dungeon-reset-hour', type=int, help='server local hour the daily counts reset (0-23, default 9)')
+    dungeons.add_argument('--untracked-objective-seconds', type=int,
+                          help='map-event objectives the server cannot follow count as done after this long (1-3600, default 30)')
     parser.add_argument('--geolocation', default='59.9139,10.7522,NO', metavar='LAT,LON,CC',
                         help="server location for the region screen ('off' to omit)")
     args = parser.parse_args(argv)
@@ -129,6 +203,16 @@ def main(argv=None):
         parser.error('--public-address must be a non-loopback IPv4 address')
     if args.certificate and not args.key:
         parser.error('--certificate needs --key')
+    if args.max_players is not None and args.max_players < 0:
+        parser.error('--max-players must be 0 or more')
+    if args.respawn_seconds is not None and not 5 <= args.respawn_seconds <= 3600:
+        parser.error('--respawn-seconds must be between 5 and 3600')
+    if args.dungeon_entries is not None and not 0 <= args.dungeon_entries <= 1000:
+        parser.error('--dungeon-entries must be between 0 and 1000')
+    if args.dungeon_reset_hour is not None and not 0 <= args.dungeon_reset_hour <= 23:
+        parser.error('--dungeon-reset-hour must be between 0 and 23')
+    if args.untracked_objective_seconds is not None and not 1 <= args.untracked_objective_seconds <= 3600:
+        parser.error('--untracked-objective-seconds must be between 1 and 3600')
     if args.staff_path is not None and (len(args.staff_path) < 9 or not args.staff_path.startswith('/')
                                         or not all(c.isalnum() or c in '-_' for c in args.staff_path[1:])):
         parser.error('--staff-path must be / followed by at least 8 letters, digits, - or _')

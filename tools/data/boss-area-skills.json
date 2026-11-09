@@ -1,0 +1,137 @@
+{
+  "source": "OURS: a hand-made table, not extracted data. tools/data/world-npcs.json npc_skills keeps each NPC skill's range, follow range, cooldown, cast and damage effect (tools/world_npcs.py npc_skills) but not its target shape or target count, so every monster skill hits its one victim. The bosses listed here (the final bosses of the expeditions and raids with a reward cube, tools/data/map-events.json dungeons[].cube_boss, that have a special besides their basic attack) hit every player within radius of the boss with their specials instead: the victim and the others nearest first, up to max_targets players, each with its own damage roll and defense and the same per-target hit message (0x3804). A boss not listed, and the basic attack (the first damaging skill of ActiveSkillList), keep the single-target hit.",
+  "regenerate": "With the client: Skill.dat TargetRangeType / TargetMaxCount (and the SkillEffect area rows) of the bosses' skills would replace this table with extracted values; extend tools/world_npcs.py npc_skills to keep them and read them in NpcAi instead. 'skills' (optional) names the area skills of a boss; absent means every damaging skill but the basic attack.",
+  "radius_units": "game units (100 = 1 m), measured from the boss's centre to the player's, plus the boss's collision radius",
+  "bosses": {
+    "2300171": {
+      "dungeon": "KraoCave_Normal (600001, Party)",
+      "radius": 500,
+      "max_targets": 4
+    },
+    "2310171": {
+      "dungeon": "KraoCave_Easy (600002, Party)",
+      "radius": 500,
+      "max_targets": 4
+    },
+    "2320171": {
+      "dungeon": "KraoCave_Hard (600004, Party)",
+      "radius": 500,
+      "max_targets": 4
+    },
+    "2310218": {
+      "dungeon": "Urugugu_Canyon_Easy (600011, Party)",
+      "radius": 500,
+      "max_targets": 4
+    },
+    "2300218": {
+      "dungeon": "Urugugu_Canyon_Normal (600012, Party)",
+      "radius": 500,
+      "max_targets": 4
+    },
+    "2320218": {
+      "dungeon": "Urugugu_Canyon_Hard (600013, Party)",
+      "radius": 500,
+      "max_targets": 4
+    },
+    "2310371": {
+      "dungeon": "Fire_Temple_Easy (600021, Party)",
+      "radius": 500,
+      "max_targets": 4
+    },
+    "2300371": {
+      "dungeon": "Fire_Temple_Normal (600022, Party)",
+      "radius": 500,
+      "max_targets": 4
+    },
+    "2320371": {
+      "dungeon": "Fire_Temple_Hard (600023, Party)",
+      "radius": 500,
+      "max_targets": 4
+    },
+    "2310471": {
+      "dungeon": "Draupnir_Easy (600031, Party)",
+      "radius": 500,
+      "max_targets": 4
+    },
+    "2300471": {
+      "dungeon": "Draupnir_Normal (600032, Party)",
+      "radius": 500,
+      "max_targets": 4
+    },
+    "2320471": {
+      "dungeon": "Draupnir_Hard (600033, Party)",
+      "radius": 500,
+      "max_targets": 4
+    },
+    "2320601": {
+      "dungeon": "DeusCenter_G_01 (600053, Party)",
+      "radius": 500,
+      "max_targets": 4
+    },
+    "2340601": {
+      "dungeon": "DeusCenter_G_03 (600055, Party)",
+      "radius": 500,
+      "max_targets": 4
+    },
+    "2343601": {
+      "dungeon": "DeusCenter_G_06 (600058, Party)",
+      "radius": 500,
+      "max_targets": 4
+    },
+    "2330709": {
+      "dungeon": "Arkanis_G_01 (600063, Party)",
+      "radius": 500,
+      "max_targets": 4
+    },
+    "2350709": {
+      "dungeon": "Arkanis_G_03 (600065, Party)",
+      "radius": 500,
+      "max_targets": 4
+    },
+    "2353709": {
+      "dungeon": "Arkanis_G_06 (600068, Party)",
+      "radius": 500,
+      "max_targets": 4
+    },
+    "2310812": {
+      "dungeon": "BakronIsland_Easy (600071, Party)",
+      "radius": 500,
+      "max_targets": 4
+    },
+    "2300812": {
+      "dungeon": "BakronIsland_Normal (600072, Party)",
+      "radius": 500,
+      "max_targets": 4
+    },
+    "2320812": {
+      "dungeon": "BakronIsland_Hard (600073, Party)",
+      "radius": 500,
+      "max_targets": 4
+    },
+    "2310910": {
+      "dungeon": "HornCave_Easy (600091, Party)",
+      "radius": 500,
+      "max_targets": 4
+    },
+    "2300910": {
+      "dungeon": "HornCave_Normal (600092, Party)",
+      "radius": 500,
+      "max_targets": 4
+    },
+    "2320910": {
+      "dungeon": "HornCave_Hard (600093, Party)",
+      "radius": 500,
+      "max_targets": 4
+    },
+    "2346601": {
+      "dungeon": "DeusCenter_G_09 (610052, Party)",
+      "radius": 500,
+      "max_targets": 4
+    },
+    "2356709": {
+      "dungeon": "Arkanis_G_09 (610062, Party)",
+      "radius": 500,
+      "max_targets": 4
+    }
+  }
+}
