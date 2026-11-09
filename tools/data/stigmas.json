@@ -49,7 +49,7 @@
     "shards": 2
    }
   ],
-  "shards_about": "CANDIDATE: 1 shard per level from 23 to 39 and 2 per level from 40 to 45 (29 from levelling at 45), plus the Ascension quest's shard at 22 (given at level 22: the quest gate is not modelled). Global's other sources (Abyss, Nightmare and Shugo Festival shops, achievements) are not modelled: Aion:Stigmas:ShardRate and the //stigma shards command stand in for them.",
+  "shards_about": "CANDIDATE: 1 shard per level from 23 to 39 and 2 per level from 40 to 45 (29 from levelling at 45), plus the Ascension quest's shard at 22 (given at level 22: the quest gate is not modelled). Global's other sources (Abyss, Nightmare and Shugo Festival shops, achievements) are not modelled: Aion:Stigmas:ShardRate and the /stigma shards command stand in for them.",
   "skill_level_damage": {
    "per_level": 500
   },

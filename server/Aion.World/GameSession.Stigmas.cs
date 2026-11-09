@@ -214,7 +214,7 @@ public sealed partial class GameSession
         botStigmas.AddRange(picks.Where(stigmas.ContainsKey));
     }
 
-    /// <summary>The stigma line of the //stigma command: shards, slots and the learned stigmas.</summary>
+    /// <summary>The stigma line of the /stigma command: shards, slots and the learned stigmas.</summary>
     public string StigmaSummary()
     {
         if (!StigmaRules.Enabled) return "Stigmas are off on this server (Aion:Stigmas:Enabled).";

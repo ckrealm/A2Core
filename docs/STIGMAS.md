@@ -23,7 +23,7 @@ publishes nothing.
   unlocks at stigma levels 5, 10, 15 and 20 are not modelled: their effects are not in our data.
 - **Reset.** Resetting a stigma, or all of them, forgets it, refunds every shard and clears its slot. It is free (OURS;
   global's price is not published, and Korea's has been free since Chapter 1). Taking one level back also refunds it.
-- **`//stigma`** in chat shows any player their shards, open slots and stigmas.
+- **`/stigma`** in chat shows any player their shards, open slots and stigmas.
 - **Playerbots** buy and slot their own stigmas with their shards at their level, damage stigmas first, raised evenly.
   They cast them when no rotation entry fits. Bot stigmas are not saved.
 
