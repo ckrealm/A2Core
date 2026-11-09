@@ -3780,8 +3780,9 @@ checks = 0;
           && Result((await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionOpenNodeRq, 9999), Now))[0]) == GameSession.DaevanionNodeNotFound,
           "refusals: not next to an dvOpened node, level, already open, points, a level-50 board, another class's board, an unknown node");
     Check(Result((await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionResetBoardRq, 201), Now))[0]) == GameSession.DaevanionBoardInvalidClass
-          && Result((await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionResetBoardRq, 102), Now))[0]) == GameSession.DaevanionBoardNotEnoughLevel,
-          "board refusals: another class (15589), the level (15588)");
+          && Result((await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionResetBoardRq, 102), Now))[0]) == 0
+          && (await dvGlad.GrantDaevanionPointsAsync(1, -5, default)).Count == 0 && dvGlad.DaevanionPoints(1) == 20,
+          "board reset: another class is refused (15589); a board not reached yet resets (nothing to close); negative grants are refused");
     await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionOpenNodeRq, 1004), Now);
     Check(dvGlad.DaevanionSkillBonus(11010000) == 2 && dvGlad.DaevanionUsed(1) == 4, "a SkillLevel node adds its levels to the skill in combat");
     Check(Result((await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionCloseNodeRq, 1002), Now))[0]) == GameSession.DaevanionNodeNeighbourOpened

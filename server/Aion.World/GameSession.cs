@@ -1712,6 +1712,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         var kit = profile is null ? [] : data.LearnedSkills(profile.Class, level);
         learned = kit.Select(k => k.SkillId).ToHashSet();
         className = profile?.Class;
+        OpenFixedNodes();   // before the pools, the stat sheet and the passives are worked out
         var (mapId, at) = spawn ?? (GamePackets.SpawnMapId, GamePackets.SpawnPosition);
         worldMap = mapId;
         // Map geometry loads off the game loop; NPCs use it from the tick it is ready.

@@ -80,7 +80,8 @@ public sealed partial class GameSession
     public int DaevanionUsed(byte type) => daevanionNodes.Select(DaevanionData.Node).OfType<DaevanionNode>()
         .Where(n => !n.Fixed && DaevanionData.Board(n.Board)?.PointType == type).Sum(n => n.Cost);
 
-    public int DaevanionLeft(byte type) => DaevanionPoints(type) - DaevanionUsed(type);
+    /// <summary>Points left (never below 0, e.g. after Aion:Daevanion lowered the rate; the opened nodes stay).</summary>
+    public int DaevanionLeft(byte type) => Math.Max(0, DaevanionPoints(type) - DaevanionUsed(type));
 
     static byte[] PointList(ushort opcode, Func<byte, int> value)
     {
@@ -107,7 +108,6 @@ public sealed partial class GameSession
     /// <summary>The world entry's Daevanion messages: the boards, the used points and (when any) the bonus points.</summary>
     List<byte[]> DaevanionAtEntry()
     {
-        OpenFixedNodes();
         var replies = new List<byte[]> { DaevanionPointUpdate(), DaevanionBoardInfo() };
         if (Enumerable.Range(1, DaevanionTables.PointTypes).Any(t => DaevanionBonus((byte)t) > 0)) replies.Add(DaevanionItemPoints());
         return replies;
@@ -249,7 +249,8 @@ public sealed partial class GameSession
         var boardId = BitConverter.ToInt32(plain, 2);
         byte[] Reply(ushort result) => PacketWriter.Opcode(DaevanionResetBoardRs).U16(result).I32(boardId).ToArray();
         if (DaevanionData.Board(boardId) is not { } board) return [Reply(DaevanionBoardInvalidData)];
-        if (BoardRefusal(board) is var refused and not 0) return [Reply(refused)];
+        // A board hidden later (Aion:Daevanion, a level cap) can still be reset to free its points; another class's cannot.
+        if (BoardRefusal(board) is DaevanionBoardInvalidClass) return [Reply(DaevanionBoardInvalidClass)];
         var closing = DaevanionData.NodesOf(boardId).Where(n => !n.Fixed && daevanionNodes.Contains(n.Id)).ToList();
         if (closing.Count == 0) return [Reply(0)];
         var (paid, changes) = await PayDaevanionAsync(closing.Sum(n => (long)n.ResetGold), DecreaseDaevanionBoardReset, ct);
@@ -417,8 +418,8 @@ public sealed partial class GameSession
     /// <summary>Daevanion points granted by staff or a reward (not an item): stored with the item points.</summary>
     public async Task<List<byte[]>> GrantDaevanionPointsAsync(byte type, int amount, CancellationToken ct)
     {
-        if (type is < 1 or > DaevanionTables.PointTypes || amount == 0) return [];
-        daevanionItemPoints[type] = Math.Max(0, daevanionItemPoints.GetValueOrDefault(type) + amount);
+        if (type is < 1 or > DaevanionTables.PointTypes || amount <= 0) return [];
+        daevanionItemPoints[type] = daevanionItemPoints.GetValueOrDefault(type) + amount;
         await SaveDaevanionAsync(ct);
         return [DaevanionItemPoints(), DaevanionPointUpdate()];
     }

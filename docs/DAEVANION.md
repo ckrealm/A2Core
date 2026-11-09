@@ -83,5 +83,4 @@ Failures use the client's EResult codes (kDaevanion_Node_* 15575-15584, kDaevani
   condition is not checked.
 - Primary and deity stats (STR, Justice, ...) are shown on the stat sheet but the server has no formula turning them into
   attack or defense yet.
-- A closed Passive node's abnormal stays until the next login.
 - Playerbots have no boards.
