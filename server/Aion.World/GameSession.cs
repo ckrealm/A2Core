@@ -2233,11 +2233,12 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
     /// The player's guard against a monster's hit (NpcAi.Guard): a dodge in progress or the evasion roll takes none of it, a block
     /// half; returns the damage taken.
     /// </summary>
-    internal int GuardHit(int damage, long now)
+    internal int GuardHit(int damage, long now, Random roll)
     {
         if (resources is null || dead || damage <= 0) return damage;
-        // Random.Shared: the shared map's AI tick calls this from another player's loop, so this session's rng is not safe here.
-        if (now < dodgingUntil || Random.Shared.NextDouble() < EvasionChance(className))
+        // The rolls use the calling AI's rng: the shared map's AI tick calls this from another player's loop, so this session's
+        // own rng is not safe here (and a seeded map AI keeps the checks deterministic).
+        if (now < dodgingUntil || roll.NextDouble() < EvasionChance(className))
         {
             LastEvadeAt = now;
             Evasions++;
@@ -2246,7 +2247,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         // The equipped gear's Block, plus the starter weapon a development login holds outside the inventory.
         var starter = inventory.Values.Any(i => i.Container == InventoryItem.Equipped && i.Slot == 1) ? 0 : data.Item(equippedWeapon)?.Stat("Block") ?? 0;
         var block = Math.Min(BlockCap, (EquippedItems().Sum(i => i.Stat("Block")) + starter) / 1000.0);
-        if (block > 0 && Random.Shared.NextDouble() < block)
+        if (block > 0 && roll.NextDouble() < block)
         {
             LastBlockAt = now;
             Blocks++;
@@ -3026,7 +3027,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
             {
                 aiMap.AiTickAt = now + 50;
                 aiMap.Ai.DefenseOf ??= key => aiMap.Players.TryGetValue(key, out var p) ? p.Session.Defense : 0;
-                aiMap.Ai.Guard ??= (key, damage, at) => aiMap.Players.TryGetValue(key, out var p) ? p.Session.GuardHit(damage, at) : damage;
+                aiMap.Ai.Guard ??= (key, damage, at, roll) => aiMap.Players.TryGetValue(key, out var p) ? p.Session.GuardHit(damage, at, roll) : damage;
                 aiMap.BroadcastAll(aiMap.Ai.Tick(aiMap.Targets, aiMap.NpcVictims(), now, (key, damage) =>
                 {
                     if (aiMap.Players.TryGetValue(key, out var victim)) victim.Send(victim.Session.NpcHitsPlayer(damage, now, aiMap.Ai.LastAttacker));
@@ -3039,7 +3040,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         }
         else if (targets is not null && (ai.DefenseOf ??= _ => Defense) is not null)
         {
-            ai.Guard ??= (_, damage, at) => GuardHit(damage, at);
+            ai.Guard ??= (_, damage, at, roll) => GuardHit(damage, at, roll);
             replies.AddRange(Visible(ai.Tick(targets, invisible || dead || FriendlyToAll ? null : position, now, damage => NpcHitsPlayer(damage, now, ai.LastAttacker))));
             replies.AddRange(NpcKillsByNpcs(ai, now));
         }

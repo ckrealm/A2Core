@@ -3425,7 +3425,7 @@ checks = 0;
           && rots.For("Assassin")!.Position == "behind" && rots.For("Templar")!.Position == "front"
           && rots.For("Cleric")!.RangeFor("heal") == 1500 && rots.For("Cleric")!.RangeFor("dps") == 1800,
           "bot-rotations.json: every class but the Cleric has an interrupt; positions and role ranges load");
-    var rotWorld = new SharedWorld(data);
+    var rotWorld = new SharedWorld(data, seed: 41);
     var rotOptions = new GameSessionOptions { World = rotWorld, TrainingDummy = true, CharacterLevel = 20 };
     long t = Now + 5_000_000;
     var lead = new GameSession(data, rotOptions, new Random(41));
@@ -3620,7 +3620,8 @@ checks = 0;
     var evadeBase = guard.Session.Evasions;
     guard.Session.SetResource('S', guard.Session.Resource.SpMax);
     Check(await guard.Session.HandleAsync(Cast(guard.Brain.DodgeSkill!.Value, guard.Session.PlayerKey, guard.Session.WorldPosition!.Value), t += 1000) is [var dodgeReply, ..] && dodgeReply[3] == 0
-          && guard.Session.GuardHit(100, t + 10) == 0 && guard.Session.GuardHit(100, t + GameSession.DodgeEvadeMs - 10) == 0 && guard.Session.Evasions == evadeBase + 2,
+          && guard.Session.GuardHit(100, t + 10, new FixedRoll(0.99)) == 0 && guard.Session.GuardHit(100, t + GameSession.DodgeEvadeMs - 10, new FixedRoll(0.99)) == 0
+          && guard.Session.GuardHit(100, t + GameSession.DodgeEvadeMs + 10, new FixedRoll(0.99)) == 100 && guard.Session.Evasions == evadeBase + 2,
           "a Dodge evades every monster hit for its first half second");
     rai.Brains[blast.Key].Pending = null;
     rai.AreaSkills = BossAreaSkills.Embedded;
@@ -3647,13 +3648,22 @@ checks = 0;
     rai.ForceAggro(pair.b, lead.PlayerKey, t);
     await Run(600, () => team.All.Any(b => b.Brain!.AreaCasts > 0));
     Check(team.All.Any(b => b.Brain!.AreaCasts > 0), "with two monsters on the group a melee bot casts an area skill around itself");
+    // Blocks and evasions (GameSession.GuardHit) with fixed rolls: under the class's evasion chance evades, under the gear's
+    // block chance blocks (half), above both lands whole; a block opens the after-block skill (Debilitating Smash).
+    var blocksBefore = guard.Session.Blocks;
+    var evadedBefore = guard.Session.Evasions;
+    Check(guard.Session.GuardHit(100, t, new FixedRoll(0.01)) == 0 && guard.Session.Evasions == evadedBefore + 1
+          && guard.Session.GuardHit(100, t, new FixedRoll(0.99)) == 100,
+          "a roll under the evasion chance evades the hit; a high roll lands it whole");
+    await Run(400, () => t >= guard.Session.CooldownUntil(12270000));
+    Check(guard.Session.GuardHit(100, t, new FixedRoll(0.1)) == (int)Math.Round(100 * GameSession.BlockTaken) && guard.Session.Blocks == blocksBefore + 1
+          && guard.Session.LastBlockAt == t, "the tank's sword blocks a roll under its block chance (half damage)");
+    var blockedAt = t;
+    await Run(60, () => guard.Brain!.CastLog.Any(c => c.Skill == 12270000 && c.At >= blockedAt));
+    Check(guard.Brain!.CastLog.Any(c => c.Skill == 12270000 && c.At >= blockedAt && c.At - blockedAt <= BotBrain.ComboWindowMs),
+          "then Debilitating Smash, its after-block skill (after_block)");
     await Run(2000, () => pair.a.Dead && pair.b.Dead);
     Check(pair.a.Dead && pair.b.Dead, "the party kills both");
-    // Blocks and evasions (GameSession.GuardHit): over these fights the tank blocked hits and someone evaded one; a blocked or
-    // evaded hit opens the after-block skill (Debilitating Smash for the Templar).
-    Check(guard.Session.Blocks > 0 && team.All.Sum(b => b.Session.Evasions) > 0,
-          $"monster hits are blocked ({guard.Session.Blocks}) and evaded ({team.All.Sum(b => b.Session.Evasions)})");
-    Check(guard.Brain!.CastLog.Any(c => c.Skill == 12270000), "the tank uses Debilitating Smash, its after-block skill (after_block)");
     lead.ExitSharedWorld();
     await team.OwnerLeftAsync(lead);
 }
@@ -4249,3 +4259,10 @@ sealed class FakeStore : INativeCharacterStore
 }
 
 sealed class FakeDbException() : System.Data.Common.DbException("constraint violated");
+
+/// <summary>A Random whose every NextDouble is one value (fixed block/evasion rolls in the checks).</summary>
+sealed class FixedRoll(double value) : Random
+{
+    public override double NextDouble() => value;
+    protected override double Sample() => value;
+}
