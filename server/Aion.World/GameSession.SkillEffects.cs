@@ -43,7 +43,7 @@ public sealed partial class GameSession
     /// </summary>
     int HealAmount(SkillEffect e, int targetHpMax, int skill) =>
         Math.Max(0, (int)Math.Round((RollRange(e.Flat, rng) + (double)SkillPower() * RollRange(e.Ratio, rng) / 10_000 + (double)targetHpMax * RollRange(e.HpRatio, rng) / 10_000)
-            * data.Progression.SkillLevelScale(SkillLevel(skill))));
+            * data.Progression.SkillLevelScale(CombatSkillLevel(skill))));
 
     /// <summary>
     /// The player a friendly skill lands on: another player on the map selected by key (alive, or dead for a resurrection; not an
@@ -167,7 +167,7 @@ public sealed partial class GameSession
                     break;
                 case "dot" when e.IntervalMs > 0:
                     dots.RemoveAll(d => d.Target == npc && d.Skill == skill);   // a recast renews it
-                    var raw = (RollRange(e.Flat, rng) + (double)SkillPower() * RollRange(e.Ratio, rng) / 10_000) * data.Progression.SkillLevelScale(SkillLevel(skill));
+                    var raw = (RollRange(e.Flat, rng) + (double)SkillPower() * RollRange(e.Ratio, rng) / 10_000) * data.Progression.SkillLevelScale(CombatSkillLevel(skill));
                     dots.Add(new Dot
                     {
                         Target = npc, Skill = skill, EffectId = data.Skill(skill)?.Damage.LastOrDefault()?.EffectId ?? 0, IntervalMs = e.IntervalMs,

@@ -3718,6 +3718,108 @@ checks = 0;
 }
 Console.WriteLine($"{checks} progression checks passed (unlocks past 25, fallback damage, skill-level scaling, MP max, combat power).");
 
+// ---------- Daevanion boards (docs/DAEVANION.md): a small board in the client tables' shape ----------
+checks = 0;
+{
+    const string boardJson = """
+    {"boards":{"101":{"class":"Gladiator","level":10,"order":1,"point":1,"reset":"Gold","title":"Nezakan"},
+               "102":{"class":"Gladiator","level":50,"order":2,"point":1,"reset":"Gold","title":"Later"},
+               "201":{"class":"Templar","level":10,"order":1,"point":1,"reset":"Gold","title":"Other"}},
+     "nodes":{"1001":{"b":101,"r":0,"c":0,"g":"Common","t":1,"auto":false,"lv":0,"ct":0,"cv":"","cost":0,"gold":0,"v":[],"n":"Start"},
+              "1002":{"b":101,"r":0,"c":1,"g":"Common","t":2,"auto":false,"lv":0,"ct":0,"cv":"","cost":2,"gold":1000,"v":["HPMax","500"],"n":"HP"},
+              "1003":{"b":101,"r":0,"c":2,"g":"Rare","t":2,"auto":false,"lv":0,"ct":0,"cv":"","cost":19,"gold":1000,"v":["EStat::Critical:40"],"n":"Crit"},
+              "1004":{"b":101,"r":1,"c":1,"g":"Rare","t":4,"auto":false,"lv":0,"ct":0,"cv":"","cost":2,"gold":1000,"v":["11010000","2"],"n":"Skill"},
+              "1005":{"b":101,"r":5,"c":5,"g":"Common","t":2,"auto":false,"lv":0,"ct":0,"cv":"","cost":1,"gold":0,"v":["MPMax","10"],"n":"Far"},
+              "1006":{"b":101,"r":1,"c":0,"g":"Common","t":2,"auto":false,"lv":30,"ct":0,"cv":"","cost":1,"gold":0,"v":["MPMax","10"],"n":"Late"},
+              "1101":{"b":102,"r":0,"c":0,"g":"Common","t":1,"auto":false,"lv":0,"ct":0,"cv":"","cost":0,"gold":0,"v":[],"n":"Start"},
+              "2001":{"b":201,"r":0,"c":0,"g":"Common","t":1,"auto":false,"lv":0,"ct":0,"cv":"","cost":0,"gold":0,"v":[],"n":"Start"},
+              "2002":{"b":201,"r":0,"c":1,"g":"Common","t":2,"auto":false,"lv":0,"ct":0,"cv":"","cost":1,"gold":0,"v":["HPMax","1"],"n":"HP"}},
+     "capacity":{"1":100},
+     "level_points":{"1":{"1":1},"2":{"1":1},"3":{"1":1},"4":{"1":1},"5":{"1":1},"6":{"1":1},"7":{"1":1},"8":{"1":1},"9":{"1":1},"10":{"1":1},
+                     "11":{"1":1},"12":{"1":1},"13":{"1":1},"14":{"1":1},"15":{"1":1},"16":{"1":1},"17":{"1":1},"18":{"1":1},"19":{"1":1},"20":{"1":1}},
+     "stats":{"HPMax":193,"MPMax":199,"Critical":128,"FixingDamage":19}}
+    """;
+    var tables = DaevanionTables.Parse(boardJson);
+    async Task<GameSession> BoardSession(DaevanionOptions? daevanion = null, int level = 20, uint creation = 1)
+    {
+        var session = new GameSession(data, new GameSessionOptions { CharacterLevel = level, Daevanion = (daevanion ?? new DaevanionOptions()) with { Tables = tables } }, new Random(5));
+        await session.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+        await session.HandleAsync(new PacketWriter().U16(0x361b).String("Daeva").U8(1).U32(creation).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
+        await session.HandleAsync(select, Now);
+        return session;
+    }
+    static byte[] NodeRq(ushort op, int id) => new PacketWriter().U16(op).I32(id).ToArray();
+    static ushort Result(byte[] rs) => BitConverter.ToUInt16(rs, 2);
+
+    Check(tables.Boards.Count == 3 && tables.NodesOf(101).Count == 6 && tables.Node(1002)!.Stats.SequenceEqual([("HPMax", 500)]) && tables.Node(1003)!.Stats.SequenceEqual([("Critical", 40)])
+          && tables.Node(1004)!.SkillLevels.SequenceEqual([(11010000, 2)]) && tables.Neighbours(tables.Node(1002)!).Select(n => n.Id).Order().SequenceEqual([1001, 1003, 1004]),
+          "daevanion.json: boards, nodes, stat and skill-level values, grid neighbours");
+    Check(DaevanionTables.ParseStats(["Critical, 5", "EStat::HPMax:100"]).SequenceEqual([("Critical", 5), ("HPMax", 100)]) && DaevanionTables.ParseSkillLevels(["11010000", "11020000,3"]).SequenceEqual([(11010000, 1), (11020000, 3)]),
+          "node values parse in the plain, comma and EStat:: forms");
+    Check(tables.LevelPoints(1, 20) == 20 && tables.LevelPoints(1, 20, "cumulative") == 1 && DaevanionTables.Embedded.StatId("HPMax") == 193 && DaevanionTables.Embedded.StatId("Critical") == 128,
+          "level points: per level summed (auto); the embedded table loads with the EStat ids");
+
+    var dvGlad = await BoardSession();
+    var dvHp = 0;
+    var entry = await dvGlad.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    dvHp = dvGlad.Resource.HpMax;
+    Check(entry.Any(b => Convert.ToHexStringLower(b) == "2ee2" + "05010000020000030000040000050000")
+          && entry.Any(b => Convert.ToHexStringLower(b) == "26e2" + "01" + "65000000" + "01" + "e9030000"),
+          "world entry: the used points as the official zero sample, the board list with the Start node dvOpened (board 101, node 1001)");
+    Check(dvGlad.DaevanionPoints(1) == 20 && dvGlad.DaevanionLeft(1) == 20, "a level-20 character has 20 points of the board's type");
+    var dvOpened = await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionOpenNodeRq, 1002), Now);
+    Check(Convert.ToHexStringLower(dvOpened[0]) == "28e2" + "0000" + "ea030000" && Op(dvOpened[1]) == GameSession.DaevanionOpenNodeNt
+          && Convert.ToHexStringLower(dvOpened[2]) == "2ee2" + "05" + "010200" + "020000030000040000050000" && dvGlad.Resource.HpMax == dvHp + 500 && dvOpened.Any(b => Op(b) == 0x364a),
+          "opening a node next to the start: 0xe228 result 0, 0xe229, 2 points used, HPMax +500 on the stat sheet");
+    Check(Result((await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionOpenNodeRq, 1005), Now))[0]) == GameSession.DaevanionNodeNeighbourNotOpen
+          && Result((await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionOpenNodeRq, 1006), Now))[0]) == GameSession.DaevanionNodeNotEnoughLevel
+          && Result((await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionOpenNodeRq, 1002), Now))[0]) == GameSession.DaevanionNodeAlreadyOpen
+          && Result((await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionOpenNodeRq, 1003), Now))[0]) == GameSession.DaevanionNodeNotEnoughPoint
+          && Result((await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionOpenNodeRq, 1101), Now))[0]) == GameSession.DaevanionNodeNotActiveBoard
+          && Result((await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionOpenNodeRq, 2002), Now))[0]) == GameSession.DaevanionNodeNotActiveBoard
+          && Result((await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionOpenNodeRq, 9999), Now))[0]) == GameSession.DaevanionNodeNotFound,
+          "refusals: not next to an dvOpened node, level, already open, points, a level-50 board, another class's board, an unknown node");
+    Check(Result((await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionResetBoardRq, 201), Now))[0]) == GameSession.DaevanionBoardInvalidClass
+          && Result((await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionResetBoardRq, 102), Now))[0]) == 0
+          && (await dvGlad.GrantDaevanionPointsAsync(1, -5, default)).Count == 0 && dvGlad.DaevanionPoints(1) == 20,
+          "board reset: another class is refused (15589); a board not reached yet resets (nothing to close); negative grants are refused");
+    await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionOpenNodeRq, 1004), Now);
+    Check(dvGlad.DaevanionSkillBonus(11010000) == 2 && dvGlad.DaevanionUsed(1) == 4, "a SkillLevel node adds its levels to the skill in combat");
+    Check(Result((await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionCloseNodeRq, 1002), Now))[0]) == GameSession.DaevanionNodeNeighbourOpened
+          && Result((await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionCloseNodeRq, 1001), Now))[0]) == GameSession.DaevanionNodeNotOpen,
+          "a node others hang on stays open (15581); the start node never closes");
+    var closed = await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionCloseNodeRq, 1004), Now);
+    Check(Result(closed[0]) == 0 && dvGlad.DaevanionUsed(1) == 2 && dvGlad.DaevanionSkillBonus(11010000) == 0 && !dvGlad.DaevanionNodes.Contains(1004),
+          "closing the outer node returns its points (development logins pay no Kina)");
+    var reset = await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionResetBoardRq, 101), Now);
+    Check(Result(reset[0]) == 0 && dvGlad.DaevanionNodes.SetEquals([1001]) && dvGlad.DaevanionUsed(1) == 0 && dvGlad.Resource.HpMax == dvHp,
+          "a board reset closes every node but the start: points back, stats gone");
+    var all = await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionOpenAllRq, 101), Now);
+    var allReader = new PacketReader(all[0]) { Offset = 2 };
+    Check(allReader.U16() == 0 && allReader.I32() == 101 && allReader.Varint() == 2 && dvGlad.DaevanionNodes.SetEquals([1001, 1002, 1004]) && dvGlad.DaevanionUsed(1) == 4,
+          "open all: every node the points reach, cheapest first (the 19-point node waits)");
+    await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionResetBoardRq, 101), Now);
+    var route = await dvGlad.HandleAsync(new PacketWriter().U16(GameSession.DaevanionOpenRouteRq).I32(101).Varint(3).I32(1002).I32(1003).I32(1004).ToArray(), Now);
+    var routeReader = new PacketReader(route[0]) { Offset = 2 };
+    Check(routeReader.U16() == GameSession.DaevanionNodeNotEnoughPoint && routeReader.I32() == 101 && routeReader.Varint() == 1 && routeReader.I32() == 1002,
+          "a route opens in order and stops at the first node it cannot open");
+
+    var rich = await BoardSession(new DaevanionOptions { PointRate = 2, ExtraPoints = 5 });
+    await rich.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    Check(rich.DaevanionPoints(1) == 45 && rich.DaevanionBonus(1) == 25, "Aion:Daevanion PointRate 2 and ExtraPoints 5: 20 level points become 45 (bonus 25)");
+    await rich.HandleAsync(NodeRq(GameSession.DaevanionOpenNodeRq, 1002), Now);
+    Check(Result((await rich.HandleAsync(NodeRq(GameSession.DaevanionOpenNodeRq, 1003), Now))[0]) == 0 && rich.Resource.HpMax > 0, "with the extra points the 19-point node opens");
+    var young = await BoardSession(level: 5);
+    var youngEntry = await young.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    Check(youngEntry.Any(b => Convert.ToHexStringLower(b) == "26e2" + "00") && young.DaevanionNodes.Count == 0, "below the board's level nothing is open");
+    var dvHidden = await BoardSession(new DaevanionOptions { MaxBoardLevel = 5 });
+    await dvHidden.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    Check(dvHidden.DaevanionNodes.Count == 0 && !dvHidden.ActiveBoards().Any(), "Aion:Daevanion:MaxBoardLevel hides the boards above it");
+    Rejects2(() => new DaevanionOptions { PointRate = -1 }.Validated(), "a negative point rate stops the host");
+    Rejects2(() => new DaevanionOptions { LevelPoints = "sometimes" }.Validated(), "an unknown LevelPoints stops the host");
+}
+Console.WriteLine($"{checks} Daevanion board checks passed (open, close, reset, open all, routes, points, Aion:Daevanion).");
+
 int DarkCreation(GameData d) => Enumerable.Range(1, 64).First(c => d.Profile(c, 1) is { Race: 2 });
 
 byte[] Strings(ushort opcode, params string[] values)
@@ -3739,6 +3841,13 @@ void Check(bool condition, string name)
 {
     if (!condition) throw new Exception("Check failed: " + name);
     checks++;
+}
+
+void Rejects2(Action action, string name)
+{
+    try { action(); }
+    catch (InvalidOperationException) { checks++; return; }
+    throw new Exception("Expected rejection: " + name);
 }
 
 void Rejects(Action action, string name)
