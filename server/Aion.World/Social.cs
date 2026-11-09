@@ -56,6 +56,8 @@ public sealed class Duel(int roomKey, WorldPlayer challenger, WorldPlayer accept
     public WorldPlayer Accepter { get; } = accepter;
     public DuelState State { get; set; } = DuelState.InWaiting;
     public long NextMs { get; set; }
+    /// <summary>Each duelist's HP and MP when the battle started (player key → values), for Aion:Fun:DuelRestore.</summary>
+    public Dictionary<int, (int Hp, int Mp)> Before { get; } = [];
     public WorldPlayer Other(WorldPlayer of) => of == Challenger ? Accepter : Challenger;
     public bool Has(WorldPlayer p) => p == Challenger || p == Accepter;
 }

@@ -42,6 +42,8 @@ public sealed record GameSessionOptions
     public BossOptions Bosses { get; init; } = BossOptions.Default;
     /// <summary>Heal/buff/debuff effects of class skills; null: the embedded tools/data/skill-effects.json (OURS values).</summary>
     public SkillEffectTable? SkillEffects { get; init; }
+    /// <summary>Aion:Fun (field bosses, //buff, //hub, duel restore); null: none of them (retail-style respawns are off too).</summary>
+    public FunFeatures? Fun { get; init; }
     /// <summary>Aion:Daevanion: the boards' point rate, flat extra points, free resets and hidden boards (docs/DAEVANION.md).</summary>
     public DaevanionOptions Daevanion { get; init; } = DaevanionOptions.Default;
 }
@@ -2068,7 +2070,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         {
             var due = respawnAt[key];
             if (!Targets.TryGetValue(key, out var target) || !target.Dead) continue;
-            if (!target.CorpseRemoved && now >= due - options.Rules.RespawnMs + CorpseMs)
+            if (!target.CorpseRemoved && now >= (target.KilledAtMs > 0 ? target.KilledAtMs : due - options.Rules.RespawnMs) + CorpseMs)
             {
                 target.CorpseRemoved = true;
                 replies.Add(GamePackets.Death(target.Key));
@@ -2079,6 +2081,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
             if (RunsMapEvents || Summons.IsSummon(target.Key)) continue;
             target.Hp = target.HpMax;
             target.CorpseRemoved = false;
+            target.KilledAtMs = 0;
             replies.Add(GamePackets.NpcAppear(target.Appearance()));
         }
         return replies;
@@ -2106,7 +2109,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         foreach (var target in chosen.Where(t => t.Hostile).ToList())
         {
             if (target.Dead) continue;
-            var hits = Combat.SkillHits(data, skill, className, level, equippedWeapon, target.Defense, rng, fixingBonus: BuffStat("FixingDamage") + DaevanionStat("FixingDamage"), skillLevel: CombatSkillLevel(skill));
+            var hits = Combat.SkillHits(data, skill, className, level, StatWeapon, target.Defense, rng, fixingBonus: BuffStat("FixingDamage") + DaevanionStat("FixingDamage"), skillLevel: CombatSkillLevel(skill));
             replies.AddRange(HitTarget(target, skill, hits, now));
         }
         return replies;
@@ -2134,7 +2137,9 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         replies.AddRange(MapEventHp(target, now));
         if (target.Dead)
         {
-            respawnAt[target.Key] = now + options.Rules.RespawnMs;  // HP 0 is the kill (Aion:Rules:RespawnSeconds)
+            // HP 0 is the kill: Aion:Rules:RespawnSeconds, or a field boss's long window (Aion:Fun).
+            respawnAt[target.Key] = now + KillRespawnMs(target);
+            target.KilledAtMs = now;
             killedNpcs.Add(target.NpcId);
             replies.AddRange(AchieveKill(target.NpcId));
             replies.AddRange(BossChallengeKilled(target, now));
@@ -2142,6 +2147,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
             replies.AddRange(MapEventKilled(target, now));
             killedLevels.Add(target.Level);
             replies.AddRange(DropLoot(target, now));
+            FieldBossKilled(target, now);   // before ai.Killed: the hate table names who fought it
             // Official order after HP 0: the mob's target cleared, the kill, its 0x8d21 off.
             replies.Add(GamePackets.TargetUpdate(target.Key));
             replies.Add(GamePackets.Kill(target.Key, skill, playerKey, ServerId, StoredName));
@@ -2210,7 +2216,8 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         var replies = new List<byte[]>();
         foreach (var (victim, killer) in fights.TakeNpcKills())
         {
-            respawnAt[victim.Key] = now + options.Rules.RespawnMs;
+            respawnAt[victim.Key] = now + KillRespawnMs(victim);
+            victim.KilledAtMs = now;
             replies.Add(GamePackets.TargetUpdate(victim.Key));
             replies.Add(GamePackets.Kill(victim.Key, 0, killer.Key, 0, ""));
             replies.AddRange(fights.Killed(victim));
@@ -2301,13 +2308,18 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
     {
         dead = true;
         diving = false;
-        if (copy is { } dungeonCopy) dungeonCopy.Deaths++;
+        List<byte[]> limitNote = [];
+        if (copy is { } dungeonCopy)
+        {
+            dungeonCopy.Deaths++;
+            limitNote = HardModeDeath(dungeonCopy);
+        }
         reviveAt = now + ReviveDelayMs;
         diedAt = position;
         inCombat = false;
         var kill = GamePackets.Kill(playerKey, 0, killerKey, ServerId, "", dieType: 2);
         worldPlayer?.Map?.Broadcast(worldPlayer, [kill]);
-        return [.. ForceDismount(), .. ClearBuffs(), kill, GamePackets.CombatState(playerKey, false)];
+        return [.. ForceDismount(), .. ClearBuffs(), kill, GamePackets.CombatState(playerKey, false), .. limitNote];
     }
 
     /// <summary>
@@ -2346,6 +2358,9 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         dead = false;
         if (resources is null) return [];
         (resources.Hp, resources.Mp) = (resources.HpMax, resources.MpMax);
+        // A hard mode's revives used up: the respawn is outside (Aion:Dungeons:HardModeRevives). A resurrection in place
+        // (a Cleric's skill, a rebirth buff or item) keeps the player in.
+        if (!inPlace && OutOfRevives()) return [resources.Update(), .. LeaveInstance(now)];
         if (inPlace && diedAt is { } fell) return [resources.Update(), .. Teleport(worldMap, fell, now)];
         // Inside a dungeon: the running stage's revival point, else the dungeon's start (the reload keeps the events).
         var raceWord = profileRace == 2 ? "Dark" : "Light";
@@ -2366,6 +2381,20 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         inventory.Values.Where(i => i.Container == InventoryItem.Equipped).Select(i => data.Item(i.ItemId)).OfType<ItemInfo>();
 
     int EquipItemLevel() => inventory.Values.Where(i => i.Container == InventoryItem.Equipped).Sum(i => i.Detail?.ItemLevel ?? 0);
+
+    /// <summary>
+    /// The item whose weapon stats this character hits with (GameData.StatWeapon, OURS): the equipped weapon, or for a Brawler's
+    /// gauntlet a Greatsword of its gear level: the character level or the mean ItemLevel of the other worn items, the higher.
+    /// </summary>
+    int? StatWeapon
+    {
+        get
+        {
+            if (data.Item(equippedWeapon) is not { Category: "Gauntlet" }) return equippedWeapon;
+            var worn = inventory.Values.Where(i => i.Container == InventoryItem.Equipped && i.Slot != 1).Select(i => data.ItemLevel(i.ItemId)).ToList();
+            return data.StatWeapon(equippedWeapon, Math.Max(level, worn.Count == 0 ? 0 : (int)worn.Average()));
+        }
+    }
 
     /// <summary>The weapon in equip slot 1; development logins (no store) keep the class starter weapon.</summary>
     int? WeaponFromInventory() =>
@@ -2389,7 +2418,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         var (stats, hpMax) = StatSheet();
         int Of(int type) => stats.FirstOrDefault(s => s.Type == type).Value;
         var gear = EquippedItems().ToList();
-        var weapon = data.WeaponStatsOf(equippedWeapon);
+        var weapon = data.WeaponStatsOf(StatWeapon);
         var attack = (weapon.Min + weapon.Max) / 2.0 + data.BaseStats(className, level).GetValueOrDefault("FixingDamage")
             + gear.Sum(i => i.Stat("WeaponFixingDamage"));
         return data.Progression.CombatPower(new Dictionary<string, double>
@@ -2412,7 +2441,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         var basis = data.BaseStats(className, level);
         var hpMax = Math.Max(1, (basis.GetValueOrDefault("HPMax") is > 0 and var hp ? hp : GamePackets.SpawnHpMax) + gear.Sum(i => i.Stat("HPMax")) + EnchantStat("HPMax") + RideStat("HPMax")
             + BuffStat("HPMax") + BoardStat("HPMax") + TitleStat("HPMax") + DaevanionStat("HPMax"));
-        var weapon = data.WeaponStatsOf(equippedWeapon);
+        var weapon = data.WeaponStatsOf(StatWeapon);
         var stats = GamePackets.DefaultStats.Select(s => s.Type switch
         {
             31 => (s.Type, weapon.Max + EnchantStat("WeaponDamage")), 33 => (s.Type, weapon.Min + EnchantStat("WeaponMinDamage")),

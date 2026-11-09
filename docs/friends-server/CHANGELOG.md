@@ -40,6 +40,13 @@
 - Not yet: the client's own Trade Post window (its browse protocol is not captured).
 - **Reference prices** (`Aion:Market:PriceFile`, CSV or JSON): the bots follow a price table (e.g. official NA East Siel prices) instead of vendor values; the buyer pays at most 80% of the reference, so overpriced listings stay unsold. No licensed live feed exists, so the table is filled by hand (`deploy/market-prices.example.csv`).
 
+## 2026-11-09 — dungeons opened to match global
+- **Entry levels** (`Aion:Dungeons:LevelGates` = global (default) | client): the client's placeholder level 99 on every Expedition hard mode, the Transcendence entries, Ascension Trial Insane/Hell/Doom and two daily dungeons becomes global's entry level (`GlobalLevel` 45, daily dungeons `GlobalDailyLevel` 30). Item levels and quest steps unchanged.
+- **Korea-only content** (`Aion:Dungeons:KoreaOnly`, default off): Dramata's Nest, Cradle of Nihility, Hall of Illusion, Azure Breath Isle, Fallen Daeva Citadel, Sunken Temple, Mirror Heart, Fafnite Gully and the raids Corroded Decontamination Facility and Chalice of Muspel are closed, as on global. On, they open at `KoreaOnlyLevel` (45).
+- **`/dungeon`** player command: lists the dungeons with difficulties and entry levels; `/dungeon <name> [difficulty]` enters (party shares the copy). Portals still pick Easy (the client's expedition window is unrecorded), so this is how players reach Normal, Hard, Transcendence stages, trial tiers and Ludra. `Aion:Dungeons:Command` turns it off.
+- **Hard-mode revives** (`Aion:Dungeons:HardModeRevives`, default 3 as on global): a notice shows revives left; after the last one the revive puts the player outside.
+- Not done: the 4-minute boss frenzy (dungeon objectives thread), Ariel Fragments (no such item in client 2.0.6.0), `Dungeon_Daily_0001` (its only event waits for a Prepare phase the dungeon never has, so it can't start).
+
 ## 2026-11-09 — Class rotations for dungeon bots (branch `claude/project-thread-8plppl`)
 - **Hand-made rotations for all 8 classes** (`tools/bot_rotations.py` plans, from public Aion 2 skill pages and class guides): interrupts first, gap closers, combo chains (Mocking Blade → Overhead Slam, Shield Smite → Annihilate/Judgment, Impactful Crush → Dark Crush ...), big cooldowns on elites and bosses, area skills on packs of 2-3+, debuff/dot upkeep, MP-restoring fillers last. Skills past level 25 are now used too. Heal bots keep 40% MP for heals.
 - **New rotation conditions**: `target_casting`, `target_stunned`, `target_slowed`, `target_elite`, `target_boss`, `target_on_self`, `target_effect_missing`, `target_has`, `target_distance_above`, `enemies_at_least`, `after`, `self_mp_below`; entries can be area casts (`area: self|target`); classes have a `position` (melee damage dealers fight from the monster's back) and per-role ranges (the Cleric fights from 18 m, 15 m as a healer).
@@ -56,4 +63,15 @@
 ## 2026-11-09 — Dungeon waves and boss phases
 - **Waves tracked**: the Ludra raid's `StartWave`/`EndWave` bring and remove the client's own wave spawns (`{wave}_{n}`, dormant until started, parts in order, sent at the nearest player); `ClearWave` counts when the wave dies instead of after a 30 s timer. Ferocious Horn Den's totem wave is hand-made (Lycans around the totem). `ResetRebirthLimit`/`SetAbnormalVolumeState` are known no-ops; the `HpRemaining` condition reads HP.
 - **Boss phases** for 68 Season 1 bosses (`tools/boss_phases.py` → `tools/data/boss-phases.json`, OURS): telegraphed slams using each boss's own long-cast skill (hit everyone inside, dodge by walking out), adds at 70%, fury at 40%, enrage at 20%, and the hard modes' 4-minute frenzy (global's rule). Adds vanish on a wipe or the kill and never respawn.
-- Config `Aion:Bosses:*` (Phases, Frenzy, FrenzySeconds, DamageScale). 29 server checks, 6 data tests. See BOSSES.md.
+- Config `Aion:Bosses:*` (Phases, Frenzy, FrenzySeconds, DamageScale). 32 server checks, 6 data tests. See BOSSES.md.
+
+## 2026-11-09 — Brawler (branch `claude/project-thread-zvu8x9`)
+- **Brawler class** (client class Fighter): kit rebuilt from the client's own SkillAcquireData (levels 1-25) plus the developer kit past 25 (OURS), Light/Dark profiles (OURS creation IDs 45/46, CANDIDATE pc_id 45-48), the Brawler's Fist as starter weapon, gauntlets for Brawlers only. Bots get the Brawler with its hand-made plan in a follow-up. Made by class change (`//ClassChange Fighter`); the creation screen can't offer it. Gauntlets scale with gear (OURS) since the client has only level-1 fists. Needs a live test of the character model: docs/friends-server/BRAWLER.md.
+
+## 2026-11-09 — fun features (`Aion:Fun`, docs/friends-server/FUN.md)
+- **Field bosses**: the 13 open-world field bosses respawn after a random 60–90 minutes (59 named elites: 10–15 minutes) instead of every 30 s. Server-wide notices when a boss is defeated and when it is back. Everyone who fought it rolls its loot.
+- **Lucky drops**: equipment drops may come one grade up (Common/Rare → Epic, Epic → Unique) at 2% from normal monsters, 6% from elites and 12% from named elites and bosses. Looted gear may arrive enchanted (20% +1..+3, 4% +4..+6, 0.5% +7..max).
+- **`/buff`** (food, drink and scroll buffs for 30 minutes) and **`/hub`** (teleports to the race's towns and the Abyss) for every player.
+- Duels give back the HP and MP they cost (never a free heal).
+- All OURS values, all configurable, all on by default. 28 checks.
+- Player chat commands work with a single slash (/buff, /hub, /report, /help, /bot, /ah, /boost); GM commands keep //.
