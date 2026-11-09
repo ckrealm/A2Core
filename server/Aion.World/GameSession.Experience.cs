@@ -85,14 +85,15 @@ public sealed partial class GameSession
             learned = kit.Select(k => k.SkillId).ToHashSet();
             var added = kit.Where(k => !skillsBefore.Contains(k.SkillId)).ToList();
             if (added.Count > 0) replies.Add(GamePackets.AddSkillList(playerKey, added));
-            // New Stigma Shards (and slots) come with the level (docs/STIGMAS.md); a bot picks its stigmas again.
+            // New Stigma Shards and slots come with the level (docs/STIGMAS.md; the client reads them from its Exp.dat, so nothing
+            // is sent, as for skill points); a bot picks its stigmas again.
             ChooseBotStigmas();
-            if (StigmasOn && level >= data.Stigmas.UnlockLevel && StigmaShardsTotal > 0) replies.Add(StigmaShardUpdate());
             replies.AddRange(PassiveAbnormals());
         }
         var broadcast = PlayerPackets.LevelBroadcast(playerKey, level);
         worldPlayer?.Map?.Broadcast(worldPlayer, [broadcast]);
         replies.Add(broadcast);
+        replies.AddRange(await DaevanionLevelUpAsync(ct));
         replies.AddRange(RefreshStats());
         if (resources is { } r)
         {

@@ -43,7 +43,7 @@ public sealed partial class GameSession
     bool IsOwnStigma(int skillId) => StigmaRules.Enabled && StigmaData.IsStigmaOf(className, skillId);
 
     /// <summary>The shards this character has had at its level (levelling grants x ShardRate).</summary>
-    public int StigmaShardsTotal => (int)Math.Floor(StigmaData.ShardsAt(level) * StigmaRules.ShardRate + 1e-9);
+    public int StigmaShardsTotal => (int)Math.Floor(StigmaData.ShardsAt(level) * StigmaRules.ShardRateOr(options.Rates) + 1e-9);
 
     public int StigmaShardsSpent => stigmas.Sum(p => StigmaData.Spent(p.Value));
 
@@ -87,6 +87,17 @@ public sealed partial class GameSession
         stigmas.Clear();
         foreach (var s in stored)
             if (s.Level >= 1) stigmas[s.SkillId] = Math.Min(s.Level, StigmaData.MaxSkillLevel);
+    }
+
+    /// <summary>
+    /// At character load: stigmas costing more shards than the level gives (after a GM level-down, or a lower ShardRate) are all
+    /// forgotten and their shards refunded, so the character can buy them again within its budget.
+    /// </summary>
+    async Task TrimStigmasAsync(INativeCharacterStore store, Guid character, CancellationToken ct)
+    {
+        if (stigmas.Count == 0 || StigmaShardsSpent <= StigmaShardsTotal) return;
+        foreach (var id in stigmas.Keys.ToList())
+            if (await store.SetStigmaAsync(character, id, 0, ct)) stigmas.Remove(id);
     }
 
     byte[] StigmaShardUpdate() =>

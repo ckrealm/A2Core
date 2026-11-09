@@ -106,6 +106,8 @@ builder.Services.AddSingleton(dungeonRules);
 // RequireSlot.
 var stigmaOptions = (builder.Configuration.GetSection("Aion:Stigmas").Get<Aion.World.StigmaOptions>() ?? Aion.World.StigmaOptions.Default).Validated();
 builder.Services.AddSingleton(stigmaOptions);
+// Aion:Daevanion (OURS, docs/DAEVANION.md): PointRate, ExtraPoints, FreeReset, MaxBoardLevel, DisabledBoards, LevelPoints.
+builder.Services.AddSingleton((builder.Configuration.GetSection("Aion:Daevanion").Get<Aion.World.DaevanionOptions>() ?? Aion.World.DaevanionOptions.Default).Validated());
 if (native.LoginPort is not null || native.GamePort is not null)
 {
     if (!native.Development && !accountsReady)

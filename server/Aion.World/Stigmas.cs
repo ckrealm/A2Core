@@ -92,7 +92,8 @@ public sealed class StigmaTable
 /// <summary>
 /// Aion:Stigmas (OURS host switches, docs/STIGMAS.md). Enabled: stigma skills are bought with Stigma Shards and work only from a
 /// stigma slot, as on global (off: the old behaviour, every kit skill unlocks by level). Slots: how many stigma slots open (4 =
-/// global, 6 = Korea). ShardRate multiplies the shards from levelling (global's shops and achievements are not modelled).
+/// global, 6 = Korea). ShardRate multiplies the shards from levelling (global's shops and achievements are not modelled); unset it
+/// follows Aion:Rates:Profile: 1 official, 3 accelerated or friends.
 /// MaxLevel caps the stigma level (at most the table's 20). RequireSlot: a stigma casts only while it is on a stigma slot; turn it
 /// off if the client turns out to register stigmas some way the server does not see.
 /// </summary>
@@ -100,7 +101,12 @@ public sealed record StigmaOptions
 {
     public bool Enabled { get; init; } = true;
     public int Slots { get; init; } = 4;
-    public double ShardRate { get; init; } = 1;
+    /// <summary>Unset: 1 with the official rates profile, <see cref="AcceleratedShardRate"/> with any other (accelerated, friends).</summary>
+    public double? ShardRate { get; init; }
+    public const double AcceleratedShardRate = 3;
+
+    /// <summary>The shard rate in force: the setting, else by the rates profile (global's sources beyond levelling are not modelled).</summary>
+    public double ShardRateOr(ServerRates rates) => ShardRate ?? (rates.Profile == ServerRates.OfficialProfile ? 1 : AcceleratedShardRate);
     public int MaxLevel { get; init; } = 20;
     public bool RequireSlot { get; init; } = true;
 
@@ -110,13 +116,13 @@ public sealed record StigmaOptions
     {
         var max = (table ?? StigmaTable.Embedded).MaxSlots;
         if (Slots < 0 || Slots > max) throw new InvalidOperationException($"Aion:Stigmas:Slots must be between 0 and {max} (got {Slots}).");
-        if (ShardRate is < 0 or > 100 || double.IsNaN(ShardRate)) throw new InvalidOperationException($"Aion:Stigmas:ShardRate must be between 0 and 100 (got {ShardRate}).");
+        if (ShardRate is { } rate && (rate is < 0 or > 100 || double.IsNaN(rate))) throw new InvalidOperationException($"Aion:Stigmas:ShardRate must be between 0 and 100 (got {ShardRate}).");
         var cap = (table ?? StigmaTable.Embedded).MaxSkillLevel;
         if (MaxLevel < 1 || MaxLevel > cap) throw new InvalidOperationException($"Aion:Stigmas:MaxLevel must be between 1 and {cap} (got {MaxLevel}).");
         return this;
     }
 
     public override string ToString() => Enabled
-        ? string.Create(CultureInfo.InvariantCulture, $"stigmas on: {Slots} slots, shards x{ShardRate}, levels to {MaxLevel}, slot needed to cast {(RequireSlot ? "yes" : "no")}")
+        ? string.Create(CultureInfo.InvariantCulture, $"stigmas on: {Slots} slots, shards x{(ShardRate is { } r ? r.ToString(CultureInfo.InvariantCulture) : "by rates profile (official 1, else 3)")}, levels to {MaxLevel}, slot needed to cast {(RequireSlot ? "yes" : "no")}")
         : "stigmas off (every kit skill unlocks by level)";
 }

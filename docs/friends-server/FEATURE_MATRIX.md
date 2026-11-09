@@ -74,7 +74,7 @@ Takeaway: the wire protocol for login, movement, combat and other players' messa
 | Skill levels / skill points | Implemented | `GameSession.SkillLevels.cs` (OBSERVED flow) | Points from Exp.dat (CANDIDATE). **Skill level doesn't change damage**: `Combat.SkillHits` (`Combat.cs:90`) ignores it. |
 | Passives | Partial | `PassiveAbnormals` at `GameSession.Buffs.cs:242` | Passive abnormals are sent (needed for weapon equip). Only the stats the server models apply. |
 | Stigmas | Partial (built, not tested in a client) | `GameSession.Stigmas.cs`, `tools/data/stigmas.json`, migration 043 | Global rules: 4 slots at 22/27/32/37, Stigma Shards from levelling, levels to 20, free reset, `/stigma`, bots slot their own. Stigma list and messages are CANDIDATE; specialties not modelled. docs/STIGMAS.md |
-| Daevanion board | Stub | `GameSession.EntryConstants.cs:21-22` sends five zero point types and an empty board | — |
+| Daevanion board | Implemented (data pending) | `GameSession.Daevanion.cs`: boards per class, node open/close/reset/open-all/route, points, stats, skill levels, passives; `docs/DAEVANION.md`. Real board data needs the client export (`tools/daevanion_data.py`) | Aion:Daevanion |
 | Creature boards | Implemented | `GameSession.Board.cs`, migration 020 | — |
 | Ascension | Implemented | `Ascend` at `GameSession.cs:1052`, migration 010 | — |
 
@@ -239,7 +239,6 @@ There is no permanent rate setting: the only way to get one is an event with no 
   - ArenaRecord → zeros;
   - SeasonRanking, PushRewardInfo, AbyssArtifactEventInfo, SkinDecoInstanceList, MessageCardBlockList → empty;
   - PartyRecentMember → empty;
-  - Daevanion → zeros;
   - 0xe259 NCGuard deliberately unanswered.
 
 ## 11. Data tables (tools/data) — shape and coverage

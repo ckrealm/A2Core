@@ -119,6 +119,9 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
             // //ah (Aion:Market, docs/MARKET.md): every player; "//ah help" lists its commands.
             if (line.StartsWith("ah", StringComparison.OrdinalIgnoreCase) && (line.Length == 2 || char.IsWhiteSpace(line[2])))
                 return Market is { } market ? await market.HandleAsync(actor.Session, line[2..].Trim(), ct) : "The market is not available on this server.";
+            // //stigma: the player command /stigma also answers with two slashes.
+            if (line.Equals("stigma", StringComparison.OrdinalIgnoreCase) || line.Equals("stigmas", StringComparison.OrdinalIgnoreCase))
+                return actor.Session.StigmaSummary();
             if (line.StartsWith("bot", StringComparison.OrdinalIgnoreCase) && (line.Length == 3 || char.IsWhiteSpace(line[3])))
                 return await BotAsync(actor.Session, line[3..].Trim(), ct);
             if (line.Length == 0 || line.Equals("help", StringComparison.OrdinalIgnoreCase))
