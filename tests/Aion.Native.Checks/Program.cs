@@ -3250,7 +3250,7 @@ checks = 0;
     var botPresence = new WorldPresence();
     var bots = new PlayerBots(data, botOptions, botWorld, presence: botPresence);
     Check(BotRotations.Embedded.For("Gladiator") is { Range: > 0, Rotation.Length: > 2 } glad && glad.Rotation[^1].Skill == 11020000
-          && BotRotations.Embedded.Classes.Count == 8, "bot-rotations.json is embedded: every playable class, the filler last");
+          && BotRotations.Embedded.Classes.Count == 9, "bot-rotations.json is embedded: every playable class, the filler last");
     Check((await bots.CommandAsync(leader, "add Leader", t, default)).Contains("yourself") && (await bots.CommandAsync(leader, "add Nobody", t, default)).Contains("not one of your characters"),
           "a bot is one of the summoner's other characters");
     Check(await bots.CommandAsync(leader, "add Alt", t, default) == "Summoning Alt." && bots.All.Single().State == PlayerBot.Phase.Pending, "//bot add queues the character");
@@ -3581,7 +3581,9 @@ checks = 0;
           && rots.For("Assassin")!.Position == "behind" && rots.For("Templar")!.Position == "front"
           && rots.For("Cleric")!.RangeFor("heal") == 1500 && rots.For("Cleric")!.RangeFor("dps") == 1800,
           "bot-rotations.json: every class but the Cleric has an interrupt; positions and role ranges load");
-    var rotWorld = new SharedWorld(data);
+    Check(GameSession.IsDodge(19000100) && GameSession.IsDodge(11000100) && !GameSession.IsDodge(19010000) && rots.For("Fighter") is { Range: 250 },
+          "the Brawler's own Dodge counts as a dodge; its rotation loads");
+    var rotWorld = new SharedWorld(data, seed: 41);
     var rotOptions = new GameSessionOptions { World = rotWorld, TrainingDummy = true, CharacterLevel = 20 };
     long t = Now + 5_000_000;
     var lead = new GameSession(data, rotOptions, new Random(41));
@@ -3776,7 +3778,8 @@ checks = 0;
     var evadeBase = guard.Session.Evasions;
     guard.Session.SetResource('S', guard.Session.Resource.SpMax);
     Check(await guard.Session.HandleAsync(Cast(guard.Brain.DodgeSkill!.Value, guard.Session.PlayerKey, guard.Session.WorldPosition!.Value), t += 1000) is [var dodgeReply, ..] && dodgeReply[3] == 0
-          && guard.Session.GuardHit(100, t + 10) == 0 && guard.Session.GuardHit(100, t + GameSession.DodgeEvadeMs - 10) == 0 && guard.Session.Evasions == evadeBase + 2,
+          && guard.Session.GuardHit(100, t + 10, new FixedRoll(0.99)) == 0 && guard.Session.GuardHit(100, t + GameSession.DodgeEvadeMs - 10, new FixedRoll(0.99)) == 0
+          && guard.Session.GuardHit(100, t + GameSession.DodgeEvadeMs + 10, new FixedRoll(0.99)) == 100 && guard.Session.Evasions == evadeBase + 2,
           "a Dodge evades every monster hit for its first half second");
     rai.Brains[blast.Key].Pending = null;
     rai.AreaSkills = BossAreaSkills.Embedded;
@@ -3799,17 +3802,30 @@ checks = 0;
         .OrderBy(x => Apart3(x.a.Position, lead.WorldPosition!.Value)).First();
     await Go(pair.a);
     await Run(60);
+    // Both sturdy and side by side, so the pack lasts and stays inside one area whatever ran before this check.
+    (pair.a.Hp, pair.b.Hp) = (Sturdy, Sturdy);
+    pair.b.Position = pair.a.Position with { X = pair.a.Position.X + 100 };
     rai.ForceAggro(pair.a, lead.PlayerKey, t);
     rai.ForceAggro(pair.b, lead.PlayerKey, t);
     await Run(600, () => team.All.Any(b => b.Brain!.AreaCasts > 0));
+    (pair.a.Hp, pair.b.Hp) = (Math.Min(pair.a.Hp, pair.a.HpMax), Math.Min(pair.b.Hp, pair.b.HpMax));
     Check(team.All.Any(b => b.Brain!.AreaCasts > 0), "with two monsters on the group a melee bot casts an area skill around itself");
+    // Blocks and evasions (GameSession.GuardHit) with fixed rolls: under the class's evasion chance evades, under the gear's
+    // block chance blocks (half), above both lands whole; a block opens the after-block skill (Debilitating Smash).
+    var blocksBefore = guard.Session.Blocks;
+    var evadedBefore = guard.Session.Evasions;
+    Check(guard.Session.GuardHit(100, t, new FixedRoll(0.01)) == 0 && guard.Session.Evasions == evadedBefore + 1
+          && guard.Session.GuardHit(100, t, new FixedRoll(0.99)) == 100,
+          "a roll under the evasion chance evades the hit; a high roll lands it whole");
+    await Run(400, () => t >= guard.Session.CooldownUntil(12270000));
+    Check(guard.Session.GuardHit(100, t, new FixedRoll(0.1)) == (int)Math.Round(100 * GameSession.BlockTaken) && guard.Session.Blocks == blocksBefore + 1
+          && guard.Session.LastBlockAt == t, "the tank's sword blocks a roll under its block chance (half damage)");
+    var blockedAt = t;
+    await Run(60, () => guard.Brain!.CastLog.Any(c => c.Skill == 12270000 && c.At >= blockedAt));
+    Check(guard.Brain!.CastLog.Any(c => c.Skill == 12270000 && c.At >= blockedAt && c.At - blockedAt <= BotBrain.ComboWindowMs),
+          "then Debilitating Smash, its after-block skill (after_block)");
     await Run(2000, () => pair.a.Dead && pair.b.Dead);
     Check(pair.a.Dead && pair.b.Dead, "the party kills both");
-    // Blocks and evasions (GameSession.GuardHit): over these fights the tank blocked hits and someone evaded one; a blocked or
-    // evaded hit opens the after-block skill (Debilitating Smash for the Templar).
-    Check(guard.Session.Blocks > 0 && team.All.Sum(b => b.Session.Evasions) > 0,
-          $"monster hits are blocked ({guard.Session.Blocks}) and evaded ({team.All.Sum(b => b.Session.Evasions)})");
-    Check(guard.Brain!.CastLog.Any(c => c.Skill == 12270000), "the tank uses Debilitating Smash, its after-block skill (after_block)");
     lead.ExitSharedWorld();
     await team.OwnerLeftAsync(lead);
 }
@@ -4655,3 +4671,10 @@ sealed class FakeStore : INativeCharacterStore
 }
 
 sealed class FakeDbException() : System.Data.Common.DbException("constraint violated");
+
+/// <summary>A Random whose every NextDouble is one value (fixed block/evasion rolls in the checks).</summary>
+sealed class FixedRoll(double value) : Random
+{
+    public override double NextDouble() => value;
+    protected override double Sample() => value;
+}
