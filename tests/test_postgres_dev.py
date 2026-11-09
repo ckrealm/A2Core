@@ -5,6 +5,9 @@ import unittest
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
+from unittest import mock
+
+import tools.postgres_dev as postgres_dev
 from tools.postgres_dev import literal, migration_script, sql, migrate, role_statement
 
 
@@ -22,6 +25,29 @@ class MigrationTests(unittest.TestCase):
         self.assertIn('Applied migration changed', script)
         self.assertIn('\\if :apply', script)
         self.assertTrue(script.endswith('COMMIT;'))
+
+
+class TimeoutTests(unittest.TestCase):
+    def test_long_timeout_from_environment(self):
+        for value, expected in (('', 3600), ('7200', 7200), ('0', None), ('90.5', 90.5)):
+            with mock.patch.dict(os.environ, {'AION_PG_TIMEOUT': value}):
+                self.assertEqual(postgres_dev.long_timeout(), expected, value)
+        for value in ('-1', 'soon'):
+            with mock.patch.dict(os.environ, {'AION_PG_TIMEOUT': value}), self.assertRaises(ValueError):
+                postgres_dev.long_timeout()
+
+    def test_restore_and_its_checks_use_the_long_timeout_the_rest_stays_short(self):
+        calls = []
+
+        def fake_run(command, **kwargs):
+            calls.append((Path(command[0]).stem, kwargs.get('timeout')))
+            return postgres_dev.subprocess.CompletedProcess(command, 0, 'items=1\n', '')
+
+        with mock.patch.dict(os.environ, {'AION_PG_TIMEOUT': '5000'}), \
+                mock.patch.object(postgres_dev.subprocess, 'run', side_effect=fake_run):
+            postgres_dev.verify_backup('x.dump')
+            postgres_dev.sql('SELECT 1;')
+        self.assertEqual(calls, [('psql', 180), ('pg_restore', 5000), ('psql', 5000), ('psql', 180), ('psql', 180)])
 
 
 @unittest.skipUnless(os.environ.get('AION_POSTGRES_TESTS') == '1', 'Requires local PostgreSQL and imported catalogue')

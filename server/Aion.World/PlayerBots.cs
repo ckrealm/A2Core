@@ -212,6 +212,7 @@ public sealed class PlayerBots(GameData data, BotOptions options, SharedWorld wo
                     bot.State = PlayerBot.Phase.Leaving;
                 }
                 finally { bot.Turn.Exit(); }
+                // LeaveAsync never throws (a failing bot is still removed), so one bot cannot stop the others' ticks.
                 if (bot.State == PlayerBot.Phase.Leaving) await LeaveAsync(bot, now);
             }
             finally { bot.Busy.Release(); }
@@ -399,21 +400,35 @@ public sealed class PlayerBots(GameData data, BotOptions options, SharedWorld wo
         if (FarFromLeader(bot) is { } spot) await Feed(bot, session.Teleport(spot.Map, spot.At, now), now, ct);
     }
 
-    /// <summary>Leaves the world (others see it go, it leaves the party) and saves its position. Holds the bot's Busy.</summary>
+    /// <summary>Checks only: runs inside <see cref="LeaveAsync"/>'s world turn (a throw there stands for a failing leave).</summary>
+    internal Action<PlayerBot>? LeaveFault { get; set; }
+
+    /// <summary>
+    /// Leaves the world (others see it go, it leaves the party) and saves its position. Holds the bot's Busy. Never throws:
+    /// whatever fails, the bot ends Gone and out of the list (its error in <see cref="PlayerBot.LastError"/>), so a broken bot
+    /// cannot be retried forever nor stop the bot loop.
+    /// </summary>
     async Task LeaveAsync(PlayerBot bot, long now)
     {
         var session = bot.Session;
-        await bot.Turn!.EnterWorldAsync(CancellationToken.None);
         try
         {
-            if (session.CharacterName is { } name) presence?.Leave(name, session);
-            session.ExitSharedWorld();
-            session.Abandon();
+            await bot.Turn!.EnterWorldAsync(CancellationToken.None);
+            try
+            {
+                LeaveFault?.Invoke(bot);
+                if (session.CharacterName is { } name) presence?.Leave(name, session);
+                session.ExitSharedWorld();
+                session.Abandon();
+            }
+            finally { bot.Turn.Exit(); }
+            await session.CheckpointAsync(now, force: true, CancellationToken.None);
         }
-        finally { bot.Turn.Exit(); }
-        try { await session.CheckpointAsync(now, force: true, CancellationToken.None); }
-        catch (Exception error) when (error is not OperationCanceledException) { bot.LastError = error.GetType().Name; }
-        bot.State = PlayerBot.Phase.Gone;
-        lock (gate) bots.Remove(bot);
+        catch (Exception error) { bot.LastError = error.GetType().Name; }
+        finally
+        {
+            bot.State = PlayerBot.Phase.Gone;
+            lock (gate) bots.Remove(bot);
+        }
     }
 }

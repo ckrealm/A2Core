@@ -8,7 +8,7 @@
 # --yes nothing else happens. With --yes: a safety backup of the live database (before-restore-*.dump), aion-host stops,
 # the file is restored into a new database aion_incoming_<time>, and only when that succeeds the live database is renamed
 # aion_pre_restore_<time> (kept, not dropped) and the new one becomes aion. aion-host starts again if it was running.
-# Settings: AION_PG_HOME, AION_PG_TOOL, AION_RUN_AS, AION_BACKUP_DIR as for backup.sh.
+# Settings: AION_PG_HOME, AION_PG_TOOL, AION_RUN_AS, AION_BACKUP_DIR, AION_PG_TIMEOUT as for backup.sh.
 set -euo pipefail
 
 TOOL="${AION_PG_TOOL:-/opt/aion/src/tools/postgres_dev.py}"
@@ -36,7 +36,7 @@ as_service() {
   if [[ -z "$RUN_AS" || "$(id -un)" == "$RUN_AS" ]]; then
     (cd / && "$@")
   elif [[ $EUID -eq 0 ]]; then
-    (cd / && runuser -u "$RUN_AS" -- env AION_PG_HOME="$AION_PG_HOME" ${AION_PG_BIN:+AION_PG_BIN="$AION_PG_BIN"} "$@")
+    (cd / && runuser -u "$RUN_AS" -- env AION_PG_HOME="$AION_PG_HOME" ${AION_PG_BIN:+AION_PG_BIN="$AION_PG_BIN"} ${AION_PG_TIMEOUT:+AION_PG_TIMEOUT="$AION_PG_TIMEOUT"} "$@")
   else
     echo "Run as root (sudo)." >&2; exit 2
   fi

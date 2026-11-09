@@ -11,7 +11,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 LINUX = ROOT / 'deploy/linux'
 WINDOWS = ROOT / 'deploy/windows'
-NEW_SCRIPTS = [LINUX / 'backup.sh', LINUX / 'restore.sh', WINDOWS / 'wsl-install.sh']
+NEW_SCRIPTS = [LINUX / 'backup.sh', LINUX / 'restore.sh', LINUX / 'backup-paths.sh', WINDOWS / 'wsl-install.sh']
 SHELL_SCRIPTS = NEW_SCRIPTS + [LINUX / 'install.sh', LINUX / 'update.sh']
 POWERSHELL_SCRIPTS = [WINDOWS / 'setup-wsl.ps1', WINDOWS / 'renew-cert.ps1', WINDOWS / 'wsl-portproxy.ps1']
 POSIX = os.name != 'nt' and shutil.which('bash') is not None
@@ -106,6 +106,15 @@ class FilesTests(unittest.TestCase):
         self.assertIn('/opt/aion/bin/', install)
         self.assertIn('aion-backup.timer', install)
         self.assertIn('Persistent=true', (LINUX / 'aion-backup.timer').read_text(encoding='utf-8'))
+        # Custom backup folders: the sandboxed unit gets them through backup-paths.sh's drop-in, which install.sh runs.
+        self.assertIn('ProtectSystem=strict', service)
+        self.assertIn('backup-paths.sh', service)
+        self.assertIn('"$REPO/deploy/linux/backup-paths.sh" /opt/aion/bin/', install)
+        self.assertIn('/opt/aion/bin/backup-paths.sh', install)
+        for readme in (LINUX / 'README.md', WINDOWS / 'README.md'):
+            text = readme.read_text(encoding='utf-8')
+            for word in ('AION_BACKUP_COPY_DIR', 'AION_BACKUP_COPY_KEEP', 'backup-paths.sh'):
+                self.assertIn(word, text, f'{readme}: {word}')
         # update.sh prunes only its own backups, not the nightly ones.
         self.assertIn('before-update-*.dump | tail -n +11', (LINUX / 'update.sh').read_text(encoding='utf-8'))
 
@@ -205,6 +214,60 @@ class BackupScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn('items=1', result.stdout)
         self.assertRegex(' '.join(self.names()), r'^weekly-\d{8}-\d{6}\.dump$')
+
+    def test_copy_dir_gets_each_verified_backup_with_its_own_retention(self):
+        copies = self.root / 'offsite'
+        copies.mkdir()
+        old = [f'nightly-2020010{day}-033000.dump' for day in range(1, 5)]
+        for name in old + ['keep-me.txt']:
+            (copies / name).write_bytes(b'x')
+        result = self.run_script(LINUX / 'backup.sh', '--keep', '5', AION_BACKUP_COPY_DIR=str(copies), AION_BACKUP_COPY_KEEP='2')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        new = [name for name in self.names() if name.startswith('nightly-')]
+        self.assertEqual(len(new), 1)
+        self.assertIn('Copied to', result.stdout)
+        self.assertEqual((copies / new[0]).read_bytes(), (self.backups / new[0]).read_bytes())
+        self.assertEqual(sorted(p.name for p in copies.iterdir()), sorted([new[0], old[-1], 'keep-me.txt']))
+
+    def test_failed_copy_keeps_the_backup_and_fails(self):
+        blocker = self.root / 'not-a-folder'
+        blocker.write_bytes(b'x')
+        result = self.run_script(LINUX / 'backup.sh', '--copy-dir', str(blocker / 'sub'))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('Copy to', result.stderr)
+        self.assertEqual(len([name for name in self.names() if name.startswith('nightly-')]), 1)
+        self.assertEqual(self.run_script(LINUX / 'backup.sh', '--copy-dir', 'relative').returncode, 2)
+        self.assertEqual(self.run_script(LINUX / 'backup.sh', '--copy-keep', '0').returncode, 2)
+
+    def run_paths(self, env_text):
+        env_file = self.root / 'backup.env'
+        env_file.write_text(env_text, encoding='utf-8')
+        units = self.root / 'systemd'
+        result = subprocess.run(['bash', str(LINUX / 'backup-paths.sh')], capture_output=True, text=True,
+                                env=dict(os.environ, AION_BACKUP_ENV=str(env_file), AION_SYSTEMD_DIR=str(units),
+                                         AION_RUN_AS='', AION_NO_RELOAD='1'))
+        return result, units / 'aion-backup.service.d' / '10-backup-paths.conf'
+
+    def test_backup_paths_writes_the_units_read_write_paths(self):
+        custom = self.root / 'mnt d' / 'aion-backups'
+        copies = self.root / 'copies'
+        result, drop_in = self.run_paths(f'AION_BACKUP_KEEP=7\nAION_BACKUP_DIR="{custom}"\nAION_BACKUP_COPY_DIR={copies}\n')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        text = drop_in.read_text(encoding='utf-8')
+        self.assertIn('[Service]', text)
+        self.assertIn(f'ReadWritePaths="-{custom}"', text)
+        self.assertIn(f'ReadWritePaths="-{copies}"', text)
+        self.assertTrue(custom.is_dir() and copies.is_dir())
+        # Back to the default folder: the drop-in goes.
+        result, drop_in = self.run_paths('AION_BACKUP_DIR=/var/lib/aion/backups\n')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(drop_in.exists())
+
+    def test_backup_paths_refuses_what_the_unit_cannot_use(self):
+        for value in ('relative/dir', '/home/me/backups', '/srv/a%n', '/srv/"x"', '/srv/../etc'):
+            result, drop_in = self.run_paths(f'AION_BACKUP_COPY_DIR={value}\n')
+            self.assertEqual(result.returncode, 2, value)
+            self.assertFalse(drop_in.exists(), value)
 
     def test_bad_options(self):
         for args in (['--keep', '0'], ['--keep', 'x'], ['--prefix', '../x'], ['--bogus']):
