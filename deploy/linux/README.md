@@ -129,7 +129,8 @@ as options (`--rates-profile`, `--exp-rate`, `--quest-exp-rate`, `--kinah-rate`,
 Party loot and monster Kinah are our own rules (nothing observed). `Aion__Rules__PartyLoot` shares a party member's kill
 among the members on the same map within 100 m (the members who share its experience): `roundrobin` gives the items to
 them in turn, `freeforall` gives each item to one of them at random, `killer` keeps everything with the killer. The
-killer's part lies on the ground to pick up; the others' parts go straight to their bags. Every monster also pays Kinah
+killer's part lies on the ground to pick up; the others' parts go straight to their bags (a part their bag cannot
+take, because they died meanwhile or the bag is full, lies on the ground at the kill site for them instead). Every monster also pays Kinah
 (tools/data/kinah-drops.json, by level and rank, times the Kinah rate `Aion__Rates__Kinah`), split evenly among the
 same members (all to the killer with `killer`). `Aion__Rules__FallbackLoot=false` turns off the generic loot that monsters
 without a reward table in the client's data (about three in four) roll instead (tools/data/fallback-loot.json:
