@@ -39,3 +39,8 @@
 - Config `Aion:Market:*` (all on by default), migration `040_market.sql`, `docs/MARKET.md`. 78 checks (`tests/Aion.Market.Checks`, `tools/check_market.py`).
 - Not yet: the client's own Trade Post window (its browse protocol is not captured).
 - **Reference prices** (`Aion:Market:PriceFile`, CSV or JSON): the bots follow a price table (e.g. official NA East Siel prices) instead of vendor values; the buyer pays at most 80% of the reference, so overpriced listings stay unsold. No licensed live feed exists, so the table is filled by hand (`deploy/market-prices.example.csv`).
+
+## 2026-11-09 — Dungeon waves and boss phases
+- **Waves tracked**: the Ludra raid's `StartWave`/`EndWave` bring and remove the client's own wave spawns (`{wave}_{n}`, dormant until started, parts in order, sent at the nearest player); `ClearWave` counts when the wave dies instead of after a 30 s timer. Ferocious Horn Den's totem wave is hand-made (Lycans around the totem). `ResetRebirthLimit`/`SetAbnormalVolumeState` are known no-ops; the `HpRemaining` condition reads HP.
+- **Boss phases** for 68 Season 1 bosses (`tools/boss_phases.py` → `tools/data/boss-phases.json`, OURS): telegraphed slams using each boss's own long-cast skill (hit everyone inside, dodge by walking out), adds at 70%, fury at 40%, enrage at 20%, and the hard modes' 4-minute frenzy (global's rule). Adds vanish on a wipe or the kill and never respawn.
+- Config `Aion:Bosses:*` (Phases, Frenzy, FrenzySeconds, DamageScale). 29 server checks, 6 data tests. See BOSSES.md.

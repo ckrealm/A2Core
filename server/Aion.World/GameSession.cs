@@ -38,6 +38,8 @@ public sealed record GameSessionOptions
     public WorldRules Rules { get; init; } = WorldRules.Default;
     /// <summary>Aion:Dungeons: daily entry limits (off by default) and the untracked-objective fallback delay.</summary>
     public DungeonOptions Dungeons { get; init; } = DungeonOptions.Default;
+    /// <summary>Aion:Bosses: boss phases, slams, adds and the hard modes' frenzy (all on by default).</summary>
+    public BossOptions Bosses { get; init; } = BossOptions.Default;
     /// <summary>Heal/buff/debuff effects of class skills; null: the embedded tools/data/skill-effects.json (OURS values).</summary>
     public SkillEffectTable? SkillEffects { get; init; }
 }
@@ -2059,8 +2061,8 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
             }
             if (now < due) continue;
             respawnAt.Remove(target.Key);
-            // In a scripted layer or dungeon the dead stay dead for the run (official dungeon mobs do not respawn).
-            if (RunsMapEvents) continue;
+            // In a scripted layer or dungeon the dead stay dead for the run (official dungeon mobs do not respawn); so do summoned adds.
+            if (RunsMapEvents || Summons.IsSummon(target.Key)) continue;
             target.Hp = target.HpMax;
             target.CorpseRemoved = false;
             replies.Add(GamePackets.NpcAppear(target.Appearance()));
@@ -2977,20 +2979,24 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
             {
                 aiMap.AiTickAt = now + 50;
                 aiMap.Ai.DefenseOf ??= key => aiMap.Players.TryGetValue(key, out var p) ? p.Session.Defense : 0;
+                aiMap.Ai.BossRules = options.Bosses;
                 aiMap.BroadcastAll(aiMap.Ai.Tick(aiMap.Targets, aiMap.NpcVictims(), now, (key, damage) =>
                 {
                     if (aiMap.Players.TryGetValue(key, out var victim)) victim.Send(victim.Session.NpcHitsPlayer(damage, now, aiMap.Ai.LastAttacker));
                     return [];
                 }));
                 var npcKills = NpcKillsByNpcs(aiMap.Ai, now);
+                npcKills.AddRange(BossSummons(aiMap.Ai, aiMap.Targets, now));
                 aiMap.BroadcastAll(npcKills, worldPlayer);
                 replies.AddRange(npcKills);
             }
         }
         else if (targets is not null && (ai.DefenseOf ??= _ => Defense) is not null)
         {
+            ai.BossRules = options.Bosses;
             replies.AddRange(Visible(ai.Tick(targets, invisible || dead || FriendlyToAll ? null : position, now, damage => NpcHitsPlayer(damage, now, ai.LastAttacker))));
             replies.AddRange(NpcKillsByNpcs(ai, now));
+            replies.AddRange(BossSummons(ai, targets, now));
         }
         PartyTick(now);
         DuelTick(now);

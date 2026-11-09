@@ -156,6 +156,8 @@ public sealed partial class GameSession
         next.removedObjects.UnionWith(removedObjects);
         next.pendingSpawns.AddRange(pendingSpawns);
         foreach (var (target, buffs) in npcBuffs) next.npcBuffs[target] = buffs;
+        foreach (var (name, wave) in waveRuns) next.waveRuns[name] = wave;
+        foreach (var (name, parts) in waveParts) next.waveParts[name] = parts;
         next.pendingExit ??= pendingExit;
         next.mapEventsMap = worldMap;
         next.mapEventNow = Math.Max(next.mapEventNow, mapEventNow);
@@ -166,6 +168,8 @@ public sealed partial class GameSession
         removedObjects.Clear();
         pendingSpawns.Clear();
         npcBuffs.Clear();
+        waveRuns.Clear();
+        waveParts.Clear();
         mapEventOut.Clear();
         pendingExit = null;
         c.Host = next;
