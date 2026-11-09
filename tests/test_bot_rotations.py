@@ -155,6 +155,12 @@ class BotRotationTests(unittest.TestCase):
                     self.assertTrue(steps and all(s['when'].get(condition) for s in steps))
         self.assertEqual(set(bot_rotations.SKIPPED), {16330000, 16300000})
 
+    def test_brawler_has_a_hand_made_plan(self):
+        fighter = self.tracked['classes']['Fighter']
+        self.assertEqual((fighter['weapon_type'], fighter['range'], fighter['position'], fighter['roles']), ('Gauntlet', 250, 'behind', ['dps', 'tank']))
+        self.assertTrue(any(s['skill'] == 19420000 and s['when'].get('target_casting') for s in fighter['rotation']))
+        self.assertEqual(fighter['rotation'][-1]['skill'], 19010000)
+
     def test_support_entries_come_from_skill_effects(self):
         cleric = self.tracked['classes']['Cleric']['rotation']
         heals = [s for s in cleric if s['skill'] == 17100000]
