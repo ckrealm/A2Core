@@ -54,6 +54,14 @@ static class MapEventChecks
         public bool PlayerDead { get; set; }
         public double? DistanceTo(string spawner) => null;
         public long UntrackedObjectiveMs { get; set; } = MapEventRun.FallbackMs;
+        public HashSet<string> KnownWaves { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public HashSet<string> DoneWaves { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, int> Hp { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public void StartWave(string wave) => Call($"StartWave {wave}");
+        public void EndWave(string wave) => Call($"EndWave {wave}");
+        public bool WaveKnown(string wave) => KnownWaves.Contains(wave);
+        public bool WaveDone(string wave) => DoneWaves.Contains(wave);
+        public int? HpPercent(string spawner) => Hp.TryGetValue(spawner, out var hp) ? hp : null;
     }
 
     public static int Run(Action<bool, string> check)
@@ -233,11 +241,12 @@ static class MapEventChecks
         }
 
         // Objective tracking (Aion:Dungeons:UntrackedObjectiveSeconds): a kill-count objective the server can follow (KillNpcCreatureType)
-        // completes on its kills and never on a timer; an untracked one (ClearWave) falls back after the configured delay, logged.
+        // completes on its kills and never on a timer; a wave the host does not know (ClearWave) falls back after the configured delay, logged.
         {
             var objectives = new[] { new MapEventObjective(1, "KillNpcCreatureType", ["Intellect", "2"]), new MapEventObjective(2, "ClearWave", ["Wave_Test"]) };
             var waves = new MapEventDefinition(1, [], [], [new MapEventStage(1, "S1", [new MapEventStep(1, [], objectives, [])])]) { Name = "Waves" };
-            C(!objectives[0].Unsupported && objectives[0].Count == 2 && objectives[1].Unsupported, "KillNpcCreatureType is tracked (count 2 from the data); ClearWave is not");
+            C(!objectives[0].Unsupported && objectives[0].Count == 2 && !objectives[1].Unsupported,
+              "KillNpcCreatureType is tracked (count 2 from the data); ClearWave is tracked when the host knows the wave");
             var hw = new FakeHost { UntrackedObjectiveMs = 5_000 };
             var rw = new MapEventRun(waves, 31, hw, 0);
             rw.Start(0);
@@ -262,6 +271,43 @@ static class MapEventChecks
             C(rk.Goals[1] == 1 && rk.Goals[0] == 0 && !rk.Finished && rk.FellBack == 1, "after 10 minutes without kills the kill objective is still open: no timer");
             rk.Killed(2701001, "Mob_1", false, false, 600_100);
             C(rk.Goals[0] == 0, "a friendly NPC's death does not count");
+
+            // A wave the host knows (its spawns are on the map): no timer; it completes when the host reports it cleared.
+            var hv = new FakeHost { UntrackedObjectiveMs = 5_000 };
+            hv.KnownWaves.Add("Wave_Test");
+            var rv = new MapEventRun(waves, 33, hv, 0);
+            rv.Start(0);
+            rv.Tick(600_000);
+            C(rv.Goals[1] == 0 && rv.FellBack == 0, "a known wave never times out");
+            C(!rv.WaveCleared("Other_Wave", 600_001) && rv.WaveCleared("wave_test", 600_002) && rv.Goals[1] == 1, "WaveCleared counts the ClearWave naming that wave (any case)");
+            // Already cleared when its step begins (an earlier step started it): done at once.
+            var hd = new FakeHost();
+            hd.KnownWaves.Add("Wave_Test");
+            hd.DoneWaves.Add("Wave_Test");
+            var rd = new MapEventRun(waves, 34, hd, 0);
+            rd.Start(0);
+            C(rd.Goals[1] == 1 && rd.FellBack == 0, "a wave cleared before its step began counts when the step begins");
+        }
+
+        // StartWave / EndWave reach the raidHost; the raid's ResetRebirthLimit and SetAbnormalVolumeState are known (no "unsupported" note);
+        // the HpRemaining condition reads the spawner's HP.
+        {
+            MapEventDirective D(int id, string type, params string[] values) => new(id, type, values);
+            var post = new[] { D(1, "StartWave", "W_01"), D(2, "ResetRebirthLimit", "2"), D(3, "SetAbnormalVolumeState", "Raid_Boss", "False"), D(4, "EndWave", "W_01") };
+            var steps = new[] { new MapEventStep(1, [], [new MapEventObjective(1, "EnterVolumePC", ["Trigger_1"], Post: post)], []) };
+            var raidEvent = new MapEventDefinition(1, [], [], [new MapEventStage(1, "S1", steps)]) { Name = "Raid" };
+            var raidHost = new FakeHost();
+            var raidRun = new MapEventRun(raidEvent, 35, raidHost, 0);
+            raidRun.Start(0);
+            raidRun.PositionAt(name => name == "Trigger_1", _ => false, 100);
+            C(raidHost.Calls.Contains("StartWave W_01") && raidHost.Calls.Contains("EndWave W_01") && !raidHost.Calls.Any(c => c.StartsWith("Unsupported", StringComparison.Ordinal)),
+              "StartWave and EndWave go to the raidHost; ResetRebirthLimit and SetAbnormalVolumeState are not reported unsupported");
+            var hp = new MapEventCondition("HpRemaining", ["Boss_1", "50"]);
+            raidHost.Hp["Boss_1"] = 60;
+            var above = raidRun.Holds([[hp]], 200);
+            raidHost.Hp["Boss_1"] = 50;
+            C(!above && raidRun.Holds([[hp]], 300) && !raidRun.Holds([[new MapEventCondition("HpRemaining", ["Gone_1", "50"])]], 300),
+              "HpRemaining holds at or below its percent, not above, and not for a spawner with no living NPC");
         }
 
         // The vessel's and the Drakan's official NpcAppear (capture 20261019-231752 #60769, #60977): flying state 7/2, reason NpcSpawn,

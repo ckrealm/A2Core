@@ -11,7 +11,8 @@ namespace Aion.World;
 /// own lock, so maps run in parallel and map work touches only its own map and players. Messages for
 /// another player go to that player's <see cref="WorldPlayer.Outbox"/> (thread-safe), sent on its next tick.
 /// </summary>
-public sealed class SharedWorld(GameData data)
+/// <param name="seed">Seeds every map's NPC AI (its rolls: attacks, blocks, evasions) for repeatable checks; null: random.</param>
+public sealed class SharedWorld(GameData data, int? seed = null)
 {
     /// <summary>Player entity keys: unique per host, clear of NPCs (2000+), the dummy (1000) and Kibelisks (900000+).</summary>
     public const int FirstPlayerKey = 100_000;
@@ -34,7 +35,7 @@ public sealed class SharedWorld(GameData data)
     {
         var key = (long)instance << 32 | (uint)mapId;
         if (!maps.TryGetValue(key, out var map))
-            maps[key] = map = new MapInstance(mapId, Combat.MapTargets(data, mapId), new NpcAi(new Random(), data)) { Instance = instance };
+            maps[key] = map = new MapInstance(mapId, Combat.MapTargets(data, mapId), new NpcAi(seed is { } s ? new Random(unchecked(s * 1_000_003 + mapId * 31 + instance)) : new Random(), data)) { Instance = instance };
         return map;
     }
 

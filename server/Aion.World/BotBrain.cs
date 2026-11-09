@@ -150,7 +150,7 @@ public sealed class BotBrain(GameData data, GameSession bot, GameSession leader,
     public int Dodges { get; private set; }
     (int Npc, long Due)? dodged;
     /// <summary>The bot's class Dodge (each class has its own, GameSession.IsDodge), or null when it has not learned one.</summary>
-    public int? DodgeSkill => Enumerable.Range(11, 8).Select(c => c * 1_000_000 + 100).Where(bot.Knows).Cast<int?>().FirstOrDefault();
+    public int? DodgeSkill => Enumerable.Range(11, 9).Select(c => c * 1_000_000 + 100).Where(bot.Knows).Cast<int?>().FirstOrDefault();
 
     /// <summary>
     /// The dodge request when the bot is the victim of a monster's special landing within <see cref="DodgeLeadMs"/> and it can
