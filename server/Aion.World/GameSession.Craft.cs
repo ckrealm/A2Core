@@ -61,9 +61,6 @@ public sealed class CraftTables
     public static CraftTables Embedded => embedded.Value;
     public Recipe? Of(int id) => recipes.GetValueOrDefault(id);
 
-    /// <summary>Every recipe (the market prices crafted items from their materials).</summary>
-    public IEnumerable<Recipe> All => recipes.Values;
-
     /// <summary>The recipes a character knows: automatic ones of its race up to its mastery of the recipe's worktable.</summary>
     public IEnumerable<Recipe> Known(int race, Func<string, int> masteryOf) => recipes.Values.Where(r => r.Auto && r.Race == race && r.Mastery <= masteryOf(r.Worktable)).OrderBy(r => r.Id);
 

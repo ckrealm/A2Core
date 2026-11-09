@@ -45,6 +45,9 @@ public interface IMarketStore
     /// <summary>Listings whose item name contains <paramref name="text"/> (or of one template), cheapest first, for a world (null: all).</summary>
     Task<IReadOnlyList<MarketListing>> SearchAsync(string? text, int? templateId, int? worldId, int offset, int limit, CancellationToken ct = default);
 
+    /// <summary>Players' listings (not the bot's) listed at or before <paramref name="listedBefore"/>, oldest first: what the buyer bot considers.</summary>
+    Task<IReadOnlyList<MarketListing>> PlayerListingsAsync(DateTimeOffset listedBefore, int limit, CancellationToken ct = default);
+
     /// <summary>A character's own listings (null: the market bot's).</summary>
     Task<IReadOnlyList<MarketListing>> ListingsOfAsync(Guid? seller, CancellationToken ct = default);
 

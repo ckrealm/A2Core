@@ -55,7 +55,17 @@ var varied = Enumerable.Range(0, 200).Select(i => pricing.SellerPrice(700, selle
 Check(varied.Min() >= 52 && varied.Max() <= 80 && varied.Distinct().Count() > 5, "seller price varies within the variance");
 Check(pricing.BuyerLimit(700, new MarketBuyerOptions { MaxPriceMultiplier = 2 }, seller) == 44
       && pricing.BuyerLimit(999, new MarketBuyerOptions(), seller) is null
-      && pricing.BuyerLimit(999, new MarketBuyerOptions { UnpricedMaxPriceEach = 9 }, seller) == 9, "buyer limits");
+      && pricing.BuyerLimit(999, new MarketBuyerOptions { UnpricedMaxPriceEach = 9 }, seller) == 9
+      && pricing.BuyerLimit(501, new MarketBuyerOptions(), seller) == 76, "buyer limits");
+// No resale loop: the buyer always pays less than the seller bot's lowest price and an NPC merchant's Kinah price.
+var shopPricing = new MarketPricing(id => vendor.TryGetValue(id, out var v) ? v : null, recipes, [], new Dictionary<int, long> { [700] = 30 }, new HashSet<int> { 501 });
+var greedy = new MarketBuyerOptions { MaxPriceMultiplier = 100 };
+var spread = new MarketSellerOptions { PriceMultiplier = 3, PriceVariancePercent = 20 };
+Check(pricing.BuyerLimit(700, greedy, spread) == 51, "buyer stays below the seller bot's lowest price");
+Check(shopPricing.BuyerLimit(700, greedy, spread) == 29 && shopPricing.BuyerLimit(501, greedy, spread) is null, "buyer stays below merchant prices; no merchant-currency items");
+var embeddedPricing = MarketPricing.Embedded;
+Check(embeddedPricing.ShopPrice(630840002) == 5000 && embeddedPricing.BuyerLimit(630840002, new MarketBuyerOptions { MaxPriceMultiplier = 100 }, new MarketSellerOptions()) is null or < 5000,
+      "the reported merchant item cannot be resold to the buyer at a profit");
 
 // --- Pricing (embedded game data) ---
 var embedded = MarketPricing.Embedded;
@@ -79,7 +89,7 @@ Check(await bot.SellAsync() == 3 && memory.Listings.Count == 3, "seller: lists e
 Check(await bot.SellAsync() == 0, "seller: no item over its per-item cap");
 Check(memory.Listings.All(l => l.ByBot && l.SellerName == "Market Trader" && (l.TemplateId != 601 || l.Quantity == 1)), "seller: bot listings, equipment one at a time");
 memory.Add(new MarketListing(100, player, "Alice", 1204, 700, "Bar", 2, 60, now.AddMinutes(-30), now.AddDays(1)));   // 60 <= 22 x 3: bought
-memory.Add(new MarketListing(101, player, "Alice", 1204, 700, "Bar", 1, 67, now.AddMinutes(-30), now.AddDays(1)));   // 67 > 66: too dear
+memory.Add(new MarketListing(101, player, "Alice", 1204, 700, "Bar", 1, 66, now.AddMinutes(-30), now.AddDays(1)));   // 66 = the seller bot's price: too dear
 memory.Add(new MarketListing(102, player, "Alice", 1204, 700, "Bar", 1, 10, now.AddMinutes(-1), now.AddDays(1)));    // too new
 memory.Add(new MarketListing(103, player, "Alice", 1204, 999, "Junk", 1, 1, now.AddMinutes(-30), now.AddDays(1)));   // unpriced
 memory.Add(new MarketListing(104, player, "Alice", 1204, 501, "Ore", 50, 30, now.AddMinutes(-30), now.AddDays(1)));  // 1500 over the day's budget
@@ -91,6 +101,9 @@ Check((await bot.BuyAsync(now)).Count == 0, "buyer: the daily budget holds");
 var noChance = new MarketBot(memory, options with { Buyer = options.Buyer with { BuyChancePercent = 0 } }, pricing, new Random(1));
 memory.Spent = 0;
 Check((await noChance.BuyAsync(now)).Count == 0, "buyer: 0% chance buys nothing");
+memory.Add(new MarketListing(106, player, "Alice", 1204, 501, "Ore", long.MaxValue / 2, 5, now.AddMinutes(-30), now.AddDays(1)));
+var unbudgeted = new MarketBot(memory, options with { Buyer = options.Buyer with { KinahPerDay = 0 } }, pricing, new Random(1));
+Check((await unbudgeted.BuyAsync(now)).All(b => b.Listing!.Id != 106), "buyer: a total that overflows is skipped");
 Console.WriteLine($"{checks} market logic checks passed.");
 
 // --- Storage (PostgreSQL) ---
@@ -214,10 +227,15 @@ var dbPricing = new MarketPricing(id => id switch { Ore => 10, Dust => 4, _ => n
 var dbOptions = new MarketOptions { Seller = new() { TargetListings = 2, Include = [Ore, Dust], Materials = false, Crafted = false },
     Buyer = new() { BuyChancePercent = 100, MinListingAgeMinutes = 0 } };
 var dbBot = new MarketBot(store, dbOptions, dbPricing, new Random(3));
-var fair = await store.ListAsync(sellerAcc, sellerId, ore, 2, 25, hours, 0);
+var fair = await store.ListAsync(sellerAcc, sellerId, ore, 2, 20, hours, 0);   // value 10: seller bot asks 24+, buyer pays up to 20
 await dbBot.TickAsync(DateTimeOffset.UtcNow);
 Check((await store.ListingsOfAsync(null)).Count == 2, "bot seller stocked the database market");
 Check(await store.ListingAsync(fair.Listing!.Id) is null && (await Mail(sellerId)).Count == 6, "bot buyer bought the fair listing and mailed the seller");
+var players = await store.PlayerListingsAsync(DateTimeOffset.UtcNow, 10);
+Check(players.All(l => !l.ByBot), "the buyer bot's query skips the bot's own listings");
+await using (var c = await source.OpenConnectionAsync())
+await using (var q = new NpgsqlCommand("SELECT min(expire_at) > now() + interval '9 years' FROM game.character_posts WHERE msg_params LIKE 'Market sale|%'", c))
+    Check((bool)(await q.ExecuteScalarAsync())!, "payout mail does not expire with the Kinah unclaimed");
 Console.WriteLine($"{checks - storeChecks} market storage checks passed.");
 
 /// <summary>An in-memory market for the bot checks.</summary>
@@ -230,6 +248,8 @@ sealed class MemoryMarket : IMarketStore
 
     public Task<IReadOnlyList<MarketListing>> SearchAsync(string? text, int? templateId, int? worldId, int offset, int limit, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<MarketListing>>(Listings.Skip(offset).Take(limit).ToList());
+    public Task<IReadOnlyList<MarketListing>> PlayerListingsAsync(DateTimeOffset listedBefore, int limit, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<MarketListing>>(Listings.Where(l => !l.ByBot && l.ListedAt <= listedBefore).Take(limit).ToList());
     public Task<IReadOnlyList<MarketListing>> ListingsOfAsync(Guid? seller, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<MarketListing>>(Listings.Where(l => l.SellerCharacter == seller).ToList());
     public Task<MarketListing?> ListingAsync(long id, CancellationToken ct = default) => Task.FromResult(Listings.FirstOrDefault(l => l.Id == id));

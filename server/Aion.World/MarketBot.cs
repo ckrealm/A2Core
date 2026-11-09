@@ -78,14 +78,15 @@ public sealed class MarketBot(IMarketStore store, MarketOptions options, MarketP
         var bought = new List<MarketPurchase>();
         if (buyer.MaxPurchasesPerCycle == 0) return bought;
         var budget = buyer.KinahPerDay > 0 ? buyer.KinahPerDay - await store.BotSpentSinceAsync(now.AddDays(-1), ct) : long.MaxValue;
-        var candidates = (await store.SearchAsync(null, null, null, 0, 200, ct))
-            .Where(l => !l.ByBot && now - l.ListedAt >= TimeSpan.FromMinutes(buyer.MinListingAgeMinutes))
+        var candidates = (await store.PlayerListingsAsync(now - TimeSpan.FromMinutes(buyer.MinListingAgeMinutes), 500, ct))
             .OrderBy(_ => rng.Next()).ToList();
         foreach (var listing in candidates)
         {
             if (bought.Count >= buyer.MaxPurchasesPerCycle) break;
             if (pricing.BuyerLimit(listing.TemplateId, buyer, options.Seller) is not { } limit || listing.PriceEach > limit) continue;
-            var total = listing.PriceEach * listing.Quantity;
+            long total;
+            try { total = checked(listing.PriceEach * listing.Quantity); }
+            catch (OverflowException) { continue; }
             if (total > budget || rng.NextDouble() * 100 >= buyer.BuyChancePercent) continue;
             var purchase = await store.BotBuyAsync(listing.Id, options.SaleTaxPercent, ct);
             if (!purchase.Ok) continue;

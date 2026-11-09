@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 
 namespace Aion.World;
 
@@ -112,13 +113,16 @@ public sealed record MarketBuyerOptions
     public int CycleSeconds { get; init; } = 120;
     /// <summary>A listing must have been up this long before the bot considers it (minutes), so players see it first.</summary>
     public double MinListingAgeMinutes { get; init; } = 10;
-    /// <summary>The bot buys a listing priced at most the item's vendor value x this (each).</summary>
-    public double MaxPriceMultiplier { get; init; } = 3;
+    /// <summary>
+    /// The bot buys a listing priced at most the item's vendor value x this (each). Whatever it is set to, the bot never pays
+    /// as much as the seller bot's lowest price or an NPC merchant's price for the item, so nothing can be resold to it at a profit.
+    /// </summary>
+    public double MaxPriceMultiplier { get; init; } = 2;
     /// <summary>Chance per cycle that the bot buys a listing it would pay for (percent).</summary>
     public double BuyChancePercent { get; init; } = 35;
     public int MaxPurchasesPerCycle { get; init; } = 5;
     /// <summary>Kinah the bot spends a day at most (0: no cap). Its Kinah comes from nowhere: the cap limits money creation.</summary>
-    public long KinahPerDay { get; init; }
+    public long KinahPerDay { get; init; } = 1_000_000;
     /// <summary>Items without a vendor value: the bot pays at most this much each (0: it leaves them alone).</summary>
     public long UnpricedMaxPriceEach { get; init; }
 
@@ -143,15 +147,22 @@ public sealed class MarketPricing
     readonly Dictionary<int, CraftTables.Recipe> recipeOf = [];
     readonly Dictionary<int, long?> memo = [];
     readonly Dictionary<int, ItemInfo> equipment;
+    readonly IReadOnlyDictionary<int, long> shopKinah;
+    readonly IReadOnlySet<int> shopOther;
     readonly Lock gate = new();
 
     public IReadOnlyList<int> MaterialIds { get; }
     public IReadOnlyList<int> CraftedIds { get; }
     public IReadOnlyList<(int Id, ItemInfo Info)> EquipmentItems { get; }
 
-    public MarketPricing(Func<int, long?> vendorPrice, IEnumerable<CraftTables.Recipe> recipes, IEnumerable<(int Id, ItemInfo Info)> equipment)
+    /// <param name="shopKinah">The lowest Kinah price each an NPC merchant sells the item for.</param>
+    /// <param name="shopOther">Items NPC merchants sell for another currency (Abyss points, medals, coins).</param>
+    public MarketPricing(Func<int, long?> vendorPrice, IEnumerable<CraftTables.Recipe> recipes, IEnumerable<(int Id, ItemInfo Info)> equipment,
+        IReadOnlyDictionary<int, long>? shopKinah = null, IReadOnlySet<int>? shopOther = null)
     {
         this.vendorPrice = vendorPrice;
+        this.shopKinah = shopKinah ?? new Dictionary<int, long>();
+        this.shopOther = shopOther ?? new HashSet<int>();
         var all = recipes.ToList();
         foreach (var r in all.OrderBy(r => r.Id)) recipeOf.TryAdd(r.Product, r);
         EquipmentItems = equipment.OrderBy(e => e.Id).ToList();
@@ -161,9 +172,42 @@ public sealed class MarketPricing
         CraftedIds = recipeOf.Keys.Order().ToList();
     }
 
-    static readonly Lazy<MarketPricing> embedded = new(() =>
-        new MarketPricing(ShopTables.Embedded.SellPrice, CraftTables.Embedded.All, GameData.Embedded.Items()));
+    static readonly Lazy<MarketPricing> embedded = new(LoadEmbedded);
     public static MarketPricing Embedded => embedded.Value;
+
+    static JsonElement Resource(string name)
+    {
+        using var stream = typeof(MarketPricing).Assembly.GetManifestResourceStream(name) ?? throw new InvalidOperationException($"Missing embedded game data {name}");
+        return JsonDocument.Parse(stream).RootElement.Clone();
+    }
+
+    /// <summary>The embedded game data: shops.json (sell prices, merchant goods), crafts.json (recipes), items.json (equipment).</summary>
+    static MarketPricing LoadEmbedded()
+    {
+        var shops = Resource("shops.json");
+        var sell = shops.GetProperty("sell").EnumerateObject().ToDictionary(p => int.Parse(p.Name, CultureInfo.InvariantCulture), p => p.Value.GetInt64());
+        var kinah = new Dictionary<int, long>();
+        var other = new HashSet<int>();
+        // goods: [item, bundle, price, level, currency item, ...]
+        foreach (var goods in shops.GetProperty("goods").EnumerateObject())
+        {
+            var g = goods.Value.EnumerateArray().Select(v => v.GetInt64()).ToArray();
+            if (g.Length < 5 || g[1] < 1 || g[2] < 1) continue;
+            var item = (int)g[0];
+            if (g[4] == GameSession.KinaItemId) kinah[item] = Math.Min(kinah.GetValueOrDefault(item, long.MaxValue), Math.Max(1, g[2] / g[1]));
+            else other.Add(item);
+        }
+        // recipes: id -> [worktable, race, mastery, auto, product, product count, [[item, count]...], fee, curve]
+        var recipes = Resource("crafts.json").GetProperty("recipes").EnumerateObject().Select(p =>
+        {
+            var r = p.Value;
+            return new CraftTables.Recipe(int.Parse(p.Name, CultureInfo.InvariantCulture), r[0].GetString()!, r[1].GetInt32(), r[2].GetInt32(), r[3].GetInt32() == 1,
+                r[4].GetInt32(), r[5].GetInt32(), r[6].EnumerateArray().Select(c => (c[0].GetInt32(), c[1].GetInt32())).ToList(), r[7].GetInt64(), r[8].GetInt32());
+        }).ToList();
+        var equipment = Resource("items.json").GetProperty("items").EnumerateObject()
+            .Select(p => (int.Parse(p.Name, CultureInfo.InvariantCulture), p.Value.Deserialize<ItemInfo>()!)).ToList();
+        return new MarketPricing(id => sell.TryGetValue(id, out var price) ? price : null, recipes, equipment, kinah, other);
+    }
 
     /// <summary>Whether the item is equipment (never stacks).</summary>
     public bool IsEquipment(int itemId) => equipment.ContainsKey(itemId);
@@ -206,13 +250,28 @@ public sealed class MarketPricing
         return Math.Max(seller.MinPriceEach, (long)Math.Round(value * factor));
     }
 
-    /// <summary>The most the bot buyer pays each for the item, or null when it does not buy it.</summary>
+    /// <summary>
+    /// The most the bot buyer pays each for the item, or null when it does not buy it. Always below the seller bot's lowest price
+    /// (value x multiplier x (1 - variance), or a fixed price) and below an NPC merchant's Kinah price, so buying from the bot or a
+    /// merchant and reselling to the buyer never pays; items merchants sell for other currencies are not bought at all.
+    /// </summary>
     public long? BuyerLimit(int itemId, MarketBuyerOptions buyer, MarketSellerOptions seller)
     {
-        if (seller.FixedPrice(itemId) is { } fixedPrice) return fixedPrice;
-        if (Value(itemId) is { } value) return (long)Math.Floor(value * buyer.MaxPriceMultiplier);
-        return buyer.UnpricedMaxPriceEach > 0 ? buyer.UnpricedMaxPriceEach : null;
+        if (shopOther.Contains(itemId)) return null;
+        long? limit;
+        if (seller.FixedPrice(itemId) is { } fixedPrice) limit = fixedPrice - 1;
+        else if (Value(itemId) is { } value)
+        {
+            var sellerLowest = Math.Max(seller.MinPriceEach, (long)Math.Floor(value * seller.PriceMultiplier * (1 - seller.PriceVariancePercent / 100.0)));
+            limit = Math.Min((long)Math.Floor(value * buyer.MaxPriceMultiplier), sellerLowest - 1);
+        }
+        else limit = buyer.UnpricedMaxPriceEach > 0 ? buyer.UnpricedMaxPriceEach : null;
+        if (limit is not null && shopKinah.TryGetValue(itemId, out var shop)) limit = Math.Min(limit.Value, shop - 1);
+        return limit is > 0 ? limit : null;
     }
+
+    /// <summary>The lowest Kinah price each an NPC merchant sells the item for, or null.</summary>
+    public long? ShopPrice(int itemId) => shopKinah.TryGetValue(itemId, out var p) ? p : null;
 
     /// <summary>The items the bot seller picks from: the enabled pools within the level range, plus Include, minus Exclude, priced.</summary>
     public IReadOnlyList<int> SellerPool(MarketSellerOptions seller)

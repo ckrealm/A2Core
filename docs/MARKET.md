@@ -19,7 +19,7 @@ driven from chat for now. Wiring the native window is future work once the brows
 | `//ah list` | Everything on the market |
 | `//ah more` | Next page of the last search |
 | `//ah buy <#listing> [count]` | Buys the listing (all of it, or `count` units). Kinah leaves your bag, the item arrives at once |
-| `//ah sell <item> [count] [price each\|auto]` | Lists from your largest stack of that item. No price or `auto`: just under the cheapest listing, else the recent average, else the bot's price. Prices take `k`/`m` (`1.5k`) |
+| `//ah sell <item> [count] [price each\|auto]` | Lists from your largest stack of that item. No price or `auto`: just under the cheapest listing, else the recent average, else the bot's price, never below the item's vendor value. Prices take `k`/`m` (`1.5k`) |
 | `//ah mine` | Your listings and the hours they have left |
 | `//ah cancel <#listing>` | Takes a listing back; the item returns to your bag |
 | `//ah price <item>` | Vendor value, what the bot buyer pays at most, cheapest listing, this week's sales |
@@ -29,7 +29,7 @@ Examples: `//ah search ore`, `//ah buy 42 5`, `//ah sell Iron Ore 20 150`, `//ah
 How it works:
 
 - A listed item waits in escrow (it leaves the bag). Enchanted or rolled items keep their enchant and go to the buyer as they are.
-- The seller is paid **by mail** (Kinah attached, minus `SaleTaxPercent`), online or not. An online seller gets the mail at once.
+- The seller is paid **by mail** (Kinah attached, minus `SaleTaxPercent`), online or not. An online seller gets the mail at once. Payout mail is kept 10 years, not the usual 30 days.
 - Unsold listings go back to the seller's bag after `ListingHours`.
 - Soul-bound items and Kinah cannot be listed. You cannot buy your own listings.
 - Light and Dark players see only their own world's listings unless `CrossWorld=true`; the bot's listings show in both.
@@ -42,11 +42,15 @@ its recipe's materials plus the crafting fee per product, whichever is higher (`
 neither have no value: the seller bot never lists them and the buyer bot leaves them alone (unless `UnpricedMaxPriceEach`).
 
 - Seller bot price each = value × `Seller:PriceMultiplier` (default 3), ± `Seller:PriceVariancePercent` (default 20%).
-- Buyer bot buys a listing priced at most value × `Buyer:MaxPriceMultiplier` (default 3) each.
-- `Seller:Prices:<item id>` fixes an item's price for both bots.
+- Buyer bot buys a listing priced at most value × `Buyer:MaxPriceMultiplier` (default 2) each.
+- `Seller:Prices:<item id>` fixes an item's price (the buyer bot then pays at most 1 less).
+
+No resale loop: whatever the settings, the buyer bot pays less than the seller bot's lowest possible price
+(value × `PriceMultiplier` × (1 − `PriceVariancePercent`)) and less than any NPC merchant's Kinah price for the item, and
+never buys items merchants sell for other currencies (Abyss points, medals, coins).
 
 The buyer bot creates Kinah when it buys and the seller bot removes Kinah when players buy from it. `Buyer:KinahPerDay`
-caps how much Kinah the buyer can bring in per day if the economy inflates.
+(default 1,000,000; 0 = no cap) limits how much Kinah the buyer can bring in per day.
 
 ## Configuration (`Aion:Market`, environment `Aion__Market__...`)
 
@@ -79,10 +83,10 @@ Defaults are on: the market, the seller bot and the buyer bot all run when the h
 | `Buyer:Enabled` | true | The buyer bot |
 | `Buyer:CycleSeconds` | 120 | How often it shops |
 | `Buyer:MinListingAgeMinutes` | 10 | Listings younger than this are left for players |
-| `Buyer:MaxPriceMultiplier` | 3 | Buys at most value × this each |
+| `Buyer:MaxPriceMultiplier` | 2 | Buys at most value × this each (always below the seller bot's and merchants' prices) |
 | `Buyer:BuyChancePercent` | 35 | Chance per cycle to buy a listing it would pay for |
 | `Buyer:MaxPurchasesPerCycle` | 5 | Purchases per cycle at most |
-| `Buyer:KinahPerDay` | 0 | Daily spending cap (0: none) |
+| `Buyer:KinahPerDay` | 1000000 | Daily spending cap (0: none) |
 | `Buyer:UnpricedMaxPriceEach` | 0 | Pays up to this for items with no value (0: never) |
 
 Example (`/etc/aion/game.env`):

@@ -78,6 +78,13 @@ public sealed class PostgresMarketStore(NpgsqlDataSource source) : IMarketStore
             """, ct, Text(pattern), Int(templateId), Int(worldId), Math.Max(0, offset), Math.Clamp(limit, 1, 200));
     }
 
+    public async Task<IReadOnlyList<MarketListing>> PlayerListingsAsync(DateTimeOffset listedBefore, int limit, CancellationToken ct = default)
+    {
+        await using var c = await source.OpenConnectionAsync(ct);
+        return await Listings(c, null, "WHERE l.seller_character IS NOT NULL AND l.expires_at>now() AND l.listed_at<=$1 ORDER BY l.listed_at, l.listing_id LIMIT $2",
+            ct, listedBefore, Math.Clamp(limit, 1, 2000));
+    }
+
     public async Task<IReadOnlyList<MarketListing>> ListingsOfAsync(Guid? seller, CancellationToken ct = default)
     {
         await using var c = await source.OpenConnectionAsync(ct);
@@ -180,12 +187,13 @@ public sealed class PostgresMarketStore(NpgsqlDataSource source) : IMarketStore
     public static long SellerShare(long total, double taxPercent) =>
         Math.Max(0, total - (long)Math.Ceiling(total * Math.Clamp(taxPercent, 0, 100) / 100.0));
 
+    /// <summary>The seller's payout mail (kept 10 years: unlike other mail, it must not expire with the Kinah unclaimed).</summary>
     static async Task<PostRecord?> PayoutMail(NpgsqlConnection c, NpgsqlTransaction t, Guid seller, string itemName, long quantity, long total, long share, CancellationToken ct)
     {
         var body = string.Create(System.Globalization.CultureInfo.InvariantCulture, $"Your {itemName} x{quantity} sold for {total:N0} Kinah. After the market tax you receive {share:N0} Kinah.");
         var attachments = share > 0 ? new[] { new long[] { KinaItemId, share } } : [];
         await using var q = Query(c, t, """
-            INSERT INTO game.character_posts(character_id,save_tab,post_data_id,msg_params,attachments) VALUES($1,$2,$3,$4,$5)
+            INSERT INTO game.character_posts(character_id,save_tab,post_data_id,msg_params,attachments,expire_at) VALUES($1,$2,$3,$4,$5,now()+interval '10 years')
             RETURNING post_id,post_type,save_tab,post_data_id,msg_params,read,taken,sent_at,expire_at,attachments::text,reason
             """, seller, share > 0 ? PostTabReward : PostTabSystem, FreePostDataId, $"Market sale|{body}", Json(attachments));
         await using var r = await q.ExecuteReaderAsync(ct);

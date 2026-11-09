@@ -107,18 +107,17 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
         if (actor is null) return "Enter the world first.";
         try
         {
-            if (line.StartsWith("bot", StringComparison.OrdinalIgnoreCase) && (line.Length == 3 || char.IsWhiteSpace(line[3])))
-                return await BotAsync(actor.Session, line[3..].Trim(), ct);
+            // //ah (Aion:Market, docs/MARKET.md): every player; "//ah help" lists its commands.
             if (line.StartsWith("ah", StringComparison.OrdinalIgnoreCase) && (line.Length == 2 || char.IsWhiteSpace(line[2])))
                 return Market is { } market ? await market.HandleAsync(actor.Session, line[2..].Trim(), ct) : "The market is not available on this server.";
+            if (line.StartsWith("bot", StringComparison.OrdinalIgnoreCase) && (line.Length == 3 || char.IsWhiteSpace(line[3])))
+                return await BotAsync(actor.Session, line[3..].Trim(), ct);
             if (line.Length == 0 || line.Equals("help", StringComparison.OrdinalIgnoreCase))
                 return await builder.AllowedAsync(actor.Session, ct)
                     ? "Builder commands (in chat: //<command>; console: s <command>): " + string.Join(", ", BuilderCommands.Supported)
                         + (Bots is { Options.Enabled: true } ? "; //bot add <character> for playerbots" : "")
-                        + (Market is { Options.Enabled: true } ? "; //ah for the market" : "")
                     : "Commands: //report <text> sends a report to the staff."
-                        + (Bots is { Options: { Enabled: true, PlayersMayUse: true } } ? " //bot add <character> summons one of your characters as a bot." : "")
-                        + (Market is { Options.Enabled: true } ? " //ah search <item> opens the market (//ah help)." : "");
+                        + (Bots is { Options: { Enabled: true, PlayersMayUse: true } } ? " //bot add <character> summons one of your characters as a bot." : "");
             return await actor.Session.InvokeAsync(async now =>
             {
                 var outcome = await builder.RunAsync(actor.Session, line, now, ct);

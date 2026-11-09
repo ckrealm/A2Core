@@ -65,6 +65,10 @@ public sealed class MarketCommands(IMarketStore store, MarketOptions options, Ma
                     return Help;
             }
         }
+        catch (TimeoutException)
+        {
+            return "The game connection did not respond.";
+        }
         catch (Exception error) when (error is System.Data.Common.DbException or InvalidOperationException or OverflowException or GameplayException)
         {
             return "The market could not do that right now. Try again in a moment.";
@@ -198,14 +202,19 @@ public sealed class MarketCommands(IMarketStore store, MarketOptions options, Ma
     static bool IsSoulBound(ItemState item) =>
         item.Upgrades.ValueKind == System.Text.Json.JsonValueKind.Object && item.Upgrades.TryGetProperty("soul_bind", out _);
 
-    /// <summary>A price each for "auto": just under the cheapest listing, else the bot's value price, else null.</summary>
+    /// <summary>
+    /// A price each for "auto": just under the cheapest listing, else the recent average, else the bot's price; never below
+    /// the item's vendor value (a troll listing at 2 Kinah does not drag everyone's auto price down). Null when nothing prices it.
+    /// </summary>
     async Task<long?> SuggestedPriceAsync(int template, CancellationToken ct)
     {
         var history = await store.PriceHistoryAsync(template, TimeSpan.FromDays(7), ct);
-        if (history.LowestListed > 1) return history.LowestListed - 1;
-        if (history.Units > 0 && history.AveragePrice > 0) return history.AveragePrice;
-        if (options.Seller.FixedPrice(template) is { } fixedPrice) return fixedPrice;
-        return pricing.Value(template) is { } value ? Math.Max(1, (long)Math.Round(value * options.Seller.PriceMultiplier)) : null;
+        var floor = pricing.Value(template) ?? 1;
+        long? price = history.LowestListed > 1 ? history.LowestListed - 1
+            : history.Units > 0 && history.AveragePrice > 0 ? history.AveragePrice
+            : options.Seller.FixedPrice(template) is { } fixedPrice ? fixedPrice
+            : pricing.Value(template) is { } value ? (long)Math.Round(value * options.Seller.PriceMultiplier) : null;
+        return price is { } p ? Math.Max(p, floor) : null;
     }
 
     async Task<string> PriceAsync(string text, CancellationToken ct)
