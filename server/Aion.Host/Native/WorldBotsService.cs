@@ -9,7 +9,8 @@ public sealed class WorldBotsService(WorldBots bots, ILogger<WorldBotsService> l
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        logger.LogInformation("World bots on: {Count} bots, levels {Min}-{Max}, {Grounds} hunting grounds", bots.Options.Count, bots.Options.MinLevel,
+        if (!bots.Options.Enabled) logger.LogInformation("World bots: content bots only (Abyss PvP fillers)");
+        else logger.LogInformation("World bots on: {Count} bots, levels {Min}-{Max}, {Grounds} hunting grounds", bots.Options.Count, bots.Options.MinLevel,
             bots.Options.MaxLevel == 0 ? "cap" : bots.Options.MaxLevel.ToString(System.Globalization.CultureInfo.InvariantCulture), bots.Grounds.Count);
         try { await bots.RunAsync(stoppingToken); }
         catch (OperationCanceledException) { }

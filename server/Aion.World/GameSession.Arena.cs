@@ -24,6 +24,20 @@ public sealed class ArenaMatch(int roomKey, int matchingId, int contentsId, int 
     public long NextMs { get; set; }
     public long StartMs { get; set; }
     public IEnumerable<WorldPlayer> Players => BlueTeam.Concat(RedTeam);
+    /// <summary>A battlefield match (Aion:Abyss:Battlefield): unlimited lives, the catalyst push, equalised stats; null for the arenas.</summary>
+    public BattlefieldOptions? Battlefield { get; init; }
+    public long RespawnMs { get; init; } = GameSession.ArenaRespawnMs;
+    /// <summary>The Shard Catalyst (Battlefield_A_1_Car, NpcData function ArenaCar): its key in the copy, the camps it runs between, where it is (0 at the
+    /// Blue camp, 1 at the Red camp; Blue pushes it toward 1) and where it started.</summary>
+    public int CatalystKey { get; set; }
+    public Vector3d BlueCamp { get; set; }
+    public Vector3d RedCamp { get; set; }
+    public double Progress { get; set; } = 0.5;
+    public double StartProgress { get; set; } = 0.5;
+    public bool ExtraTime { get; set; }
+    public long CatalystTickMs { get; set; }
+    public long CatalystSentMs { get; set; }
+    public int LastAnnounced { get; set; }
     public WorldPlayer Owner => BlueTeam.Count > 0 ? BlueTeam[0] : RedTeam[0];
     public byte TeamOf(WorldPlayer p) => BlueTeam.Contains(p) ? Blue : RedTeam.Contains(p) ? Red : (byte)0;
     public bool Has(WorldPlayer p) => BlueTeam.Contains(p) || RedTeam.Contains(p);
@@ -60,7 +74,7 @@ public sealed partial class GameSession
 
     ArenaMatch? ArenaOf(WorldPlayer p) => Social?.Arenas.Values.FirstOrDefault(a => a.Has(p));
 
-    byte[] MatchingState(int matchingId, byte state) => PacketWriter.Opcode(MatchingStateChangeNt).I32(matchingId).U8(state).ToArray();
+    static byte[] MatchingState(int matchingId, byte state) => PacketWriter.Opcode(MatchingStateChangeNt).I32(matchingId).U8(state).ToArray();
 
     /// <summary>0xe2a9 MatchingStart_RQ {matching id}: into the queue; a full set of players opens a match pending everyone's acceptance.</summary>
     List<byte[]> MatchingStart(byte[] plain, long now)
@@ -68,6 +82,7 @@ public sealed partial class GameSession
         if (plain.Length < 6) return [];
         var matchingId = BitConverter.ToInt32(plain, 2);
         byte[] Reply(int result) => PacketWriter.Opcode(MatchingStartRs).U16(result).I32(matchingId).ToArray();
+        if (War is { } war && matchingId == war.Options.Battlefield.MatchingId) return BattlefieldQueue(war, matchingId, now);
         var size = ArenaTeamSize(matchingId);
         // Aion:Rules:Pvp off: the arena queue is refused with the existing failure reply (OURS).
         if (size == 0 || !options.Rules.Pvp || Social is not { } s || worldPlayer is null || instanceKey != 0 || ArenaOf(worldPlayer) is not null || s.ArenaQueue.Any(q => q.Player == worldPlayer)) return [Reply(1)];
@@ -98,6 +113,7 @@ public sealed partial class GameSession
             s.Arenas.Remove(match.RoomKey);
             foreach (var p in match.Players.Where(p => p != worldPlayer))
             {
+                if (p.Session.Bot) { War?.Bots?.Release(p.Session); continue; }
                 s.ArenaQueue.Add(new ArenaQueueEntry(p, matchingId, now));
                 p.Send(MatchingState(matchingId, MatchingStateMatching));
             }
@@ -105,6 +121,14 @@ public sealed partial class GameSession
         }
         match.Accepted.Add(playerKey);
         if (match.Accepted.Count < match.Players.Count()) return [Reply(0)];
+        BeginArena(match, now);
+        return [Reply(0)];
+    }
+
+    /// <summary>Everyone accepted: the room info, and each player moves into the match's copy (on its own loop).</summary>
+    static void BeginArena(ArenaMatch match, long now)
+    {
+        var matchingId = match.MatchingId;
         match.State = 1;
         match.NextMs = now + ArenaReadyWaitMs;
         foreach (var p in match.Players)
@@ -114,10 +138,9 @@ public sealed partial class GameSession
             p.Send([MatchingState(matchingId, MatchingStateComplete), MatchingRoomInit(match)]);
             _ = session.InvokeAsync(at => (true, session.EnterArena(match, at)));
         }
-        return [Reply(0)];
     }
 
-    byte[] MatchingRoomInit(ArenaMatch match)
+    static byte[] MatchingRoomInit(ArenaMatch match)
     {
         var w = PacketWriter.Opcode(MatchingRoomInitNt).I32(match.RoomKey).I32(match.MatchingId).I32(match.ContentsId).I32(0).I32(match.DungeonId).Varint(2);
         foreach (var (team, members) in new[] { (ArenaMatch.Blue, match.BlueTeam), (ArenaMatch.Red, match.RedTeam) })
@@ -133,10 +156,12 @@ public sealed partial class GameSession
         return w.ToArray();
     }
 
-    (Vector3d Start, Vector3d Respawn)? ArenaPoints(ArenaMatch match, byte team)
+    (Vector3d Start, Vector3d Respawn)? ArenaPoints(ArenaMatch match, byte team) => ArenaPointsOf(data, match, team);
+
+    static (Vector3d Start, Vector3d Respawn)? ArenaPointsOf(GameData data, ArenaMatch match, byte team)
     {
         var points = data.MapPoints(match.MapId);
-        var side = team == ArenaMatch.Blue ? "_A_" : "_B_";
+        var side = match.Battlefield is not null ? (team == ArenaMatch.Blue ? "_BLUE_" : "_RED_") : team == ArenaMatch.Blue ? "_A_" : "_B_";
         Vector3d? Find(string suffix) => points.FirstOrDefault(p => p.Key.Contains(side + suffix, StringComparison.OrdinalIgnoreCase)).Value is { Length: >= 3 } v ? new Vector3d(v[0], v[1], v[2]) : null;
         var start = Find("Teleport") ?? Find("Respawn");
         return start is null ? null : (start.Value, Find("Respawn") ?? start.Value);
@@ -175,6 +200,7 @@ public sealed partial class GameSession
         match.NextMs = now + match.PlayTimeMs;
         var start = PacketWriter.Opcode(ArenaDungeonReadyEndNt).I64(now).ToArray();
         foreach (var p in match.Players) p.Send(start);
+        if (match.Battlefield is not null) StartCatalyst(match, now);
     }
 
     byte[] ArenaScores(ArenaMatch match, ushort opcode = ArenaDungeonScoreUpdateNt)
@@ -196,7 +222,7 @@ public sealed partial class GameSession
         if (victim is null || !match.Enemies(worldPlayer, victim) || victim.Session.resources is not { } theirs || match.RespawnAt.ContainsKey(victim.Key)) return [];
         var replies = new List<byte[]>();
         var seq = 0;
-        foreach (var hit in Combat.SkillHits(data, skill, className, level, equippedWeapon, victim.Session.Defense, rng, pvp: true, fixingBonus: BuffStat("FixingDamage"), skillLevel: SkillLevel(skill)))
+        foreach (var hit in ArenaSkillHits(match, skill, victim.Session))
         {
             theirs.Hp = Math.Max(1, theirs.Hp - hit.Amount);
             replies.Add(GamePackets.SkillHit(victim.Key, playerKey, skill, hit.EffectId, hit.Amount, hit.Critical, ++seq));
@@ -215,7 +241,8 @@ public sealed partial class GameSession
         match.Scores[victim.Key] = (v.Kills, v.Deaths + 1, Math.Max(0, v.Life - 1));
         var packets = new List<byte[]> { PacketWriter.Opcode(ArenaDungeonKillNt).I64(killer.Session.DbId).I64(victim.Session.DbId).ToArray(), ArenaScores(match) };
         foreach (var p in match.Players) p.Send(packets);
-        if (match.Scores[victim.Key].Life > 0) match.RespawnAt[victim.Key] = now + ArenaRespawnMs;
+        if (match.Lives == 0 || match.Scores[victim.Key].Life > 0) match.RespawnAt[victim.Key] = now + match.RespawnMs;
+        if (match.Lives == 0) return;   // a battlefield: unlimited lives
         var blueOut = match.BlueTeam.All(p => match.Scores.GetValueOrDefault(p.Key).Life == 0);
         var redOut = match.RedTeam.All(p => match.Scores.GetValueOrDefault(p.Key).Life == 0);
         if (blueOut || redOut) EndArena(match, blueOut ? ArenaMatch.Red : ArenaMatch.Blue, now);
@@ -235,6 +262,7 @@ public sealed partial class GameSession
         match.State = 4;
         Social?.Arenas.Remove(match.RoomKey);
         var (join, win) = ArenaRewards(match.MatchingId);
+        var war = match.Players.FirstOrDefault()?.Session.War;
         foreach (var p in match.Players)
         {
             var won = match.TeamOf(p) == winner;
@@ -245,7 +273,18 @@ public sealed partial class GameSession
                 w.I64(q.Session.DbId).Bool(false).Bool(false).U8((byte)kills).U8((byte)deaths).U8(0).U8((byte)life);
             }
             p.Send(w.ToArray());
-            p.Session.pendingRewards.Add([(AbyssPointItemId, join + (won ? win : 0))]);
+            if (match.Battlefield is not null)
+            {
+                if (war?.BattlefieldRewards(p.Session, won, now) is { Count: > 0 } items) p.Session.PostReward(items);
+                p.Send(Notice(winner == 0 ? "The battle ends in a draw." : won ? "Victory! The Shard Catalyst is yours." : "Defeat."));
+                if (p.Session.Bot)
+                {
+                    var bot = p.Session;
+                    _ = bot.InvokeAsync(at => { bot.instanceExitAt = at + ArenaExitMs; war?.Bots?.Release(bot); return (true, new List<byte[]>()); });
+                    continue;
+                }
+            }
+            else p.Session.pendingRewards.Add([(AbyssPointItemId, join + (won ? win : 0))]);
             p.Session.instanceExitAt = now + ArenaExitMs;
             p.Session.pendingAchievementPackets.AddRange(won ? p.Session.Achieve("ArenaWin", 1, e => e.Values.Length == 0 || e.Has(match.MatchingId == 1 ? "SingleCombat" : "TeamCombat"), now) : []);
         }
@@ -260,10 +299,12 @@ public sealed partial class GameSession
             match.RespawnAt.Remove(key);
             if (match.Players.FirstOrDefault(p => p.Key == key) is { } p) _ = p.Session.InvokeAsync(at => (true, p.Session.ArenaRespawn(match, at)));
         }
-        if (now < match.NextMs) return;
+        if (match.State == 3 && match.Battlefield is not null) CatalystTick(match, now);
+        if (match.State == 4 || now < match.NextMs) return;
         switch (match.State)
         {
             case 1 or 2: StartArenaBattle(match, now); break;
+            case 3 when match.Battlefield is not null: BattlefieldTimeUp(match, now); break;
             case 3:
                 var blue = match.BlueTeam.Sum(p => match.Scores.GetValueOrDefault(p.Key).Kills);
                 var red = match.RedTeam.Sum(p => match.Scores.GetValueOrDefault(p.Key).Kills);
@@ -277,6 +318,11 @@ public sealed partial class GameSession
     {
         if (Social is not { } s || worldPlayer is null) return;
         s.ArenaQueue.RemoveAll(q => q.Player == worldPlayer);
+        if (ArenaOf(worldPlayer) is { Battlefield: not null } field && field.State < 4)
+        {
+            LeaveBattlefield(field, now);
+            return;
+        }
         if (ArenaOf(worldPlayer) is { } match && match.State < 4)
         {
             var mine = match.TeamOf(worldPlayer);

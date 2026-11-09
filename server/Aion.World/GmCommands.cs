@@ -108,11 +108,13 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
         {
             if (line.StartsWith("bot", StringComparison.OrdinalIgnoreCase) && (line.Length == 3 || char.IsWhiteSpace(line[3])))
                 return await BotAsync(actor.Session, line[3..].Trim(), ct);
+            if (Word(line, "abyss") is { } abyssArgs) return await AbyssAsync(actor.Session, abyssArgs, ct);
+            if (Word(line, "rift") is { } riftArgs) return await AbyssAsync(actor.Session, "rift " + riftArgs, ct);
             if (line.Length == 0 || line.Equals("help", StringComparison.OrdinalIgnoreCase))
                 return await builder.AllowedAsync(actor.Session, ct)
                     ? "Builder commands (in chat: //<command>; console: s <command>): " + string.Join(", ", BuilderCommands.Supported)
                         + (Bots is { Options.Enabled: true } ? "; //bot add <character> for playerbots" : "")
-                    : "Commands: //report <text> sends a report to the staff."
+                    : "Commands: //report <text> sends a report to the staff. //abyss shows the siege, rifts and battlefield; //abyss bf queues for the battlefield; //rift on|off switches rift PvP."
                         + (Bots is { Options: { Enabled: true, PlayersMayUse: true } } ? " //bot add <character> summons one of your characters as a bot." : "");
             return await actor.Session.InvokeAsync(async now =>
             {
@@ -124,6 +126,44 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
         {
             return "The game connection did not respond.";
         }
+    }
+
+    /// <summary>The rest of the line after a leading command word, or null when the line starts with another word.</summary>
+    static string? Word(string line, string word) =>
+        line.StartsWith(word, StringComparison.OrdinalIgnoreCase) && (line.Length == word.Length || char.IsWhiteSpace(line[word.Length])) ? line[word.Length..].Trim() : null;
+
+    /// <summary>
+    /// //abyss (docs/ABYSS_PVP.md): the state for everyone; "bf" queues for the battlefield; "rift on|off" switches rift PvP; staff:
+    /// "siege start [minutes]", "siege end", "rift open [minutes]". Runs on the sender's game loop (world work, so the world lock).
+    /// </summary>
+    async Task<string> AbyssAsync(GameSession actor, string args, CancellationToken ct)
+    {
+        var parts = args.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var verb = parts.Length > 0 ? parts[0].ToLowerInvariant() : "";
+        var sub = parts.Length > 1 ? parts[1].ToLowerInvariant() : "";
+        int? minutes = parts.Length > 2 && int.TryParse(parts[2], out var m) && m is > 0 and <= 600 ? m : null;
+        var staffOnly = verb == "siege" || verb == "rift" && sub == "open";
+        if (staffOnly && !await builder.AllowedAsync(actor, ct)) return "Only staff can start or stop Abyss events.";
+        return await actor.InvokeAsync(now =>
+        {
+            if (actor.War is not { } war) return ("There is no Abyss PvP on this server (Aion:Abyss:Enabled).", new List<byte[]>());
+            (string, List<byte[]>) Say(string text, List<byte[]>? packets = null) => (text, packets ?? []);
+            var result = (verb, sub) switch
+            {
+                ("" or "status", _) => Say(actor.AbyssStatus(now)),
+                ("bf" or "battlefield", _) => Say(war.BattlefieldOpen(now) ? "Battlefield queue." : "The battlefield is closed now.", actor.JoinBattlefield(now)),
+                ("rift", "on" or "off") => Say($"Rift PvP {sub} requested.", actor.SetRiftPvp(sub == "on", now)),
+                ("siege", "start") when war.SiegeRunning => Say("A siege is already running."),
+                ("siege", "start") when war.Artifacts.Count == 0 => Say("No artifact cores were found on the siege layers."),
+                ("siege", "start") => Do(() => war.StartSiege(now, minutes * 60_000L), $"Siege started for {minutes ?? war.Options.Siege.DurationMinutes} minutes."),
+                ("siege", "end") when !war.SiegeRunning => Say("No siege is running."),
+                ("siege", "end") => Do(() => war.EndSiege(now), "Siege ended."),
+                ("rift", "open") => Do(() => war.OpenRifts(now, minutes * 60_000L), $"Rifts open for {minutes ?? war.Options.Rifts.OpenMinutes} minutes."),
+                _ => Say("Use //abyss, //abyss bf, //rift on|off" + "; staff: //abyss siege start [minutes] | siege end | rift open [minutes]."),
+            };
+            return result;
+            (string, List<byte[]>) Do(Action work, string done) { work(); return (done, []); }
+        }).WaitAsync(TimeSpan.FromSeconds(10), ct);
     }
 
     /// <summary>//bot world [name]: the summary, or one bot's class, level, place and activity (anyone may ask: it is what others see).</summary>

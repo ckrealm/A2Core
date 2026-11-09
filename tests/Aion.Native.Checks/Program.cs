@@ -2395,7 +2395,7 @@ presence.Enter("Player1", game, null);
 presence.Enter("Visitor", stored, null);
 Check((await gm.HandleAsync(chatter, "player1", "//help", default)).StartsWith("Builder commands"), "configured development GM");
 Check((await gm.HandleAsync(chatter, "[GM] Player1", "//help", default)).StartsWith("Builder commands"), "chat under the displayed name finds the character");
-Check(await gm.HandleAsync(chatter, "Visitor", "//help", default) == "Commands: //report <text> sends a report to the staff.", "players get the report command as help");
+Check((await gm.HandleAsync(chatter, "Visitor", "//help", default)).StartsWith("Commands: //report <text> sends a report to the staff. //abyss"), "players get the report and Abyss commands as help");
 Check(await gm.HandleAsync(chatter, "Visitor", "//report the bridge is broken", default) == "Reports are not available on this server.", "no reports without staff tools");
 var reports = new List<string>();
 var reporting = new GmCommands(presence, builder) { Report = (_, name, text, _) => { reports.Add(name + ":" + text); return Task.FromResult("sent"); } };
@@ -3521,6 +3521,7 @@ checks = 0;
 }
 Console.WriteLine($"{checks} playerbot checks passed (Aion:Bots).");
 Console.WriteLine($"{await WorldBotChecks.RunAsync(data, Check)} world bot and bot chat checks passed (Aion:WorldBots, Aion:BotChat).");
+Console.WriteLine($"{await AbyssChecks.RunAsync(data, Check)} Abyss PvP checks passed (Aion:Abyss: siege, rifts, battlefield, PvP bots).");
 
 // ---------- Progression past the recovered tables (progression.json, OURS; docs/PROGRESSION.md) ----------
 checks = 0;

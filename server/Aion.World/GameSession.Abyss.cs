@@ -8,7 +8,7 @@ namespace Aion.World;
 // PvP damage (Skill.dat PvP rows, the NPC-hit path for HP and death: 0x8d00, the kill 0x8d04 with the killer); the killer's
 // KillPC / KillPCAbyssGrade quest objectives and achievements count and 100 Abyss Points arrive (OURS; the official points
 // depend on the victim's rank). Dead players revive at their race's respawn point. Ranks, fortresses, artifacts and the
-// rift portals are not modelled.
+// rift portals are in GameSession.AbyssWar.cs (artifact sieges, Spacetime Rifts, battlefield).
 public sealed partial class GameSession
 {
     public const int AbyssKillPoints = 100;
@@ -29,7 +29,7 @@ public sealed partial class GameSession
     /// <summary>A cast at a player of the other race on an Abyss map (after duels and arenas said nothing).</summary>
     List<byte[]> FactionHits(int skill, int targetKey, long now)
     {
-        if (!OnAbyssMap || worldPlayer?.Map is not { } map || !map.Players.TryGetValue(targetKey, out var victim) || victim.Session.profileRace == profileRace
+        if (worldPlayer?.Map is not { } map || !map.Players.TryGetValue(targetKey, out var victim) || !FactionTarget(victim.Session)
             || victim.Session.resources is null || victim.Session.dead || victim.Hidden) return [];
         var replies = new List<byte[]>();
         var seq = 0;
@@ -55,7 +55,8 @@ public sealed partial class GameSession
             var changed = questLog.KilledPlayer(level);
             if (changed.Count > 0) pendingQuestChanges.AddRange(changed);
         }
-        pendingRewards.Add([(AbyssPointItemId, AbyssKillPoints)]);
+        // In a home field (rift PvP) the points are Aion:Abyss:Rifts:KillPoints (OURS); a revival there sends a rift visitor home.
+        pendingRewards.Add([(AbyssPointItemId, OnAbyssMap ? AbyssKillPoints : War?.Options.Rifts.KillPoints ?? AbyssKillPoints)]);
         return replies;
     }
 

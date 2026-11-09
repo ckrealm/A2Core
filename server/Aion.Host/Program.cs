@@ -97,6 +97,10 @@ var bots = (builder.Configuration.GetSection("Aion:Bots").Get<Aion.World.BotOpti
 // (Enabled, Endpoint, Model, ApiKey from the environment only, Room, FactionOnly, ...).
 var worldBots = (builder.Configuration.GetSection("Aion:WorldBots").Get<Aion.World.WorldBotOptions>() ?? new Aion.World.WorldBotOptions()).Validated();
 var botChat = (builder.Configuration.GetSection("Aion:BotChat").Get<Aion.World.BotChatOptions>() ?? new Aion.World.BotChatOptions()).Validated();
+// Organised Abyss PvP (docs/ABYSS_PVP.md): Aion:Abyss (Siege, Rifts, Battlefield, TimeZone) and Aion:Abyss:Bots (the bots that fill the sides).
+var abyss = (builder.Configuration.GetSection("Aion:Abyss").Get<Aion.World.AbyssOptions>() ?? new Aion.World.AbyssOptions()).Validated();
+var abyssBots = (builder.Configuration.GetSection("Aion:Abyss:Bots").Get<Aion.World.AbyssBotOptions>() ?? new Aion.World.AbyssBotOptions()).Validated();
+var abyssBotsOn = abyss.Enabled && abyssBots.Enabled;
 
 builder.Services.AddSingleton(dungeonRules);
 if (native.LoginPort is not null || native.GamePort is not null)
@@ -121,7 +125,12 @@ if (native.LoginPort is not null || native.GamePort is not null)
     builder.Services.AddSingleton<Aion.World.WorldPresence>();
     builder.Services.AddSingleton<Aion.Host.Authentication.ScheduledRestart>();
     // Multiplayer: one shared world (maps, NPCs, players) for every game connection on this host.
-    builder.Services.AddSingleton(_ => new Aion.World.SharedWorld(Aion.World.GameData.Embedded));
+    builder.Services.AddSingleton(provider =>
+    {
+        var shared = new Aion.World.SharedWorld(Aion.World.GameData.Embedded);
+        if (abyss.Enabled) shared.Abyss = new Aion.World.AbyssWar(Aion.World.GameData.Embedded, abyss, shared) { BotOptions = abyssBots };
+        return shared;
+    });
     // The race of the world each account picks on the login port, for the game port's lobby.
     builder.Services.AddSingleton<Aion.World.WorldChoices>();
     builder.Services.AddSingleton(provider =>
@@ -136,7 +145,7 @@ if (native.LoginPort is not null || native.GamePort is not null)
             presence: provider.GetRequiredService<Aion.World.WorldPresence>()));
         builder.Services.AddHostedService<PlayerBotsService>();
     }
-    if (worldBots.Enabled && native.GamePort is not null)
+    if ((worldBots.Enabled || abyssBotsOn) && native.GamePort is not null)
     {
         builder.Services.AddSingleton(provider => new Aion.World.WorldBots(Aion.World.GameData.Embedded, worldBots, provider.GetRequiredService<Aion.World.SharedWorld>(),
             new Aion.World.GameSessionOptions
@@ -147,7 +156,7 @@ if (native.LoginPort is not null || native.GamePort is not null)
                 Dungeons = provider.GetService<Aion.World.DungeonOptions>() ?? Aion.World.DungeonOptions.Default,
             }, presence: provider.GetRequiredService<Aion.World.WorldPresence>()));
         builder.Services.AddHostedService<WorldBotsService>();
-        if (botChat.Enabled && chatPort is not null)
+        if (worldBots.Enabled && botChat.Enabled && chatPort is not null)
         {
             builder.Services.AddSingleton(provider =>
             {
@@ -211,6 +220,18 @@ if (native.LoginPort is not null || native.GamePort is not null)
             },
         };
     });
+    if (abyss.Enabled && native.GamePort is not null)
+    {
+        // The Abyss clock; its bots come from the world bots (content bots), which run whenever Abyss bots are on.
+        builder.Services.AddSingleton(provider =>
+        {
+            var war = provider.GetRequiredService<Aion.World.SharedWorld>().Abyss!;
+            if (abyssBotsOn && provider.GetService<Aion.World.WorldBots>() is { } worldBotPool)
+                war.Bots = new Aion.World.PvpBots(worldBotPool, Aion.World.GameData.Embedded, abyssBots);
+            return war;
+        });
+        builder.Services.AddHostedService<AbyssWarService>();
+    }
     if (native.LoginPort is not null) builder.Services.AddHostedService<NativeLoginListener>();
     if (native.GamePort is not null) builder.Services.AddHostedService<NativeGameListener>();
     if (native.GamePort is not null)

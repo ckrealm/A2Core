@@ -177,6 +177,9 @@ public sealed class BotBrain(GameData data, GameSession bot, GameSession leader,
         var threats = Threats(group, lead);
         var target = Assist ? Fight(now, me, lead, threats) : null;
         if (target is null && Assist && Wander?.Pull(now, me) is { } pull) target = pull;
+        // Enemy players (an Abyss foe, rift PvP, an arena or battlefield enemy, a duel opponent) near the leader, after the monsters:
+        // a snapshot target whose key is the player's, so the cast goes down the session's PvP path (GameSession.AbyssWar.cs).
+        if (target is null && Assist && Wander is null && bot.PvpFoe(lead, AssistRange) is { } foe) target = foe;
         FightingKey = target?.Key;
         var choice = now >= nextCastAt ? Choose(target, now, group, Fighting(target, group, threats, now), me, threats) : null;
         // Heals, resurrection and buffs: run within reach of the group member, stop, cast.

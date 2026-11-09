@@ -54,6 +54,9 @@ public sealed class SharedWorld(GameData data)
     public double ExpRate { get => Volatile.Read(ref expRate); set => Volatile.Write(ref expRate, Math.Clamp(value, 0.1, 10)); }
     public double DropRate { get => Volatile.Read(ref dropRate); set => Volatile.Write(ref dropRate, Math.Clamp(value, 0.1, 10)); }
 
+    /// <summary>The artifact sieges, rifts and battlefield queue (Aion:Abyss); null when the host runs none.</summary>
+    public AbyssWar? Abyss { get; set; }
+
     /// <summary>Parties, invitations, trades and duels (use under the gate).</summary>
     public SocialState Social { get; } = new();
 

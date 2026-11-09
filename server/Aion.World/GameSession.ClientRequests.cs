@@ -40,9 +40,12 @@ public sealed partial class GameSession
             // SkinDecoInstanceList_RQ (no body): the reply carries only a result (usmap). CANDIDATE.
             case SkinDecoInstanceListRq when plain.Length == 2:
                 return [PacketWriter.Opcode(SkinDecoInstanceListRs).U16(0).ToArray()];
-            // AbyssArtifactEventInfo_RQ (no body): no Abyss events, no artifacts (usmap: result, two lists). CANDIDATE.
+            // AbyssArtifactEventInfo_RQ (no body): the siege event and the artifacts (usmap: result, two lists). CANDIDATE.
+            // The siege state (AbyssWar), else the empty reply.
             case AbyssArtifactEventInfoRq when plain.Length == 2:
-                return [PacketWriter.Opcode(AbyssArtifactEventInfoRs).U16(0).Varint(0).Varint(0).ToArray()];
+                return AbyssArtifactInfo(now);
+            case AbyssPackets.RiftOptionRq when plain.Length >= 3:
+                return RiftOption(plain, now);
             // RetrieveMyLatestSeasonRanking_RQ {contents type u8, class u8}: no ranking, the official empty reply.
             case MySeasonRankingRq when plain.Length >= 4:
             {

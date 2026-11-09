@@ -203,7 +203,7 @@ public sealed partial class GameSession
     {
         var batches = pendingRewards.ToList();
         pendingRewards.Clear();
-        var items = batches.SelectMany(b => b).ToList();
+        var items = WithAbyssBonus(batches.SelectMany(b => b).ToList());
         if (items.Count == 0) return [];
         if (Store is { } store && CharacterId is { } character)
         {

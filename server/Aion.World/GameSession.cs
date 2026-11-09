@@ -735,7 +735,8 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
             if (i >= objects.Count) continue;
             var o = objects[i];
             double dx = o.Position[0] - at.X, dy = o.Position[1] - at.Y;
-            var near = (instance && o.LongRange || dx * dx + dy * dy <= WorldObjects.VisibleRange * WorldObjects.VisibleRange) && !MapEventHidden(i, o);
+            var near = (instance && o.LongRange || dx * dx + dy * dy <= WorldObjects.VisibleRange * WorldObjects.VisibleRange) && !MapEventHidden(i, o)
+                && War?.RiftObjectHidden(worldMap, o) != true;   // rift portals show only while open
             if (near && !Gathered(i, now) && !usedObjects.Contains(i) && shownObjects.Add(i))
                 replies.Add(GamePackets.EnvObjSpawn(WorldObjects.FirstKey + i, o.Env, o.At, o.Yaw, now, o.UniqueKey, (byte)o.Relationship));
             else if (!near && shownObjects.Remove(i))
@@ -846,8 +847,11 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
             shownObjects.Remove(index);
             replies.Add(GamePackets.EnvObjDespawn(key, 4, 3));
         }
+        // A Spacetime Rift portal (AbyssWar), or an Abyss Corridor (the artifact holder's AbyssArtifact dungeon).
+        if (RiftPortalUse(objects[index], now) is { } rift) return [.. replies, .. rift];
+        if (CorridorEntry(objects[index], now) is { } corridor) replies.AddRange(corridor);
         // A party dungeon's portal (EnvObjData Usage PartyDungeon): into the expedition.
-        if (objects[index].Portal is { Length: > 0 } portal) replies.AddRange(EnterPartyDungeon(portal, now));
+        else if (objects[index].Portal is { Length: > 0 } portal) replies.AddRange(EnterPartyDungeon(portal, now));
         // The expedition's reward cube (Usage OdEnergyCube): the final boss's reward, once per player per run.
         if (objects[index].Cube) replies.AddRange(await CubeRewardAsync(null, now, ct));
         replies.AddRange(Achieve("UseEnvObjSpawnerName", 1, e => e.Has(objects[index].Name), now));
@@ -2125,6 +2129,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
             replies.AddRange(MapEventKilled(target, now));
             killedLevels.Add(target.Level);
             replies.AddRange(DropLoot(target, now));
+            AbyssCoreKilled(target, now);
             // Official order after HP 0: the mob's target cleared, the kill, its 0x8d21 off.
             replies.Add(GamePackets.TargetUpdate(target.Key));
             replies.Add(GamePackets.Kill(target.Key, skill, playerKey, ServerId, StoredName));
@@ -2287,6 +2292,8 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         if (resources is null) return [];
         (resources.Hp, resources.Mp) = (resources.HpMax, resources.MpMax);
         if (inPlace && diedAt is { } fell) return [resources.Update(), .. Teleport(worldMap, fell, now)];
+        // A Spacetime Rift visitor who fell in the enemy's field revives at home (the rift's way back).
+        if (RiftDeathReturn() is { } home) return [resources.Update(), .. Teleport(home.Map, home.At, now)];
         // Inside a dungeon: the running stage's revival point, else the dungeon's start (the reload keeps the events).
         var raceWord = profileRace == 2 ? "Dark" : "Light";
         var respawn = DungeonRevivalPoint() ?? data.MapPoints(worldMap).Where(p => p.Key.Contains("respawn", StringComparison.OrdinalIgnoreCase))
@@ -2839,7 +2846,8 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         || DotDue(now)
         || instanceExitAt is { } exit && now >= exit
         || Social is { } s && worldPlayer is not null && s.DuelOf(worldPlayer) is { } duel && duel.Challenger == worldPlayer && now >= duel.NextMs
-        || Social is { } s2 && worldPlayer is not null && ArenaOf(worldPlayer) is { } arena && arena.Owner == worldPlayer && (now >= arena.NextMs || arena.RespawnAt.Values.Any(r => now >= r));
+        || Social is { } s2 && worldPlayer is not null && ArenaOf(worldPlayer) is { } arena && arena.Owner == worldPlayer
+            && (now >= arena.NextMs || arena.RespawnAt.Values.Any(r => now >= r) || arena is { Battlefield: not null, State: 3 });
 
     /// <summary>The time of the last request or tick (for work done from a request without its own clock).</summary>
     long lastNow;
