@@ -213,6 +213,7 @@ public sealed class MarketCommands(IMarketStore store, MarketOptions options, Ma
         long? price = history.LowestListed > 1 ? history.LowestListed - 1
             : history.Units > 0 && history.AveragePrice > 0 ? history.AveragePrice
             : options.Seller.FixedPrice(template) is { } fixedPrice ? fixedPrice
+            : pricing.Reference(template) is { } reference ? reference
             : pricing.Value(template) is { } value ? (long)Math.Round(value * options.Seller.PriceMultiplier) : null;
         return price is { } p ? Math.Max(p, floor) : null;
     }
@@ -225,6 +226,7 @@ public sealed class MarketCommands(IMarketStore store, MarketOptions options, Ma
         var (template, name) = (exact.Count > 0 ? exact : matches)[0];
         var history = await store.PriceHistoryAsync(template, TimeSpan.FromDays(7), ct);
         var parts = new List<string> { $"{name} ({template})" };
+        if (pricing.Reference(template) is { } reference) parts.Add($"reference price {Kinah(reference)}");
         if (pricing.Value(template) is { } value) parts.Add($"vendor value {Kinah(value)}");
         if (pricing.BuyerLimit(template, options.Buyer, options.Seller) is { } limit && options.Buyer.Enabled) parts.Add($"the market bot buys at up to {Kinah(limit)} each");
         parts.Add(history.LowestListed > 0 ? $"cheapest listing {Kinah(history.LowestListed)}" : "none listed");

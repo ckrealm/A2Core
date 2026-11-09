@@ -11,12 +11,14 @@ namespace Aion.World;
 /// paid by mail. <paramref name="mailed"/> tells an online seller about the payout mail.
 /// </summary>
 public sealed class MarketBot(IMarketStore store, MarketOptions options, MarketPricing pricing, Random? random = null,
-    Action<Guid, PostRecord>? mailed = null, Action<string>? log = null)
+    Action<Guid, PostRecord>? mailed = null, Action<string>? log = null,
+    (Dictionary<int, long> ById, Dictionary<string, long> ByName)? references = null)
 {
     readonly Random rng = random ?? new Random();
     readonly SemaphoreSlim busy = new(1, 1);
     DateTimeOffset nextExpire = DateTimeOffset.MinValue, nextSell = DateTimeOffset.MinValue, nextBuy = DateTimeOffset.MinValue;
     IReadOnlyList<int>? pool;
+    bool referencesResolved = references is null;
 
     public MarketOptions Options => options;
     public IReadOnlyList<int> Pool => pool ??= pricing.SellerPool(options.Seller);
@@ -27,6 +29,7 @@ public sealed class MarketBot(IMarketStore store, MarketOptions options, MarketP
         if (!options.Enabled || !await busy.WaitAsync(0, ct)) return;
         try
         {
+            if (!referencesResolved) await ResolveReferencesAsync(ct);
             if (now >= nextExpire)
             {
                 nextExpire = now.AddSeconds(options.ExpireCheckSeconds);
@@ -46,6 +49,24 @@ public sealed class MarketBot(IMarketStore store, MarketOptions options, MarketP
             }
         }
         finally { busy.Release(); }
+    }
+
+    /// <summary>The reference price table into the pricing: item IDs as they are, names matched exactly against the catalogue.</summary>
+    public async Task ResolveReferencesAsync(CancellationToken ct = default)
+    {
+        if (references is not { } table) return;
+        var prices = new Dictionary<int, long>(table.ById);
+        var unknown = new List<string>();
+        foreach (var (name, price) in table.ByName)
+        {
+            var found = (await store.FindItemsAsync(name, 50, ct)).Where(i => i.Name.Equals(name, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (found.Count == 0) unknown.Add(name);
+            foreach (var (id, _) in found) prices[id] = price;
+        }
+        pricing.SetReferences(prices);
+        pool = null;
+        referencesResolved = true;
+        log?.Invoke($"Market: {prices.Count} reference prices loaded" + (unknown.Count > 0 ? $"; no catalogue item named {string.Join(", ", unknown.Take(20))}{(unknown.Count > 20 ? ", ..." : "")}" : "") + ".");
     }
 
     /// <summary>The seller's cycle: new bot listings up to the target (at most ListingsPerCycle, MaxListingsPerItem per item). Returns how many.</summary>

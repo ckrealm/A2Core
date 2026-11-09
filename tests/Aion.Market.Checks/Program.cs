@@ -67,6 +67,23 @@ var embeddedPricing = MarketPricing.Embedded;
 Check(embeddedPricing.ShopPrice(630840002) == 5000 && embeddedPricing.BuyerLimit(630840002, new MarketBuyerOptions { MaxPriceMultiplier = 100 }, new MarketSellerOptions()) is null or < 5000,
       "the reported merchant item cannot be resold to the buyer at a profit");
 
+// --- Reference prices (Aion:Market:PriceFile) ---
+var csv = MarketReferencePrices.Parse("# NA East Siel, noted by hand\nitem,price\n501,40\nTest Ore Dust, 1.5k\n", json: false);
+Check(csv.ById[501] == 40 && csv.ByName["test ore dust"] == 1500, "reference CSV: IDs, names, k suffix, header and comments");
+var jsonRefs = MarketReferencePrices.Parse("""{"source": "NA East Siel", "prices": {"700": 90, "Test Sword": "2m"}}""", json: true);
+Check(jsonRefs.ById[700] == 90 && jsonRefs.ByName["Test Sword"] == 2_000_000, "reference JSON");
+try { MarketReferencePrices.Parse("item,price\n501,0\n", json: false); throw new Exception("Market check failed: zero price accepted"); }
+catch (InvalidOperationException) { Check(true, "reference prices must be at least 1"); }
+var refPricing = new MarketPricing(id => vendor.TryGetValue(id, out var v) ? v : null, recipes, []);
+refPricing.SetReferences(new Dictionary<int, long> { [700] = 100, [888] = 500 });
+var refSeller = new MarketSellerOptions { PriceVariancePercent = 10 };
+var refPrices = Enumerable.Range(0, 100).Select(i => refPricing.SellerPrice(700, refSeller, new Random(i))!.Value).ToList();
+Check(refPrices.Min() >= 90 && refPrices.Max() <= 110, "seller bot lists around the reference price");
+Check(refPricing.BuyerLimit(700, new MarketBuyerOptions { ReferenceFraction = 0.8 }, refSeller) == 80
+      && refPricing.BuyerLimit(700, new MarketBuyerOptions { ReferenceFraction = 1 }, refSeller) == 89, "buyer pays at most 80% of reference and below the seller's lowest");
+Check(refPricing.SellerPool(new MarketSellerOptions()).Contains(888) && !refPricing.SellerPool(new MarketSellerOptions { ReferenceItems = false }).Contains(888),
+      "reference items join the seller pool");
+
 // --- Pricing (embedded game data) ---
 var embedded = MarketPricing.Embedded;
 var pool = embedded.SellerPool(defaults.Seller);
@@ -231,6 +248,10 @@ var fair = await store.ListAsync(sellerAcc, sellerId, ore, 2, 20, hours, 0);   /
 await dbBot.TickAsync(DateTimeOffset.UtcNow);
 Check((await store.ListingsOfAsync(null)).Count == 2, "bot seller stocked the database market");
 Check(await store.ListingAsync(fair.Listing!.Id) is null && (await Mail(sellerId)).Count == 6, "bot buyer bought the fair listing and mailed the seller");
+var namedRefs = new MarketPricing(_ => null, [], []);
+var refBot = new MarketBot(store, new MarketOptions(), namedRefs, references: (new Dictionary<int, long> { [Sword] = 7000 }, new(StringComparer.OrdinalIgnoreCase) { ["test iron ore"] = 300, ["No Such Thing"] = 5 }));
+await refBot.ResolveReferencesAsync();
+Check(namedRefs.Reference(Ore) == 300 && namedRefs.Reference(Sword) == 7000 && namedRefs.ReferenceCount == 2, "reference names matched against the catalogue");
 var players = await store.PlayerListingsAsync(DateTimeOffset.UtcNow, 10);
 Check(players.All(l => !l.ByBot), "the buyer bot's query skips the bot's own listings");
 await using (var c = await source.OpenConnectionAsync())

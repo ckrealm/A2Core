@@ -45,8 +45,23 @@ neither have no value: the seller bot never lists them and the buyer bot leaves 
 - Buyer bot buys a listing priced at most value × `Buyer:MaxPriceMultiplier` (default 2) each.
 - `Seller:Prices:<item id>` fixes an item's price (the buyer bot then pays at most 1 less).
 
+### Reference prices (official market prices)
+
+`Aion:Market:PriceFile` points at a price table so the bots follow real market prices (for example the official NA East
+Siel market) instead of vendor values. For an item in the table the seller bot lists at that price ± `PriceVariancePercent`,
+and the buyer bot pays at most `Buyer:ReferenceFraction` (default 80%) of it. Overpriced listings, like a material at
+twice its usual price, stay unsold. With `Seller:ReferenceItems` (default on) every item in the table is also sold by the bot.
+
+The file is CSV (`item,price` per line, item ID or exact item name, `k`/`m` allowed, `#` comments) or JSON
+(`{"prices": {"<id or name>": price}}`). Names are matched against the catalogue at startup, and the log lists the
+names it could not find. `deploy/market-prices.example.csv` is a template. A bad file stops the host with the reason.
+
+There is no licensed live feed of official prices. Public tracker sites either forbid automated reading (A2-Tracker's
+data-use terms require written permission, support@A2-Tracker.com) or publish no per-server data. So the table is filled by hand
+from the in-game Trade Post or a site that permits reuse, and it is updated by editing the file and restarting the host.
+
 No resale loop: whatever the settings, the buyer bot pays less than the seller bot's lowest possible price
-(value × `PriceMultiplier` × (1 − `PriceVariancePercent`)) and less than any NPC merchant's Kinah price for the item, and
+(value × `PriceMultiplier` × (1 − `PriceVariancePercent`), or reference × (1 − `PriceVariancePercent`)) and less than any NPC merchant's Kinah price for the item, and
 never buys items merchants sell for other currencies (Abyss points, medals, coins).
 
 The buyer bot creates Kinah when it buys and the seller bot removes Kinah when players buy from it. `Buyer:KinahPerDay`
@@ -65,6 +80,7 @@ Defaults are on: the market, the seller bot and the buyer bot all run when the h
 | `MaxPriceEach` | 2000000000 | Highest price each |
 | `CrossWorld` | false | Light and Dark share one market |
 | `ExpireCheckSeconds` | 60 | How often expired listings are returned |
+| `PriceFile` | none | Reference price table (CSV or JSON), e.g. `/etc/aion/market-prices.csv` |
 | `Seller:Enabled` | true | The seller bot |
 | `Seller:Name` | Market Trader | Name on its listings |
 | `Seller:TargetListings` | 250 | Listings it keeps up |
@@ -78,6 +94,7 @@ Defaults are on: the market, the seller bot and the buyer bot all run when the h
 | `Seller:MaxStack` | 20 | Stackable items are listed 1 to this many |
 | `Seller:Materials` / `Crafted` / `Equipment` | true / true / false | Item pools: recipe materials, crafted products, all equipment |
 | `Seller:MinItemLevel` / `MaxItemLevel` | 0 / 0 | Equipment level range (0: no bound) |
+| `Seller:ReferenceItems` | true | Also sell every item of the reference table |
 | `Seller:Include` / `Exclude` | empty | Extra item IDs to sell / never sell (`Seller__Include__0=...`) |
 | `Seller:Prices:<id>` | none | Fixed price each for an item |
 | `Buyer:Enabled` | true | The buyer bot |
@@ -86,6 +103,7 @@ Defaults are on: the market, the seller bot and the buyer bot all run when the h
 | `Buyer:MaxPriceMultiplier` | 2 | Buys at most value × this each (always below the seller bot's and merchants' prices) |
 | `Buyer:BuyChancePercent` | 35 | Chance per cycle to buy a listing it would pay for |
 | `Buyer:MaxPurchasesPerCycle` | 5 | Purchases per cycle at most |
+| `Buyer:ReferenceFraction` | 0.8 | Items with a reference price: pays at most this share of it |
 | `Buyer:KinahPerDay` | 1000000 | Daily spending cap (0: none) |
 | `Buyer:UnpricedMaxPriceEach` | 0 | Pays up to this for items with no value (0: never) |
 

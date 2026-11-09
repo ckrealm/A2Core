@@ -24,6 +24,11 @@ public sealed record MarketOptions
     public bool CrossWorld { get; init; }
     /// <summary>How often expired listings are returned (seconds).</summary>
     public int ExpireCheckSeconds { get; init; } = 60;
+    /// <summary>
+    /// A reference price table (JSON or CSV; docs/MARKET.md), e.g. prices noted from the official NA East Siel market. Items in it
+    /// are listed by the seller bot around that price and bought by the buyer bot below it. Null: vendor values only.
+    /// </summary>
+    public string? PriceFile { get; init; }
     public MarketSellerOptions Seller { get; init; } = new();
     public MarketBuyerOptions Buyer { get; init; } = new();
 
@@ -80,6 +85,8 @@ public sealed record MarketSellerOptions
     /// <summary>Extra item IDs to sell, and item IDs never to sell.</summary>
     public int[] Include { get; init; } = [];
     public int[] Exclude { get; init; } = [];
+    /// <summary>The seller bot also sells every item of the reference price table (Aion:Market:PriceFile).</summary>
+    public bool ReferenceItems { get; init; } = true;
     /// <summary>Fixed prices each by item ID (as text keys, e.g. Aion__Market__Seller__Prices__610710006=250).</summary>
     public Dictionary<string, long> Prices { get; init; } = [];
 
@@ -123,6 +130,8 @@ public sealed record MarketBuyerOptions
     public int MaxPurchasesPerCycle { get; init; } = 5;
     /// <summary>Kinah the bot spends a day at most (0: no cap). Its Kinah comes from nowhere: the cap limits money creation.</summary>
     public long KinahPerDay { get; init; } = 1_000_000;
+    /// <summary>Items with a reference price: the bot pays at most this share of it (0.8: 80%), so overpriced listings stay unsold.</summary>
+    public double ReferenceFraction { get; init; } = 0.8;
     /// <summary>Items without a vendor value: the bot pays at most this much each (0: it leaves them alone).</summary>
     public long UnpricedMaxPriceEach { get; init; }
 
@@ -133,6 +142,7 @@ public sealed record MarketBuyerOptions
         if (!double.IsFinite(MaxPriceMultiplier) || MaxPriceMultiplier is <= 0 or > 1000) throw MarketOptions.Bad("Buyer:MaxPriceMultiplier must be above 0 and at most 1000");
         if (!double.IsFinite(BuyChancePercent) || BuyChancePercent is < 0 or > 100) throw MarketOptions.Bad("Buyer:BuyChancePercent must be between 0 and 100");
         if (MaxPurchasesPerCycle < 0) throw MarketOptions.Bad("Buyer:MaxPurchasesPerCycle must be 0 or more");
+        if (!double.IsFinite(ReferenceFraction) || ReferenceFraction is <= 0 or > 1) throw MarketOptions.Bad("Buyer:ReferenceFraction must be above 0 and at most 1");
         if (KinahPerDay < 0 || UnpricedMaxPriceEach < 0) throw MarketOptions.Bad("Buyer:KinahPerDay and UnpricedMaxPriceEach must be 0 or more");
     }
 }
@@ -149,6 +159,7 @@ public sealed class MarketPricing
     readonly Dictionary<int, ItemInfo> equipment;
     readonly IReadOnlyDictionary<int, long> shopKinah;
     readonly IReadOnlySet<int> shopOther;
+    volatile IReadOnlyDictionary<int, long> references = new Dictionary<int, long>();
     readonly Lock gate = new();
 
     public IReadOnlyList<int> MaterialIds { get; }
@@ -244,11 +255,19 @@ public sealed class MarketPricing
     public long? SellerPrice(int itemId, MarketSellerOptions seller, Random rng)
     {
         if (seller.FixedPrice(itemId) is { } fixedPrice) return fixedPrice;
-        if (Value(itemId) is not { } value) return null;
         var variance = seller.PriceVariancePercent / 100.0;
-        var factor = seller.PriceMultiplier * (1 + (rng.NextDouble() * 2 - 1) * variance);
-        return Math.Max(seller.MinPriceEach, (long)Math.Round(value * factor));
+        var spread = 1 + (rng.NextDouble() * 2 - 1) * variance;
+        if (Reference(itemId) is { } reference) return Math.Max(seller.MinPriceEach, (long)Math.Round(reference * spread));
+        if (Value(itemId) is not { } value) return null;
+        return Math.Max(seller.MinPriceEach, (long)Math.Round(value * seller.PriceMultiplier * spread));
     }
+
+    /// <summary>Replaces the reference price table (item ID to Kinah each; Aion:Market:PriceFile).</summary>
+    public void SetReferences(IReadOnlyDictionary<int, long> prices) => references = prices.Where(p => p.Value > 0).ToDictionary();
+
+    /// <summary>The item's reference price each, or null.</summary>
+    public long? Reference(int itemId) => references.TryGetValue(itemId, out var p) ? p : null;
+    public int ReferenceCount => references.Count;
 
     /// <summary>
     /// The most the bot buyer pays each for the item, or null when it does not buy it. Always below the seller bot's lowest price
@@ -260,6 +279,11 @@ public sealed class MarketPricing
         if (shopOther.Contains(itemId)) return null;
         long? limit;
         if (seller.FixedPrice(itemId) is { } fixedPrice) limit = fixedPrice - 1;
+        else if (Reference(itemId) is { } reference)
+        {
+            var sellerLowest = Math.Max(seller.MinPriceEach, (long)Math.Floor(reference * (1 - seller.PriceVariancePercent / 100.0)));
+            limit = Math.Min((long)Math.Floor(reference * buyer.ReferenceFraction), sellerLowest - 1);
+        }
         else if (Value(itemId) is { } value)
         {
             var sellerLowest = Math.Max(seller.MinPriceEach, (long)Math.Floor(value * seller.PriceMultiplier * (1 - seller.PriceVariancePercent / 100.0)));
@@ -281,9 +305,61 @@ public sealed class MarketPricing
         if (seller.Crafted) pool.UnionWith(CraftedIds);
         if (seller.Equipment) pool.UnionWith(EquipmentItems.Select(e => e.Id));
         pool.RemoveWhere(id => Equipment(id) is { } info && (seller.MinItemLevel > 0 && info.Level < seller.MinItemLevel || seller.MaxItemLevel > 0 && info.Level > seller.MaxItemLevel));
+        if (seller.ReferenceItems) pool.UnionWith(references.Keys);
         pool.UnionWith(seller.Include);
         pool.ExceptWith(seller.Exclude);
         pool.Remove(GameSession.KinaItemId);
-        return pool.Where(id => seller.FixedPrice(id) is not null || Value(id) is not null).Order().ToList();
+        return pool.Where(id => seller.FixedPrice(id) is not null || Reference(id) is not null || Value(id) is not null).Order().ToList();
     }
+}
+
+/// <summary>
+/// The reference price table (Aion:Market:PriceFile, OURS format): JSON {"prices": {"&lt;item ID or exact item name&gt;": Kinah each}}
+/// (other top-level keys such as "source" and "updated" are notes), or CSV lines "item,price" ('#' starts a comment, a header
+/// line is skipped). Names are matched against the catalogue when the market bot starts.
+/// </summary>
+public static class MarketReferencePrices
+{
+    public static (Dictionary<int, long> ById, Dictionary<string, long> ByName) Parse(string text, bool json)
+    {
+        var byId = new Dictionary<int, long>();
+        var byName = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        void Add(string key, long price)
+        {
+            key = key.Trim();
+            if (key.Length == 0 || price < 1) throw new InvalidOperationException($"Aion:Market:PriceFile: \"{key}\" needs an item and a price of at least 1.");
+            if (int.TryParse(key, NumberStyles.None, CultureInfo.InvariantCulture, out var id)) byId[id] = price; else byName[key] = price;
+        }
+        if (json)
+        {
+            using var doc = JsonDocument.Parse(text, new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+            if (!doc.RootElement.TryGetProperty("prices", out var prices) || prices.ValueKind != JsonValueKind.Object)
+                throw new InvalidOperationException("Aion:Market:PriceFile: a JSON price file needs a \"prices\" object.");
+            foreach (var p in prices.EnumerateObject())
+                Add(p.Name, p.Value.ValueKind == JsonValueKind.Number ? p.Value.GetInt64() : MarketCommands.ParseKinah(p.Value.GetString() ?? "") ?? 0);
+        }
+        else
+        {
+            var header = true;
+            foreach (var raw in text.Split('\n'))
+            {
+                var line = raw.Trim();
+                if (line.Length == 0 || line.StartsWith('#')) continue;
+                var cut = line.LastIndexOf(',');
+                if (cut < 0) throw new InvalidOperationException($"Aion:Market:PriceFile: \"{line}\" is not \"item,price\".");
+                var (item, price) = (line[..cut].Trim().Trim('"'), line[(cut + 1)..].Trim());
+                if (MarketCommands.ParseKinah(price) is not { } kinah)
+                {
+                    if (header) { header = false; continue; }   // the first line may be a header ("item,price")
+                    throw new InvalidOperationException($"Aion:Market:PriceFile: \"{line}\" has no price.");
+                }
+                header = false;
+                Add(item, kinah);
+            }
+        }
+        return (byId, byName);
+    }
+
+    public static (Dictionary<int, long> ById, Dictionary<string, long> ByName) Load(string path) =>
+        Parse(File.ReadAllText(path), path.EndsWith(".json", StringComparison.OrdinalIgnoreCase));
 }

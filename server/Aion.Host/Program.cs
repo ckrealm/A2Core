@@ -96,6 +96,9 @@ var bots = (builder.Configuration.GetSection("Aion:Bots").Get<Aion.World.BotOpti
 // Market (OURS, docs/MARKET.md): Aion:Market (Enabled, ListingHours, SaleTaxPercent, CrossWorld, ...), Aion:Market:Seller and
 // Aion:Market:Buyer (the market bot). Needs the game database.
 var market = (builder.Configuration.GetSection("Aion:Market").Get<Aion.World.MarketOptions>() ?? new Aion.World.MarketOptions()).Validated();
+// Aion:Market:PriceFile: reference prices (docs/MARKET.md); a bad file stops the host here with the reason.
+var marketReferences = market.PriceFile is { Length: > 0 } priceFile ? Aion.World.MarketReferencePrices.Load(priceFile)
+    : ((Dictionary<int, long> ById, Dictionary<string, long> ByName)?)null;
 
 builder.Services.AddSingleton(dungeonRules);
 if (native.LoginPort is not null || native.GamePort is not null)
@@ -147,7 +150,7 @@ if (native.LoginPort is not null || native.GamePort is not null)
             var log = provider.GetRequiredService<ILoggerFactory>().CreateLogger("Aion.Market");
             return new Aion.World.MarketBot(provider.GetRequiredService<Aion.Application.Market.IMarketStore>(), market, Aion.World.MarketPricing.Embedded,
                 mailed: (seller, post) => world.FindOnline(seller)?.Send(Aion.World.GameSession.PostReceived(post)),
-                log: message => log.LogInformation("{Message}", message));
+                log: message => log.LogInformation("{Message}", message), references: marketReferences);
         });
         builder.Services.AddHostedService<MarketBotService>();
     }
