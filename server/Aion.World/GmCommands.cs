@@ -94,7 +94,7 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
     public FunFeatures? Fun { get; init; }
 
     /// <summary>Commands every player may type with a single slash (the client's own slash commands never reach the server).</summary>
-    static readonly HashSet<string> PlayerWords = new(StringComparer.OrdinalIgnoreCase) { "help", "report", "buff", "hub", "bot", "ah", "boost", "mail", "sendkinah", "senditem" };
+    static readonly HashSet<string> PlayerWords = new(StringComparer.OrdinalIgnoreCase) { "help", "report", "buff", "hub", "bot", "ah", "boost", "mail", "pmail", "sendkinah", "senditem" };
 
     static bool Is(string line, string word) =>
         line.StartsWith(word, StringComparison.OrdinalIgnoreCase) && (line.Length == word.Length || char.IsWhiteSpace(line[word.Length]));
@@ -104,7 +104,7 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
         var text = content.Trim();
         string line;
         if (text.StartsWith("//", StringComparison.Ordinal)) line = text[2..].Trim();
-        // One slash works for the player commands (/buff, /hub, /report, /help, /bot, /ah, /boost, /mail, /sendkinah, /senditem);
+        // One slash works for the player commands (/buff, /hub, /report, /help, /bot, /ah, /boost, /mail, /pmail, /sendkinah, /senditem);
         // "//" works for them too, and builder (GM) commands keep "//".
         else if (text.StartsWith('/') && text[1..].Split(' ', 2)[0] is var word && PlayerWords.Contains(word)) line = text[1..].Trim();
         else return "Unknown command. Use /help.";
