@@ -1,7 +1,8 @@
 # Stigmas
 
 Stigmas work the way they do on global Aion 2 (October 2026). Every value is marked: CANDIDATE values come from public
-global guides and still need the client's own tables or a capture to confirm; OURS values are our choice where global
+global guides and still need the client's own tables or a capture to confirm; recovered values come from the client's own
+tables (the stigma skills and their costs); OURS values are our choice where global
 publishes nothing.
 
 ## How it plays
@@ -45,19 +46,21 @@ In an env file: `Aion__Stigmas__Slots=4`, `Aion__Stigmas__ShardRate=2`.
 
 ## Which skills are stigmas
 
-`tools/stigmas.py` writes the list to `tools/data/stigmas.json` (CANDIDATE). The client's developer kit `Class_<class>`
-(DevTeleportDataTable, `tools/data/dev-menu.json`) teaches a level-45, Ascension-3 character its whole kit. The active
-skills in that kit that no auto-learned SkillAcquireData row gives the class are the ones `class_skills.py` dropped for
-having a cost. Those are the stigmas: 11 or 12 per class. Global lists 13. The 13th, added in March 2026, is not in the
-developer kit. The passives in that kit (the 7x family) stay level unlocks.
+**Recovered data.** The server data bundle's catalogue (`game-catalog-v2/entries.jsonl`, each skill's SkillAcquireData rows
+under `relationships.acquisition`) has 2,340 Stigma rows: 117 stigma skills, 13 per class for the 8 classes and the
+Brawler (`Fighter`). All are Active and flagged `bIsStigmaSkill`. Every class's x700000 skill is its 120 s Assault
+stigma. All 117 share one cost ladder (the 1/2/4/8 above), and every level needs character level 22. Level 1 also needs
+Ascension grade 3, which we do not check (OURS). The ID, name and cooldown of each stigma are in
+`tools/data/stigmas.json` `params.recovered`. The Brawler's names are "???" in the client.
 
-The Brawler (client class `Fighter`) uses its recovered list instead (`params.recovered`): 13 stigmas read from the
-client's SkillAcquireData Stigma rows during the Brawler work, all from level 22: 19280000 to 19400000 and 19460000.
-19370000 and 19460000 are not in the developer kit, so they have no cast data yet. The Brawler becomes playable in its
-own PR (#10).
+**Cast data.** None of them has recovered damage rows. `tools/stigmas.py` gives each one a definition
+(`generated.skills`): its real name and cooldown, with damage taken from the class's comparable damage skills in that
+cooldown band (OURS, `progression.fallback_definition`). Buff and defence stigmas such as Zikel's Blessing therefore hit
+a target like an attack until their SkillEffect rows are exported. `GameData.Skill` uses these definitions ahead of
+progression.json's guesses.
 
-The OURS level unlocks in `progression.json` still list these skills and give them their fallback cast data. With
-stigmas on, the server leaves them out of the level kit (`GameSession.LevelKit`).
+progression.json still lists most of these skills as OURS level unlocks from level 26, as before. With stigmas on, the
+server leaves every stigma out of the level kit (`GameSession.LevelKit`).
 
 ## Messages (CANDIDATE)
 
@@ -85,9 +88,8 @@ stigma levels cost. Stigma slots are ordinary quick slots.
 | Value | Client table |
 |---|---|
 | Shards and slots per level | Exp.dat `BonusStigmaPoint`, `BonusStigmaSuperiorPoint`, `StigmaSkillContextSlotMax` (the `levels.json` export only kept `BonusSkillPoint`) |
-| The stigma skills and their level costs | SkillAcquireData rows with `AcquireType` Stigma, `CostStigmaPoint`, `CostStigmaSuperiorPoint`, `GainStigmaSuperiorPoint` |
 | Reset prices | GlobalSettingTable `stigma_skill_reset_cost`, `stigma_skill_reset_all_cost` (and the Superior versions) |
-| Which skills are stigmas | Skill.dat `bIsStigmaSkill` |
+| What each stigma does | Skill.dat SkillEffect rows for the stigma skills (damage, buffs, specialties) |
 | The unlock quest | GlobalSettingTable `stigma_unlock_condition`, `stigma_unlock_condition_quest_light` / `_dark` |
 
 `tools/stigmas.py build` is the place to read them.

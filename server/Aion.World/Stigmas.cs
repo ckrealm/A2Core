@@ -24,6 +24,7 @@ public sealed class StigmaTable
 
     sealed record Generated(
         [property: JsonPropertyName("classes")] Dictionary<string, int[]> Classes,
+        [property: JsonPropertyName("skills")] Dictionary<string, SkillDefinition>? Skills,
         [property: JsonPropertyName("shard_totals")] Dictionary<string, int> ShardTotals);
 
     sealed record File([property: JsonPropertyName("params")] Params Params, [property: JsonPropertyName("generated")] Generated Generated);
@@ -50,7 +51,11 @@ public sealed class StigmaTable
     public IReadOnlyList<int> ClassStigmas(string? className) =>
         className is not null && file.Generated.Classes.TryGetValue(className, out var ids) ? ids : [];
 
-    public bool IsStigma(int skillId) => owner.ContainsKey(skillId);
+/// <summary>A stigma's cast data when no recovered Skill.dat summary has it: recovered name and cooldown, OURS damage.</summary>
+    public SkillDefinition? Skill(int skillId) =>
+        file.Generated.Skills?.GetValueOrDefault(skillId.ToString(CultureInfo.InvariantCulture));
+
+        public bool IsStigma(int skillId) => owner.ContainsKey(skillId);
 
     public bool IsStigmaOf(string? className, int skillId) => className is not null && owner.GetValueOrDefault(skillId) == className;
 

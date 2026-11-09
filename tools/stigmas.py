@@ -75,19 +75,42 @@ def shard_totals(params, max_level):
     return out
 
 
-def build(params, rules, dev_buttons):
+def build(params, rules, dev_buttons, progression_skills=None):
     # Recovered SkillAcquireData Stigma rows win over the developer-kit candidates where we have them.
     recovered = params.get('recovered', {})
-    classes = {c: sorted(recovered[c]) if c in recovered else class_stigmas(c, rules, dev_buttons) for c in CLASSES}
+    classes = {c: sorted(e[0] for e in recovered[c]) if c in recovered else class_stigmas(c, rules, dev_buttons) for c in CLASSES}
     return {'classes': {c: s for c, s in classes.items() if s},
+            'skills': stigma_skills(recovered, rules, progression_skills or {}),
             'shard_totals': shard_totals(params, rules['max_level'])}
+
+
+def stigma_skills(recovered, rules, progression_skills):
+    """Cast data for the recovered stigmas without recovered Skill.dat data (OURS damage, real name and cooldown): the class's
+    comparable damage skills in the cooldown's band (progression.fallback_definition). progression.json's definition is the
+    base where it has one (its cooldown is a guessed band, its passives are wrong: every stigma is Active)."""
+    edges = progression.load()['params']['cooldown_bands_ms']
+    out = {}
+    for class_name, entries in recovered.items():
+        cls = rules['classes'].get(class_name)
+        if not cls or not cls.get('unlocks'):
+            continue
+        pool = progression.comparable(class_name, rules, edges)
+        for skill_id, name, cooldown in entries:
+            if str(skill_id) in rules['skills']:
+                continue   # recovered cast data exists
+            base = progression_skills.get(str(skill_id)) or {}
+            base = {k: v for k, v in base.items() if k in ('target', 'weapons', 'casting_ms', 'cost')} if base.get('type') == 'Active' else {}
+            definition = progression.fallback_definition(skill_id, progression.band_of(cooldown, edges), pool, cls['weapon_type'],
+                                                         name=name, base={**base, 'cooldown_ms': cooldown, 'name': name})
+            out[str(skill_id)] = definition
+    return out
 
 
 def regenerate(path=DATA, class_skills_path=CLASS_SKILLS, dev_menu_path=DEV_MENU):
     document = json.loads(Path(path).read_text(encoding='utf-8'))
     rules = json.loads(Path(class_skills_path).read_text(encoding='utf-8'))
     dev = json.loads(Path(dev_menu_path).read_text(encoding='utf-8'))['buttons']
-    document['generated'] = build(document['params'], rules, dev)
+    document['generated'] = build(document['params'], rules, dev, progression.load()['generated']['skills'])
     Path(path).write_text(json.dumps(document, indent=1) + '\n', encoding='utf-8')
     return document
 
