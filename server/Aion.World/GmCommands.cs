@@ -112,10 +112,11 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
                 return Market is { } market ? await market.HandleAsync(actor.Session, line[2..].Trim(), ct) : "The market is not available on this server.";
             if (line.StartsWith("bot", StringComparison.OrdinalIgnoreCase) && (line.Length == 3 || char.IsWhiteSpace(line[3])))
                 return await BotAsync(actor.Session, line[3..].Trim(), ct);
-            // Player mail (Aion:Alts:PlayerMail, GameSession.Alts.cs; off: as before). "//mail" without a '|' stays the staff builder's Mail for staff.
+            // Player mail (Aion:Alts:PlayerMail, GameSession.Alts.cs; off: as before). Staff keep the builder's //mail (its
+            // "Title|Body" has a '|' too) and send player mail with //pmail.
             var mailWord = line.Split(' ', 2)[0];
             if (actor.Session.Alts.PlayerMail && GameSession.MailCommands.FirstOrDefault(c => c.Equals(mailWord, StringComparison.OrdinalIgnoreCase)) is { } mailCommand
-                && (mailCommand != "mail" || line.Contains('|') || !await builder.AllowedAsync(actor.Session, ct)))
+                && (mailCommand != "mail" || !await builder.AllowedAsync(actor.Session, ct)))
                 return await actor.Session.InvokeAsync(async _ => await actor.Session.PlayerMailAsync(mailCommand, line[mailWord.Length..].Trim(), ct))
                     .WaitAsync(TimeSpan.FromSeconds(10), ct);
             if (line.Length == 0 || line.Equals("help", StringComparison.OrdinalIgnoreCase))

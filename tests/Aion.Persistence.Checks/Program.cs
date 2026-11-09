@@ -312,6 +312,37 @@ await using(var source=NpgsqlDataSource.Create(connectionString))
     Check(await game.TakePostAsync(second,staffChar,mailed.Post!.Id)
           && (await game.InventoryAsync(second,staffChar))!.Items.Single(x=>x.InstanceId==deposit.InstanceId) is { Location: "bag" } arrived && arrived.WireId==deposit.WireId
           && !await game.TakePostAsync(second,staffChar,mailed.Post!.Id),"taking the post moves the item itself (identity kept) into the recipient's bag, once");
+    // Kinah plus fee past long.MaxValue is refused, not wrapped into a negative payment.
+    Check((await game.SendPlayerPostAsync(first,altId,new PlayerPost("[gm]staff",106,"x|y",Kinah:long.MaxValue,Fee:1))).Result=="kinah","Kinah plus fee past the long range is refused");
+    // Both races share world 1204: an Asmodian of the same account has its own warehouse and cannot mail an Elyos.
+    Guid darkId;
+    await using(var dark=source.CreateCommand("INSERT INTO game.characters(account_id,world_id,name,creation_id,race,gender,lobby_slot) VALUES($1,1204,'Darkalt',9,2,1,7) RETURNING character_id"))
+    { dark.Parameters.AddWithValue(first.AccountId); darkId=(Guid)(await dark.ExecuteScalarAsync())!; }
+    await game.AdminAsync(second,new AdminCommand(Guid.NewGuid(),altId,"grant","test",101));
+    var lightDeposit=(await game.InventoryAsync(first,altId))!.Items.Last(x=>x.Location=="bag" && x.TemplateId==101 && !x.Upgrades.TryGetProperty("soul_bind",out _));
+    Check(await game.MoveWarehouseItemAsync(first,altId,lightDeposit.InstanceId,lightDeposit.Revision,"account_storage",2)
+          && (await game.AccountWarehouseAsync(first,altId)).Any(x=>x.InstanceId==lightDeposit.InstanceId)
+          && (await game.AccountWarehouseAsync(first,darkId)).All(x=>x.InstanceId!=lightDeposit.InstanceId),"the other race of the account has its own warehouse");
+    var lightHeld=(await game.AccountWarehouseAsync(first,altId)).Single(x=>x.InstanceId==lightDeposit.InstanceId);
+    Check(!await game.MoveWarehouseItemAsync(first,darkId,lightDeposit.InstanceId,lightHeld.Revision,"bag",4),"an Asmodian cannot take from the Elyos warehouse");
+    Check((await game.SendPlayerPostAsync(first,darkId,new PlayerPost("Altfirst",106,"x|y"))).Result=="unknown","player mail does not cross to the other race");
+    // A soul-bound item in a character's own warehouse joins the account's on load, but only that character takes it out.
+    await using(var toStorage=source.CreateCommand("UPDATE game.item_instances SET location='storage',slot=40 WHERE instance_id=$1"))
+    { toStorage.Parameters.AddWithValue(bound.InstanceId); await toStorage.ExecuteNonQueryAsync(); }
+    var mergedBound=(await game.AccountWarehouseAsync(first,id)).Single(x=>x.InstanceId==bound.InstanceId);
+    Check(!await game.MoveWarehouseItemAsync(first,altId,bound.InstanceId,mergedBound.Revision,"bag",5),"another character cannot take a merged soul-bound item");
+    Check(await game.MoveWarehouseItemAsync(first,id,bound.InstanceId,mergedBound.Revision,"bag",30),"its own character takes it back");
+    // Mail with an item that expires untaken goes back to the sender.
+    var lightTaken=await game.MoveWarehouseItemAsync(first,altId,lightDeposit.InstanceId,lightHeld.Revision,"bag",4);
+    var lightBack=(await game.InventoryAsync(first,altId))!.Items.Single(x=>x.InstanceId==lightDeposit.InstanceId);
+    var expiring=await game.SendPlayerPostAsync(first,altId,new PlayerPost("[gm]staff",106,"Sword|Late",lightBack.InstanceId,lightBack.Revision));
+    await using(var expire=source.CreateCommand("UPDATE game.character_posts SET expire_at=now()-interval '1 second' WHERE post_id=$1"))
+    { expire.Parameters.AddWithValue(expiring.Post!.Id); await expire.ExecuteNonQueryAsync(); }
+    var returned=(await game.PostsAsync(first,altId)).SingleOrDefault(p=>p.Params.StartsWith("Returned: Sword"));
+    Check(lightTaken && expiring.Result=="ok" && returned is not null && returned.Attachments.SequenceEqual([(101,1L)])
+          && (await game.PostsAsync(second,staffChar)).All(p=>p.Id!=expiring.Post!.Id),"an expired mail with an item comes back to its sender");
+    Check(await game.TakePostAsync(first,altId,returned!.Id)
+          && (await game.InventoryAsync(first,altId))!.Items.Single(x=>x.InstanceId==lightDeposit.InstanceId) is { Location: "bag" },"the sender takes the item back");
 }
 Console.WriteLine($"{checks} isolated PostgreSQL repository checks passed.");
 

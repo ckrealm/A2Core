@@ -60,9 +60,15 @@ public sealed class CollectionTables
     {
         clock ??= ResetClock.Current;
         if (nowMs < file.Season.FromMs || nowMs > file.Season.ToMs) return (-1, -1, -1);
+        // The season's first day is its calendar start date (a Wednesday, UTC), not the reset day its start instant falls in:
+        // west of UTC the official 07:00 UTC start is before the local 05:00 reset, which would count it as the day before and
+        // run every rotation a day or a week early. The hours between the season start and the first local reset count as day 1.
+        var first = DateOnly.FromDateTime(DateTimeOffset.FromUnixTimeMilliseconds(file.Season.FromMs).UtcDateTime);
+        var firstWeek = first.AddDays(-(((int)first.DayOfWeek - (int)clock.WeeklyDay + 7) % 7));
         var today = clock.Day(nowMs);
-        var week = clock.Week(nowMs);
-        return (today.DayNumber - clock.Day(file.Season.FromMs).DayNumber, (week.DayNumber - clock.Week(file.Season.FromMs).DayNumber) / 7 + 1, today.DayNumber - week.DayNumber);
+        if (today < first) today = first;
+        var week = today.AddDays(-(((int)today.DayOfWeek - (int)clock.WeeklyDay + 7) % 7));
+        return (today.DayNumber - first.DayNumber, (week.DayNumber - firstWeek.DayNumber) / 7 + 1, today.DayNumber - week.DayNumber);
     }
 
     /// <summary>The collections open now for a race with their windows: today's daily, this week's weekly, the season-long ones.</summary>

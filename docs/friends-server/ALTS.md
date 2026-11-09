@@ -24,12 +24,13 @@ the warehouse is container 2 in the item list (0x5611 / 0x561b) and in `ItemMove
 
 **What the server does.** With `SharedWarehouse` on, container 2 is the account's warehouse on that world:
 
-- Items in it are stored with location `account_storage` and the owning account and world. Any of the account's
-  characters on the world sees them and can take them out. One race per account applies on this server (migration 038),
-  so race does not come into it.
+- Items in it are stored with location `account_storage` and the owning account, world and race. Both races share
+  world 1204, so an account's Elyos and Asmodian characters (`Aion:Friends:BothFactions`) keep separate warehouses. Any of
+  the account's characters of that race sees them and can take them out.
 - A character's old per-character warehouse joins the account warehouse the first time that character loads its items
   (its slots are kept where they are free). Nothing is lost.
-- Soul-bound items cannot go in (the same rule as trading).
+- Soul-bound items cannot go in (the same rule as trading). A soul-bound item that was already in a character's own
+  warehouse joins the account warehouse with the rest, but only that character can take it out.
 - Container 15 (`kCharacterStorage`) is not served: the client was never seen showing it.
 
 **Two characters of one account online at once.** The server does not stop it (two launches of the same account both
@@ -68,8 +69,11 @@ with chat commands. Receiving uses the client's real mailbox.
 - The Kinah or item leaves your bag when you send. The item itself travels (its enchant and other upgrades are kept) and
   waits until the recipient takes the attachment. Soul-bound items cannot be mailed. A mail with an attachment not yet
   taken cannot be deleted.
-- Staff keep the builder command `//Mail <character> <item id|0> <count> <text>` for system mail. A staff `//mail` line
-  with a `|` is player mail, without one it is the builder's.
+- Mail only reaches characters of the sender's race: it never crosses to the other faction.
+- Staff keep the builder command `//Mail <character> <item id|0> <count> <text>` for system mail (its `Title|Body`
+  has a `|` too), so for staff `//mail` is always the builder's. Staff send player mail with `//pmail`, which takes the
+  same arguments as a player's `//mail`.
+- A mail can't cost more than the long range: Kinah plus `MailFee` past it is refused.
 
 Limits (OURS): subject 40 characters (longer is cut), text 500 characters.
 
@@ -77,7 +81,8 @@ Limits (OURS): subject 40 characters (longer is cut), text 500 characters.
 
 - `kStorage` = account warehouse is CANDIDATE (from the client's names).
 - How the mailbox shows the title and text comes from the staff-mail template (Post.dat 106, `"{title}|{body}"`), CANDIDATE.
-- Mail expiry: an unclaimed item waits as long as the mail (`MailDays`); after that the mail is hidden and the item
-  stays in the database (location `mail`), not returned to the sender.
+- Mail expiry: an unclaimed item or Kinah waits as long as the mail (`MailDays`). After that it goes back to the
+  sender as a new post titled `Returned: ...`, which is never returned again. Any mailbox load sweeps the whole server for
+  expired mail.
 - The `TakePost` increase reason in `GameSession.Mail.cs` is 29, while the client's `EIncreaseReason` lists
   `kPostAttachment` = 21. Not changed here.

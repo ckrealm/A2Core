@@ -67,6 +67,7 @@ The kill is rolled once, for the killer (class-aware for the killer), and then s
   because the roll is already over and can't be redrawn.
 - Each member nearby counts their own dry kills against the monster, and gets their own guaranteed item when their
   streak is up, even if their share of that kill was empty.
+- Playerbots never count dry kills or get a guaranteed item, whether they made the kill or were nearby.
 - The chance boost only applies to the killer's roll.
 
 ## Limitations

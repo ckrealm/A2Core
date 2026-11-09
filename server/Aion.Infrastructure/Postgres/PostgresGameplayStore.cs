@@ -802,6 +802,21 @@ public sealed partial class PostgresGameplayStore(NpgsqlDataSource source) : IGa
     {
         await using var c=await source.OpenConnectionAsync(ct); await using var t=await c.BeginTransactionAsync(ct);
         if(!await Own(c,t,account.AccountId,character,ct)) return [];
+        // Aion:Alts player mail (migration 041) that expired untaken goes back to its sender as a new post: the mailed items
+        // (still in location 'mail') change hands, the Kinah attachment travels with them. A returned post has no sender, so it
+        // is never returned again. Any mailbox load sweeps the whole server (a few rows on a friends server).
+        await Execute(c,t,"""
+            WITH expired AS (
+                UPDATE game.character_posts SET taken=true,deleted=true
+                WHERE NOT taken AND NOT deleted AND expire_at<=now() AND sender_character IS NOT NULL
+                  AND (cardinality(attached_items)>0 OR attachments<>'[]'::jsonb)
+                RETURNING sender_character,save_tab,post_data_id,msg_params,attachments,attached_items),
+            moved AS (
+                UPDATE game.item_instances i SET character_id=e.sender_character,revision=i.revision+1
+                FROM expired e WHERE i.instance_id=ANY(e.attached_items) AND i.location='mail')
+            INSERT INTO game.character_posts(character_id,save_tab,post_data_id,msg_params,attachments,attached_items,expire_at)
+            SELECT sender_character,save_tab,post_data_id,'Returned: '||msg_params,attachments,attached_items,now()+interval '365 days' FROM expired
+            """,ct);
         var posts=new List<PostRecord>();
         await using(var q=Query(c,t,$"SELECT {PostColumns} FROM game.character_posts p WHERE p.character_id=$1 AND NOT p.deleted AND p.expire_at>now() ORDER BY p.post_id DESC LIMIT 200",character))
         {

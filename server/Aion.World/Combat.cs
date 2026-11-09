@@ -31,6 +31,8 @@ public sealed class Target
     public bool NoRotation { get; init; }
     /// <summary>Combat.DamageScale of its NpcSubType and Grade (times the Aion:DungeonScaling damage in a short-handed copy).</summary>
     public double DamageScale { get; set; } = 1.0;
+    /// <summary>HP max and damage scale before Aion:DungeonScaling touched them (null: never scaled), so a rescale starts from them.</summary>
+    public (int HpMax, double DamageScale)? Unscaled { get; set; }
     /// <summary>NpcData ObjectTerrainType Air: appears flying (move state 7 FlyingOnAirStop, substate 2; every official air NPC).</summary>
     public bool Air { get; init; }
     /// <summary>A flying monster: appears with the passive abnormal 10000001 (immunities; every official flying monster, 17 of 17).</summary>

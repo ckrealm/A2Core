@@ -16,10 +16,10 @@ one is created with fewer members, its monsters get weaker:
 | 1 (solo) | 70% | 80% (79% floored at 80%) |
 
 - **Playerbots count as members.** One player with three bots is a full group and gets no scaling.
-- **Counted once, when the copy is created** (the first member's map load inside). The count is the larger of the
-  first member's party (bots included, even those not inside yet) and the players already in the copy. Members who
-  join later get the same copy at the same scale. A group that grows after entering keeps the easier monsters for that
-  run. A group that shrinks keeps the harder ones.
+- **Counted at every entry.** The count is the larger of the entering member's party (bots included, even those not
+  inside yet) and the players already in the copy. When it is larger than the copy was scaled for (someone joined the
+  party later), the copy's monsters grow to the new size: health and damage are recomputed from their unscaled values,
+  and a hurt monster keeps its share of health. A group that shrinks keeps the harder monsters.
 - **What changes:** each monster's maximum HP (it also appears with that HP, so health bars read correctly) and its
   hits (the NPC damage scale, so ordinary attacks, skills and boss area attacks all shrink). Friendly NPCs (escorts,
   allies) are left alone. Dungeon monsters do not respawn. Monsters a map event wakes later come from the same spawn

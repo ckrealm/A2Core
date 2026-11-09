@@ -3232,14 +3232,25 @@ checks = 0;
         await members[0].HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), noon + 20);
         return members;
     }
-    var pair = await Group(new SharedWorld(data), 2);
+    var pairWorld = new SharedWorld(data);
+    var pair = await Group(pairWorld, 2);
     Check(ScaledAs(pair[0], 0.8, 0.86) && pair[0].Copy?.Scale?.Members == 2, "two in the party: 80% HP, 86% damage (the second member counted before entering)");
     pair[1].EnterDungeonById(600002, noon + 30);
     await pair[1].HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), noon + 40);
     Check(ScaledAs(pair[1], 0.8, 0.86) && ReferenceEquals(pair[0].Copy, pair[1].Copy), "the second member joins the same copy: scaled once, not again");
+    // A third player joins the party later and enters: the copy's monsters grow to the three-member scale (not left weaker).
+    var third = await Delver(scaling, "Delver2late", pairWorld);
+    await pair[0].HandleAsync(SocialRequests.EncodeServerAndName(SocialOpcodes.PartyInviteRq, 1204, third.CharacterName!), noon + 50);
+    var lateInvite = (await third.TickAsync(noon + 51)).Single(b => (b[0] | b[1] << 8) == SocialOpcodes.PartyInviteNt);
+    await third.HandleAsync(SocialRequests.EncodePartyInviteResponse([new PartyInviteReply(BitConverter.ToInt64(lateInvite, 2), PartyInviteAnswer.Accept)]), noon + 52);
+    await pair[0].TickAsync(noon + 53);
+    third.EnterDungeonById(600002, noon + 60);
+    await third.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), noon + 70);
+    Check(ReferenceEquals(pair[0].Copy, third.Copy) && third.Copy?.Scale?.Members == 3 && ScaledAs(third, 0.9, 0.93) && ScaledAs(pair[0], 0.9, 0.93),
+          "a member who joins later raises the copy to the new group size (90% HP, 93% damage)");
     var full = await Group(new SharedWorld(data), 4);
     Check(ScaledAs(full[0], 1, 1) && full[0].Copy?.Scale?.Members == 4, "a full party of four (bots count as members): no scaling");
-    foreach (var s in pair.Concat(full)) s.ExitSharedWorld();
+    foreach (var s in pair.Append(third).Concat(full)) s.ExitSharedWorld();
 
     // Boss area attacks (tools/data/boss-area-skills.json, OURS): the expeditions' final bosses; their basic attack stays single-target.
     var areas = BossAreaSkills.Embedded;
@@ -3418,6 +3429,12 @@ checks = 0;
     Check(resetBook.At(season) == (0, 1, 0) && resetBook.At(At("2026-07-16T04:59:00Z")) == (0, 1, 0) && resetBook.At(At("2026-07-16T05:00:00Z")) == (1, 1, 1)
           && resetBook.At(At("2026-07-22T05:00:00Z")) == (7, 2, 0) && resetBook.At(season - 1) == (-1, -1, -1),
           "the collection book's days and weeks turn with the clock (a new day at 05:00, a new week on Wednesday)");
+    // West of UTC (05:00 in Chicago is 11:00 UTC) the season's 07:00 UTC start comes before the first local reset: those hours
+    // are still day 1 of week 1, and the rotation does not run a day or a week early.
+    var west = ResetClock.Utc(11);
+    Check(resetBook.At(season, west) == (0, 1, 0) && resetBook.At(At("2026-07-15T10:59:00Z"), west) == (0, 1, 0) && resetBook.At(At("2026-07-16T11:00:00Z"), west) == (1, 1, 1)
+          && resetBook.At(At("2026-07-22T10:59:00Z"), west) == (6, 1, 6) && resetBook.At(At("2026-07-22T11:00:00Z"), west) == (7, 2, 0),
+          "a reset hour after the season's start (west of UTC) keeps the season's first day and week");
     var daily = resetBook.Open(1, At("2026-10-13T15:00:00Z")).First(o => o.Collection.Kind == 1);
     Check(daily.From == At("2026-10-13T05:00:00Z") && daily.To == At("2026-10-14T05:00:00Z") - 1, "a daily collection's window is the reset day");
 }
@@ -3932,7 +3949,7 @@ checks = 0;
     Check((await feePayer.PlayerMailAsync("mail", "Altchar hi | there", CancellationToken.None)).Message == "Mail sent to Altchar. Fee: 100 Kinah."
           && feeStore.Items.Single(i => i.TemplateId == 930100001).Quantity == 50
           && (await feePayer.PlayerMailAsync("mail", "Altchar again | there", CancellationToken.None)).Message.StartsWith("Not enough Kinah (the mail costs 100"), "MailFee: paid per mail, refused without the Kinah");
-    // The chat command path: players use //mail; for staff, //Mail without a '|' stays the builder's staff mail.
+    // The chat command path: players use //mail (or //pmail); for staff, //mail is always the builder's staff mail.
     var altPresence = new WorldPresence();
     altPresence.Enter("Mainchar", main, null);
     var altGm = new GmCommands(altPresence, new BuilderCommands(altPresence, new GmPolicy(), (_, _, _) => { }, data));
@@ -3943,6 +3960,9 @@ checks = 0;
     var usage = altGm.HandleAsync(altChat, "Mainchar", "//Mail Altchar 0 0 hello", default);
     for (var altTick = 0; !usage.IsCompleted && altTick < 2000; altTick++) { await main.TickAsync(Now + 3000 + altTick); await Task.Delay(1); }
     Check((await usage).StartsWith("Usage: //mail"), "a player's //mail without '|' gets the player usage, not the staff builder");
+    var pmail = altGm.HandleAsync(altChat, "Mainchar", "//pmail Altchar Again | by pmail", default);
+    for (var altTick = 0; !pmail.IsCompleted && altTick < 2000; altTick++) { await main.TickAsync(Now + 6000 + altTick); await Task.Delay(1); }
+    Check(await pmail == "Mail sent to Altchar." && altStore.Posts[^1].Params == "[Mainchar] Again|by pmail", "//pmail (the staff's player mail) is player mail too");
 }
 Console.WriteLine($"{checks} alt checks passed (account warehouse, player mail).");
 

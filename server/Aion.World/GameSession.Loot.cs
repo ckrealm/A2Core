@@ -41,7 +41,7 @@ public sealed partial class GameSession
         var me = loot.Picks || loot.BadLuckProtection ? Looter() : null;
         Func<Func<int>, int>? pick = loot.Picks ? me!.Pick : null;
         var kill = new LootKill(target.NpcId, target.SubType, target.Level, generic);
-        var pity = PityCounts(kill, me);
+        var pity = !Bot && PityCounts(kill, me);   // a playerbot's own kills give it no guarantee
         var boost = pity ? loot.ChanceAfter(loot.Book.Dry(PityKey, target.NpcId)) : 1;
         var rolled = new List<(int, long)>();
         for (var i = 0; i < rolls; i++)
@@ -103,9 +103,13 @@ public sealed partial class GameSession
         var shares = MonsterRewards.Split(kinah, everyone.Count);
         for (var i = 0; i < everyone.Count; i++)
             if (shares[i] > 0) parts[everyone[i]].Add((KinaItemId, shares[i]));
-        // With bad-luck protection every member nearby hears of the kill (its own dry count), even with an empty share.
+        // With bad-luck protection every player nearby hears of the kill (its own dry count), even with an empty share.
         foreach (var member in members)
-            if (parts[member].Count > 0 || kill is not null) member.Session.ShareLoot(parts[member], killSite ?? position ?? Vector3d.Zero, kill);
+        {
+            // Playerbots get no dry count and no guaranteed item (their gear is not the players' progression).
+            var memberKill = member.Session.Bot ? null : kill;
+            if (parts[member].Count > 0 || memberKill is not null) member.Session.ShareLoot(parts[member], killSite ?? position ?? Vector3d.Zero, memberKill);
+        }
         return parts[worldPlayer!];
     }
 

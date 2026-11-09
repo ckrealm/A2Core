@@ -11,22 +11,23 @@ public sealed partial class PostgresGameplayStore
     const int KinahItemId = 930100001;
     const string WarehouseColumns = "instance_id,build_id,template_id,quantity,location,slot,revision,rolled_stats::text,upgrades::text,wire_id";
 
-    static async Task<(Guid Account, int World)> CharacterHome(NpgsqlConnection c, NpgsqlTransaction t, Guid character, CancellationToken ct)
+    // A character's account, world and race: both races share the world (1204), so the warehouse and mail are kept per race.
+    static async Task<(Guid Account, int World, int Race)> CharacterHome(NpgsqlConnection c, NpgsqlTransaction t, Guid character, CancellationToken ct)
     {
-        await using var q = Query(c, t, "SELECT account_id,world_id FROM game.characters WHERE character_id=$1", character);
+        await using var q = Query(c, t, "SELECT account_id,world_id,race FROM game.characters WHERE character_id=$1", character);
         await using var r = await q.ExecuteReaderAsync(ct);
         if (!await r.ReadAsync(ct)) throw new GameplayException("character_unavailable");
-        return (r.GetGuid(0), r.GetInt32(1));
+        return (r.GetGuid(0), r.GetInt32(1), r.GetInt32(2));
     }
 
     // One writer per account warehouse at a time (two characters of one account may be in the world together): the lock is
     // held to the end of the transaction, so a take and a deposit never both see the same slot or the same item.
-    static Task WarehouseLock(NpgsqlConnection c, NpgsqlTransaction t, Guid account, int world, CancellationToken ct) =>
-        Execute(c, t, "SELECT pg_advisory_xact_lock(hashtextextended($1,7314))", ct, $"warehouse:{account}:{world}");
+    static Task WarehouseLock(NpgsqlConnection c, NpgsqlTransaction t, Guid account, int world, int race, CancellationToken ct) =>
+        Execute(c, t, "SELECT pg_advisory_xact_lock(hashtextextended($1,7314))", ct, $"warehouse:{account}:{world}:{race}");
 
     // The account's other characters on the world reload their items (InventoryNotifications): a second session sees the change.
-    static Task NotifyAccount(NpgsqlConnection c, NpgsqlTransaction t, Guid account, int world, Guid except, CancellationToken ct) =>
-        Execute(c, t, "SELECT pg_notify('aion_inventory',character_id::text) FROM game.characters WHERE account_id=$1 AND world_id=$2 AND character_id<>$3", ct, account, world, except);
+    static Task NotifyAccount(NpgsqlConnection c, NpgsqlTransaction t, Guid account, int world, int race, Guid except, CancellationToken ct) =>
+        Execute(c, t, "SELECT pg_notify('aion_inventory',character_id::text) FROM game.characters WHERE account_id=$1 AND world_id=$2 AND race=$4 AND character_id<>$3", ct, account, world, except, race);
 
     static async Task<List<ItemState>> ReadItems(NpgsqlCommand q, CancellationToken ct)
     {
@@ -42,11 +43,11 @@ public sealed partial class PostgresGameplayStore
     {
         await using var c = await source.OpenConnectionAsync(ct); await using var t = await c.BeginTransactionAsync(ct);
         if (!await Own(c, t, account.AccountId, character, ct)) return [];
-        var (owner, world) = await CharacterHome(c, t, character, ct);
-        await WarehouseLock(c, t, owner, world, ct);
+        var (owner, world, race) = await CharacterHome(c, t, character, ct);
+        await WarehouseLock(c, t, owner, world, race, ct);
         // The character's own warehouse (the per-character one before Aion:Alts) joins the account's, keeping slots where free.
         var used = new HashSet<int>();
-        await using (var q = Query(c, t, "SELECT slot FROM game.item_instances WHERE location='account_storage' AND warehouse_account=$1 AND warehouse_world=$2 AND slot IS NOT NULL", owner, world))
+        await using (var q = Query(c, t, "SELECT slot FROM game.item_instances WHERE location='account_storage' AND warehouse_account=$1 AND warehouse_world=$2 AND warehouse_race=$3 AND slot IS NOT NULL", owner, world, race))
         {
             await using var r = await q.ExecuteReaderAsync(ct);
             while (await r.ReadAsync(ct)) used.Add(r.GetInt32(0));
@@ -63,15 +64,15 @@ public sealed partial class PostgresGameplayStore
             int target;
             if (slot is { } kept && used.Add(kept)) target = kept;
             else { while (used.Contains(next)) next++; used.Add(target = next); }
-            await Execute(c, t, "UPDATE game.item_instances SET location='account_storage',slot=$2,warehouse_account=$3,warehouse_world=$4 WHERE instance_id=$1", ct, id, target, owner, world);
+            await Execute(c, t, "UPDATE game.item_instances SET location='account_storage',slot=$2,warehouse_account=$3,warehouse_world=$4,warehouse_race=$5 WHERE instance_id=$1", ct, id, target, owner, world, race);
         }
         if (own.Count > 0)
         {
             await Execute(c, t, "INSERT INTO audit.events(action,character_id,actor_id,details) VALUES('warehouse_merged',$1,$2,$3)", ct, character, account.AccountId, Json(new { items = own.Count }));
-            await NotifyAccount(c, t, owner, world, character, ct);
+            await NotifyAccount(c, t, owner, world, race, character, ct);
         }
         List<ItemState> items;
-        await using (var q = Query(c, t, $"SELECT {WarehouseColumns} FROM game.item_instances WHERE location='account_storage' AND warehouse_account=$1 AND warehouse_world=$2 ORDER BY instance_id", owner, world))
+        await using (var q = Query(c, t, $"SELECT {WarehouseColumns} FROM game.item_instances WHERE location='account_storage' AND warehouse_account=$1 AND warehouse_world=$2 AND warehouse_race=$3 ORDER BY instance_id", owner, world, race))
             items = await ReadItems(q, ct);
         await t.CommitAsync(ct); return items;
     }
@@ -81,51 +82,56 @@ public sealed partial class PostgresGameplayStore
         if (slot is < 0 or > 999 || location is not ("bag" or "account_storage")) throw new GameplayException("invalid_slot");
         await using var c = await source.OpenConnectionAsync(ct); await using var t = await c.BeginTransactionAsync(ct);
         if (!await Own(c, t, account.AccountId, character, ct)) return false;
-        var (owner, world) = await CharacterHome(c, t, character, ct);
-        await WarehouseLock(c, t, owner, world, ct);
+        var (owner, world, race) = await CharacterHome(c, t, character, ct);
+        await WarehouseLock(c, t, owner, world, race, ct);
         // The moved item: the character's bag item (not soul-bound when it goes into the warehouse) or one of the warehouse's.
         string oldLocation; object oldSlot;
         await using (var q = Query(c, t, """
-            SELECT location,slot,upgrades ? 'soul_bind' FROM game.item_instances
+            SELECT location,slot,upgrades ? 'soul_bind',character_id=$3 FROM game.item_instances
             WHERE instance_id=$1 AND revision=$2
-              AND ((character_id=$3 AND location='bag') OR (location='account_storage' AND warehouse_account=$4 AND warehouse_world=$5)) FOR UPDATE
-            """, item, revision, character, owner, world))
+              AND ((character_id=$3 AND location='bag') OR (location='account_storage' AND warehouse_account=$4 AND warehouse_world=$5 AND warehouse_race=$6)) FOR UPDATE
+            """, item, revision, character, owner, world, race))
         {
             await using var r = await q.ExecuteReaderAsync(ct);
             if (!await r.ReadAsync(ct)) return false;
             oldLocation = r.GetString(0); oldSlot = r.IsDBNull(1) ? DBNull.Value : r.GetInt32(1);
             if (oldLocation == "bag" && (location == "bag" || r.GetBoolean(2))) return false;   // bag to bag is MoveBagItem; bound items stay out
+            // A soul-bound item merged in from a character's own warehouse comes out only to that character.
+            if (oldLocation == "account_storage" && r.GetBoolean(2) && !r.GetBoolean(3)) return false;
         }
         // Off its slot first, so the swap below never meets it on the slot indexes.
         await Execute(c, t, "UPDATE game.item_instances SET slot=NULL WHERE instance_id=$1", ct, item);
         // The item on the target slot (if any) takes the moved item's old place.
         Guid? occupant = null; var occupantBound = false;
         await using (var q = Query(c, t, """
-            SELECT instance_id,upgrades ? 'soul_bind' FROM game.item_instances
+            SELECT instance_id,upgrades ? 'soul_bind',character_id=$6 FROM game.item_instances
             WHERE slot=$1 AND instance_id<>$2
-              AND (($3='account_storage' AND location='account_storage' AND warehouse_account=$4 AND warehouse_world=$5) OR ($3='bag' AND location='bag' AND character_id=$6)) FOR UPDATE
-            """, slot, item, location, owner, world, character))
+              AND (($3='account_storage' AND location='account_storage' AND warehouse_account=$4 AND warehouse_world=$5 AND warehouse_race=$7) OR ($3='bag' AND location='bag' AND character_id=$6)) FOR UPDATE
+            """, slot, item, location, owner, world, character, race))
         {
             await using var r = await q.ExecuteReaderAsync(ct);
-            if (await r.ReadAsync(ct)) { occupant = r.GetGuid(0); occupantBound = r.GetBoolean(1); }
+            if (await r.ReadAsync(ct)) { occupant = r.GetGuid(0); occupantBound = r.GetBoolean(1) && !(location == "account_storage" && r.GetBoolean(2)); }
         }
         if (occupant is { } other)
         {
-            if (oldLocation == "account_storage" && occupantBound) return false;
+            // A bound bag item cannot go into the warehouse; a bound warehouse item of another character cannot come out.
+            if (occupantBound) return false;
             await Execute(c, t, """
                 UPDATE game.item_instances SET location=$2,slot=$3,character_id=$4,
-                    warehouse_account=CASE WHEN $2='account_storage' THEN $5 END,warehouse_world=CASE WHEN $2='account_storage' THEN $6 END
+                    warehouse_account=CASE WHEN $2='account_storage' THEN $5 END,warehouse_world=CASE WHEN $2='account_storage' THEN $6 END,
+                    warehouse_race=CASE WHEN $2='account_storage' THEN $7 END
                 WHERE instance_id=$1
-                """, ct, other, oldLocation, oldSlot, character, owner, world);
+                """, ct, other, oldLocation, oldSlot, character, owner, world, race);
         }
         await Execute(c, t, """
             UPDATE game.item_instances SET location=$2,slot=$3,character_id=$4,
-                warehouse_account=CASE WHEN $2='account_storage' THEN $5 END,warehouse_world=CASE WHEN $2='account_storage' THEN $6 END
+                warehouse_account=CASE WHEN $2='account_storage' THEN $5 END,warehouse_world=CASE WHEN $2='account_storage' THEN $6 END,
+                warehouse_race=CASE WHEN $2='account_storage' THEN $7 END
             WHERE instance_id=$1
-            """, ct, item, location, slot, character, owner, world);
+            """, ct, item, location, slot, character, owner, world, race);
         await Execute(c, t, "INSERT INTO audit.events(action,character_id,actor_id,details) VALUES('warehouse_move',$1,$2,$3)", ct, character, account.AccountId,
             Json(new { item, from = oldLocation, to = location, slot, swapped = occupant }));
-        await NotifyAccount(c, t, owner, world, character, ct);
+        await NotifyAccount(c, t, owner, world, race, character, ct);
         await t.CommitAsync(ct); return true;
     }
 
@@ -134,10 +140,11 @@ public sealed partial class PostgresGameplayStore
         if (post.ItemCount < 0 || post.Kinah < 0 || post.Fee < 0 || post.Days is < 1 or > 3650 || string.IsNullOrWhiteSpace(post.To)) return new("invalid");
         await using var c = await source.OpenConnectionAsync(ct); await using var t = await c.BeginTransactionAsync(ct);
         if (!await Own(c, t, account.AccountId, character, ct)) return new("invalid");
-        var (_, world) = await CharacterHome(c, t, character, ct);
-        // Anyone on the world whose account is not disabled (deleted characters sit on a disabled account).
-        if (await Scalar(c, t, "SELECT c.character_id FROM game.characters c JOIN auth.accounts a USING(account_id) WHERE c.world_id=$1 AND lower(c.name)=lower($2) AND a.disabled_at IS NULL LIMIT 1",
-                ct, world, post.To.Trim()) is not Guid to) return new("unknown");
+        var (_, world, race) = await CharacterHome(c, t, character, ct);
+        // Anyone of the sender's race on the world whose account is not disabled (deleted characters sit on a disabled account):
+        // mail never crosses to the other faction.
+        if (await Scalar(c, t, "SELECT c.character_id FROM game.characters c JOIN auth.accounts a USING(account_id) WHERE c.world_id=$1 AND c.race=$3 AND lower(c.name)=lower($2) AND a.disabled_at IS NULL LIMIT 1",
+                ct, world, post.To.Trim(), race) is not Guid to) return new("unknown");
         if (to == character) return new("self");
         var escrow = new List<Guid>();
         if (post.Item is { } item)
@@ -168,6 +175,8 @@ public sealed partial class PostgresGameplayStore
                     """, ct, item, to, count))!);
             }
         }
+        // The Kinah sent plus the fee, refused rather than wrapped when it would pass long.MaxValue.
+        if (post.Kinah > long.MaxValue - post.Fee) return new("kinah");
         var pay = post.Kinah + post.Fee;
         if (pay > 0)
         {

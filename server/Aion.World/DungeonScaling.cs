@@ -60,31 +60,37 @@ public sealed record DungeonScaling
 public sealed partial class GameSession
 {
     /// <summary>
-    /// After the map's targets are set (LoadComplete): a fresh group-dungeon copy takes its scale from the group entering it
-    /// (Aion:DungeonScaling) and its monsters get it, once per target set (a shared copy's set is scaled by its first entrant).
+    /// After the map's targets are set (LoadComplete): a group-dungeon copy takes its scale from the group in it
+    /// (Aion:DungeonScaling) and its monsters get it. The group is counted at every entry (the first member's party, players
+    /// inside): when more members are there than the copy was scaled for, its monsters grow back toward full strength (a
+    /// later joiner does not keep a short-handed copy's weaker monsters). The scale never drops again when someone leaves.
     /// </summary>
     void ApplyDungeonScaling()
     {
-        if (copy is not { } c || targets is null || ReferenceEquals(c.ScaledTargets, targets)) return;
-        if (c.Scale is null)
-        {
-            var scaling = options.DungeonScaling;
-            if (MapEventData.DungeonOfMap(worldMap) is not { } room || !scaling.Scales(room)) return;
-            var party = worldPlayer is not null ? Social?.PartyOf(worldPlayer)?.Members.Count ?? 1 : 1;
-            var inside = options.World?.Map(worldMap, instanceKey).Players.Count ?? 0;
-            var members = Math.Max(1, Math.Max(party, inside));
-            c.Scale = (members, scaling.For(members).Hp, scaling.For(members).Damage);
-        }
+        if (copy is not { } c || targets is null) return;
+        var scaling = options.DungeonScaling;
+        if (MapEventData.DungeonOfMap(worldMap) is not { } room || !scaling.Scales(room)) return;
+        var party = worldPlayer is not null ? Social?.PartyOf(worldPlayer)?.Members.Count ?? 1 : 1;
+        var inside = options.World?.Map(worldMap, instanceKey).Players.Count ?? 0;
+        var members = Math.Max(1, Math.Max(party, inside));
+        if (ReferenceEquals(c.ScaledTargets, targets) && c.Scale is { } current && members <= current.Members) return;
+        // A fresh target set takes the copy's scale (kept from an earlier set, or counted now); more members than it was
+        // scaled for raise it.
+        if (c.Scale is not { } kept || members > kept.Members) c.Scale = (members, scaling.For(members).Hp, scaling.For(members).Damage);
         c.ScaledTargets = targets;
-        if (c.Scale is not { } scale || scale.Hp == 1 && scale.Damage == 1) return;
+        if (c.Scale is not { } scale) return;
         foreach (var t in targets.Values)
         {
             if (!t.SubType.EndsWith("Monster", StringComparison.Ordinal)) continue;
-            var hpMax = Math.Max(1, (int)Math.Round(t.HpMax * scale.Hp));
-            t.Hp = t.Hp >= t.HpMax ? hpMax : Math.Min(t.Hp, hpMax);
+            if (t.Unscaled is null && scale.Hp == 1 && scale.Damage == 1) continue;
+            var (baseHp, baseDamage) = t.Unscaled ??= (t.HpMax, t.DamageScale);
+            var hpMax = Math.Max(1, (int)Math.Round(baseHp * scale.Hp));
+            // Full health stays full; a hurt monster keeps its share of health.
+            t.Hp = t.Hp >= t.HpMax ? hpMax : Math.Max(t.Dead ? 0 : 1, (int)Math.Round((double)t.Hp * hpMax / Math.Max(1, t.HpMax)));
             t.HpMax = hpMax;
-            t.DamageScale *= scale.Damage;
+            t.DamageScale = baseDamage * scale.Damage;
         }
+        if (scale.Hp == 1 && scale.Damage == 1) return;
         Note($"{MapEventData.DungeonOfMap(worldMap)?.Name}: {scale.Members} member(s), monsters at {scale.Hp * 100:0}% HP and {scale.Damage * 100:0}% damage (Aion:DungeonScaling)");
     }
 }

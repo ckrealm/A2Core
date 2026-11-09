@@ -23,10 +23,13 @@ public sealed partial class GameSession
         return [.. own.Where(r => r.Location is not ("storage" or "account_storage")), .. warehouse.Select(r => r with { Location = "storage" })];
     }
 
-    /// <summary>The chat commands of player mail (//mail with a '|', //sendkinah, //senditem).</summary>
-    public static readonly IReadOnlyList<string> MailCommands = ["mail", "sendkinah", "senditem"];
+    /// <summary>
+    /// The chat commands of player mail: //mail (players; staff keep the builder's //mail, and write player mail with //pmail),
+    /// //pmail, //sendkinah, //senditem.
+    /// </summary>
+    public static readonly IReadOnlyList<string> MailCommands = ["mail", "pmail", "sendkinah", "senditem"];
 
-    public const string MailUsage = "//mail <name> <subject> | <text>, //sendkinah <name> <amount> [note], //senditem <name> <bag slot> [count] (//senditem alone lists your bag)";
+    public const string MailUsage = "//mail <name> <subject> | <text>, //sendkinah <name> <amount> [note], //senditem <name> <bag slot> [count] (//senditem alone lists your bag; staff write //pmail for player mail)";
 
     /// <summary>
     /// Player mail by chat command (Aion:Alts:PlayerMail): the client has no send request (see AltRules), so the sender types
@@ -44,7 +47,7 @@ public sealed partial class GameSession
         PlayerPost post;
         switch (command.ToLowerInvariant())
         {
-            case "mail":
+            case "mail" or "pmail":
             {
                 var bar = words.Length == 2 ? words[1].IndexOf('|') : -1;
                 if (bar < 0) return ("Usage: //mail <name> <subject> | <text>", []);
