@@ -94,7 +94,7 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
     public FunFeatures? Fun { get; init; }
 
     /// <summary>Commands every player may type with a single slash (the client's own slash commands never reach the server).</summary>
-    static readonly HashSet<string> PlayerWords = new(StringComparer.OrdinalIgnoreCase) { "help", "report", "buff", "hub", "bot", "ah", "boost", "mail", "pmail", "sendkinah", "senditem", "dungeon" };
+    static readonly HashSet<string> PlayerWords = new(StringComparer.OrdinalIgnoreCase) { "help", "report", "buff", "hub", "bot", "ah", "boost", "mail", "pmail", "sendkinah", "senditem", "dungeon", "lfg", "lfm" };
 
     static bool Is(string line, string word) =>
         line.StartsWith(word, StringComparison.OrdinalIgnoreCase) && (line.Length == word.Length || char.IsWhiteSpace(line[word.Length]));
@@ -127,6 +127,7 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
                 return Market is { } market ? await market.HandleAsync(actor.Session, line[2..].Trim(), ct) : "The market is not available on this server.";
             if (line.StartsWith("bot", StringComparison.OrdinalIgnoreCase) && (line.Length == 3 || char.IsWhiteSpace(line[3])))
                 return await BotAsync(actor.Session, line[3..].Trim(), ct);
+            if (Is(line, "lfg") || Is(line, "lfm")) return await LfgAsync(actor.Session, line[3..].Trim(), ct);
             if (Fun is { Options.BuffCommand: true } && Is(line, "buff"))
                 return await actor.Session.InvokeAsync(now => actor.Session.FunBuff(now)).WaitAsync(TimeSpan.FromSeconds(10), ct);
             if (Fun is { Options.HubCommand: true } && Is(line, "hub"))
@@ -139,6 +140,7 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
                         + (Fun is { Options.BuffCommand: true } ? " /buff gives you the food and scroll buffs." : "")
                         + (Fun is { Options.HubCommand: true } ? " /hub teleports to a town or the Abyss." : "")
                         + (Market is not null ? " /ah help shows the auction house commands." : "")
+                        + (Bots is { Options: { Enabled: true, Recruits: true } } ? " /lfg <what> [tank|heal|dps] posts your group: bots of the missing roles join it." : "")
                         + (Bots is { Options: { Enabled: true, PlayersMayUse: true } } ? " /bot add <character> summons one of your characters as a bot." : "");
             return await actor.Session.InvokeAsync(async now =>
             {
@@ -166,6 +168,14 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
         {
             return "The game connection did not respond.";
         }
+    }
+
+    /// <summary>/lfg (PlayerBots.Recruit): every player when Aion:Bots:Recruits; runs on the sender's game loop.</summary>
+    async Task<string> LfgAsync(GameSession actor, string args, CancellationToken ct)
+    {
+        if (Bots is not { Options: { Enabled: true, Recruits: true } } bots) return "Bots do not join posted groups on this server.";
+        if (actor.Bot) return "Bots do not post groups.";
+        return await actor.InvokeAsync(now => (bots.Recruit(actor, args, now), new List<byte[]>())).WaitAsync(TimeSpan.FromSeconds(10), ct);
     }
 
     /// <summary>//bot: allowed for staff, or for everyone with Aion:Bots:PlayersMayUse; runs on the sender's game loop.</summary>

@@ -29,6 +29,24 @@ The name argument defaults to `all`. `//bot` is for staff characters, and for ev
 A bot leaves the world when its leader logs out, goes back to the character screen or disconnects. It saves its
 position first, through the leader's still-open store.
 
+### Posting a group (`/lfg`)
+
+Bots never join anyone's group by themselves. A player posts a group, and bots of the roles it lacks join it:
+
+| Command | What it does |
+|---|---|
+| `/lfg <what> [tank\|heal\|dps ...]` (or `/lfm`) | Posts your group for something ("/lfg Fire Temple", "/lfg Ludra 2 dps heal"). With no roles named, one tank and one healer join if the group has none, then damage dealers fill it to the party limit. A number before a role repeats it. |
+| `/lfg list` | The bots hired for your group and whether they are still on the way. |
+| `/lfg cancel` | Closes the group: the hired bots leave. |
+
+Every player may post (no staff check), while `Aion:Bots:Enabled` and `Aion:Bots:Recruits` are on; you must lead your
+party or have none. Hired bots are new unsaved characters of your race and level: tanks are Templars (then Gladiators,
+Brawlers), healers Clerics (then Chanters), damage dealers a mix that skips classes already in the group. They arrive one
+by one, `Aion:Bots:RecruitJoinMs` apart, join your party and play with their role's rotation. A hired bot leaves when
+it is out of the party (kick it with the party window), when you close the group or leave the world, or when the party
+filled up before it arrived. They count against `MaxTotal`, not against your own `MaxPerAccount` bots
+(`PlayerBots.Recruit`).
+
 ## Design
 
 ### A bot is a session without a socket
@@ -348,6 +366,8 @@ These settings are in `appsettings` or the environment (`Aion__Bots__Enabled=tru
 | `Aion:Bots:MaxTotal` | `20` | Bots on the host at once. |
 | `Aion:Bots:JoinParty` | `true` | Bots join their leader's party, up to the party limit of 4. |
 | `Aion:Bots:TeleportBeyond` | `4000` | A bot farther than this from its leader (cm), or on another map, teleports to it. Minimum 1000. |
+| `Aion:Bots:Recruits` | `true` | Every player may post a group with `/lfg` for bots to fill. |
+| `Aion:Bots:RecruitJoinMs` | `3000` | Hired bots join this far apart (ms), the first this long after the post. |
 
 Bots do not count against `Aion:Native:MaxPlayers`, which counts connections, and they hold no socket slot. Each
 bot costs one exclusive world turn per 50 ms tick. That is fine for a friends server. A large host would batch

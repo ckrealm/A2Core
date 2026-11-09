@@ -90,6 +90,19 @@ public sealed partial class GameSession
         return true;
     }
 
+    /// <summary>The creation profile of a class in this player's race (a hired bot of the same faction), or 0 (no such class).</summary>
+    internal int CreationFor(string className) =>
+        Enumerable.Range(1, 64).FirstOrDefault(c => data.Profile(c, 1) is { } p && p.Class.Equals(className, StringComparison.OrdinalIgnoreCase) && p.Race == profileRace);
+
+    /// <summary>Whether this player leads its party or has none: the one who may post a group for bots to fill.</summary>
+    public bool LeadsOrSolo => Social is not { } s || worldPlayer is null || s.PartyOf(worldPlayer) is not { } party || party.Leader == worldPlayer;
+
+    /// <summary>Players in one party (Party.Limit).</summary>
+    public static int PartyLimit => Party.Limit;
+
+    /// <summary>Whether this player is in a party (a hired bot leaves once it is not).</summary>
+    public bool InParty => Social is { } s && worldPlayer is not null && s.PartyOf(worldPlayer) is not null;
+
     /// <summary>The party members' sessions (this one included), for bots that look after their group.</summary>
     public IReadOnlyList<GameSession> PartyMembers() =>
         Social is { } s && worldPlayer is not null && s.PartyOf(worldPlayer) is { } party ? party.Members.Select(m => m.Session).ToList() : [this];

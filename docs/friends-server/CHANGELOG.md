@@ -47,6 +47,9 @@
 - **Hard-mode revives** (`Aion:Dungeons:HardModeRevives`, default 3 as on global): a notice shows revives left; after the last one the revive puts the player outside.
 - Not done: the 4-minute boss frenzy (dungeon objectives thread), Ariel Fragments (no such item in client 2.0.6.0), `Dungeon_Daily_0001` (its only event waits for a Prepare phase the dungeon never has, so it can't start).
 
+## 2026-11-09 — Bots join posted groups (`/lfg`)
+- `/lfg <what> [tank|heal|dps ...]` (or `/lfm`) posts the player's group; bots of the missing roles (a tank and a healer if none, then damage) join the party one by one. They are new unsaved characters of the poster's race and level, and leave when kicked, when the group closes (`/lfg cancel`) or when the poster leaves. Bots never join a group by themselves. Config `Aion:Bots:Recruits` (on), `RecruitJoinMs` (3000). 14 new playerbot checks.
+
 ## 2026-11-09 — Class rotations for dungeon bots (branch `claude/project-thread-8plppl`)
 - **Hand-made rotations for all 8 classes** (`tools/bot_rotations.py` plans, from public Aion 2 skill pages and class guides): interrupts first, gap closers, combo chains (Mocking Blade → Overhead Slam, Shield Smite → Annihilate/Judgment, Impactful Crush → Dark Crush ...), big cooldowns on elites and bosses, area skills on packs of 2-3+, debuff/dot upkeep, MP-restoring fillers last. Skills past level 25 are now used too. Heal bots keep 40% MP for heals.
 - **New rotation conditions**: `target_casting`, `target_stunned`, `target_slowed`, `target_elite`, `target_boss`, `target_on_self`, `target_effect_missing`, `target_has`, `target_distance_above`, `enemies_at_least`, `after`, `self_mp_below`; entries can be area casts (`area: self|target`); classes have a `position` (melee damage dealers fight from the monster's back) and per-role ranges (the Cleric fights from 18 m, 15 m as a healer).

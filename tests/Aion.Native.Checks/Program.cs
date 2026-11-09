@@ -3829,6 +3829,56 @@ checks = 0;
     lead.ExitSharedWorld();
     await team.OwnerLeftAsync(lead);
 }
+// Posting a group (/lfg, PlayerBots.Recruit): bots join only a group a player posts, the roles it lacks, one by one.
+{
+    var lfgWorld = new SharedWorld(data, seed: 7);
+    long t = Now + 9_000_000;
+    var poster = new GameSession(data, new GameSessionOptions { World = lfgWorld, TrainingDummy = true, CharacterLevel = 22 }, new Random(3));
+    await poster.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), t);
+    await poster.HandleAsync(new PacketWriter().U16(0x361b).String("Poster").U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), t);
+    await poster.HandleAsync(select, t);
+    await poster.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    var hall = new PlayerBots(data, new BotOptions { Enabled = true, MaxPerAccount = 1, MaxTotal = 10, RecruitJoinMs = 1000 }, lfgWorld);
+    async Task Tick(int ticks) { for (var k = 0; k < ticks; k++) { await hall.TickAsync(t += 50); await poster.TickAsync(t); } }
+    await Tick(20);
+    Check(hall.All.Count == 0 && poster.PartyMembers().Count == 1, "no bot joins a player who has posted nothing");
+    var posted = hall.Recruit(poster, "Fire Temple", t);
+    var hired = hall.All.ToList();
+    Check(posted.StartsWith("Group posted for Fire Temple", StringComparison.Ordinal) && hired.Count == GameSession.PartyLimit - 1
+          && hired.Select(b => b.HiredRole).Order().SequenceEqual(new[] { "dps", "heal", "tank" }.Take(GameSession.PartyLimit - 1).Order()),
+          $"/lfg Fire Temple hires the missing roles: a tank, a healer, then damage ({posted})");
+    Check(hired.All(b => b.Hired && b.State == PlayerBot.Phase.Pending) && hired.Zip(hired.Skip(1)).All(p => p.Second.EnterAt - p.First.EnterAt == 1000),
+          "they come one by one (Aion:Bots:RecruitJoinMs apart)");
+    await Tick(10);
+    Check(poster.PartyMembers().Count == 1, "none is there before its time");
+    await Tick(25);
+    Check(poster.PartyMembers().Count == 2 && hired[0].State == PlayerBot.Phase.InWorld && hired[1].State == PlayerBot.Phase.Pending, "the first joins the party, the next is on its way");
+    await Tick(60);
+    Check(poster.PartyMembers().Count == GameSession.PartyLimit && hired.All(b => b.State == PlayerBot.Phase.InWorld && b.InParty),
+          "all of them joined: the party is full");
+    Check(hired.All(b => b.Session.Level == poster.Level && b.Session.CreationFor("Gladiator") == poster.CreationFor("Gladiator"))
+          && hired.Single(b => b.HiredRole == "tank").Session.ClassName == "Templar" && hired.Single(b => b.HiredRole == "heal").Session.ClassName == "Cleric"
+          && hired.Single(b => b.HiredRole == "tank").Brain!.Role == "tank",
+          "hired bots have the poster's level and race; a Templar tank and a Cleric healer, in those roles");
+    Check(hall.Recruit(poster, "more", t) == "Your party is full." && hall.Recruit(poster, "list", t).StartsWith("Hired for Fire Temple", StringComparison.Ordinal),
+          "a full party hires no more; /lfg list shows the hired bots");
+    Check((await hall.AddAsync(poster, "Alt", "Ranger", default)).StartsWith("Summoning", StringComparison.Ordinal), "hired bots do not use up the player's own bot places");
+    hall.Remove(poster, "Alt");
+    Check(hall.Recruit(poster, "cancel", t).StartsWith("Group closed", StringComparison.Ordinal), "/lfg cancel closes the group");
+    await Tick(10);
+    Check(hall.All.Count == 0 && poster.PartyMembers().Count == 1, "the hired bots leave the party and the world");
+    var twoHeals = hall.Recruit(poster, "Ludra 2 heal", t);
+    Check(hall.All.Count == 2 && hall.All.All(b => b.HiredRole == "heal" && b.Activity == "Ludra") && twoHeals.Contains("Cleric") && twoHeals.Contains("Chanter"),
+          $"named roles are hired as asked, \"2 heal\" twice, different classes ({twoHeals})");
+    await Tick(80);
+    var dropped = hall.All.First();
+    dropped.Session.ExitSharedWorld();
+    await Tick(10);
+    Check(dropped.State == PlayerBot.Phase.Gone, "a hired bot out of the party leaves");
+    poster.ExitSharedWorld();
+    await hall.OwnerLeftAsync(poster);
+    Check(hall.All.Count == 0, "the poster leaving takes the rest with it");
+}
 Console.WriteLine($"{checks} playerbot checks passed (Aion:Bots).");
 
 // ---------- Progression past the recovered tables (progression.json, OURS; docs/PROGRESSION.md) ----------
