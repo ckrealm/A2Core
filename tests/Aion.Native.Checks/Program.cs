@@ -2694,6 +2694,24 @@ checks = 0;
     await mate.TickAsync(t0 + 50);
     Check(alone.Count == 5 && KinahIn(alone) == 90 && mateStore.Items.Count == mateLines, "a member out of range gets no share: all items and Kinah to the killer");
     await Place(mate, spot with { X = spot.X + 300 }, t0 + 60);
+    // A member who dies before its share is granted (or whose bag refuses it) finds the share on the ground at the kill site, not lost.
+    var deadRows = mateStore.Items.Count;
+    var deadKept = lead.ShareLootWithParty(Gear(2), 40, spot);
+    mate.NpcHitsPlayer(mate.Resource.HpMax * 10, t0 + 62, killerKey: 2001);
+    await mate.TickAsync(t0 + 63);
+    var mateGround = mate.GroundDropItems.ToList();
+    Check(mate.Dead && mateStore.Items.Count == deadRows && KinahIn(mateGround) == 20 && mateGround.Count + deadKept.Count == 4 && mate.SharedLootDropped == mateGround.Count,
+          $"a member dead when its share arrives: its items and Kinah lie on the ground at the kill site for it ({mateGround.Count} lines), nothing lost");
+    var fullWorld = new SharedWorld(data);
+    var (fullLead, _) = await LootMember(fullWorld, robinRules, "Olga");
+    var (fullMate, fullStore) = await LootMember(fullWorld, robinRules, "Pete");
+    await Join(fullLead, fullMate, t0 + 70);
+    await Place(fullLead, spot, t0 + 72); await Place(fullMate, spot with { X = spot.X + 300 }, t0 + 72);
+    fullStore.RefuseLoot = true;
+    fullLead.ShareLootWithParty(Gear(1), 10, spot);
+    await fullMate.TickAsync(t0 + 74);
+    Check(KinahIn(fullMate.GroundDropItems) == 5 && fullMate.SharedLootReceived == 0 && fullMate.SharedLootDropped > 0,
+          "a member whose bag refuses its share (full) finds it on the ground at the kill site");
 
     // A real kill through the party: an elite monster always pays Kinah (kinah-drops.json), split between the two and scaled by Aion:Rates:Kinah.
     var richWorld = new SharedWorld(data);
@@ -2819,16 +2837,20 @@ checks = 0;
           && dummyNpc.Hp == dummyHp && cleric.Resource.Mp == mpBefore, "a heal at a monster is refused");
     foe.SetResource('H', 10);
     Check((await cleric.HandleAsync(Cast(HealingLight, foe.PlayerKey, castAt), t)).Single()[3] == 1 && foe.Resource.Hp == 10 && foe.MapId == cleric.MapId, "a heal at an enemy (the other race) is refused");
-    // Another player: the heal reaches their session (their bars) and the caster sees their HP.
+    // Another player: the heal is applied on their own loop (WorldTurn: the caster never touches another session's state), their
+    // bars to them, then their HP to the caster.
     await ally.TickAsync(t);
     ally.SetResource('H', 10);
     var allyHeal = await cleric.HandleAsync(Cast(HealingLight, ally.PlayerKey, castAt), t);
+    var hpBeforeAllyLoop = ally.Resource.Hp;
     var allyHears = await ally.TickAsync(t + 1);
-    Check(allyHeal[0][3] == 0 && ally.Resource.Hp > 10 && allyHeal.Any(b => b.SequenceEqual(GamePackets.NpcHp(ally.PlayerKey, ally.Resource.Hp)))
-          && allyHears.Any(b => Op(b) == 0x8d00 && KeyOf(b) == ally.PlayerKey), "Healing Light on an ally heals their session in the shared world");
+    var casterSees = await cleric.TickAsync(t + 1);
+    Check(allyHeal[0][3] == 0 && hpBeforeAllyLoop == 10 && ally.Resource.Hp > 10 && casterSees.Any(b => b.SequenceEqual(GamePackets.NpcHp(ally.PlayerKey, ally.Resource.Hp)))
+          && allyHears.Any(b => Op(b) == 0x8d00 && KeyOf(b) == ally.PlayerKey), "Healing Light on an ally heals their session on its own loop, the caster sees their HP");
     // Heal over time on the ally: ticks every 2 s for 10 s, then stops.
     ally.SetResource('H', 10);
     await cleric.HandleAsync(Cast(Regeneration, ally.PlayerKey, castAt), t + 10);
+    await ally.TickAsync(t + 10);
     var hp0 = ally.Resource.Hp;
     await ally.TickAsync(t + 10 + 2_000);
     var hp1 = ally.Resource.Hp;
@@ -2876,9 +2898,11 @@ checks = 0;
     var priest = await ClassSession(4, 16, "Priest", reviveTable);
     t += 40_000;
     Check((await priest.HandleAsync(Cast(HealingLight, ally.PlayerKey, castAt), t)).Single()[3] == 1, "a resurrection at a living ally is refused");
+    await ally.TickAsync(t);   // its regeneration clock up to date: the revive below runs on its loop (WorldTurn), regeneration with it
     ally.NpcHitsPlayer(ally.Resource.HpMax * 2, t);
     Check(ally.Dead, "the ally died");
     var revivedAlly = await priest.HandleAsync(Cast(HealingLight, ally.PlayerKey, castAt), t + 10);
+    await ally.TickAsync(t + 10);
     Check(revivedAlly[0][3] == 0 && !ally.Dead && ally.Resource.Hp == ally.Resource.HpMax * 3000 / 10_000, "a resurrection skill revives the dead ally with 30% HP");
     foreach (var s in new[] { cleric, ally, foe, sorcerer, priest }) s.ExitSharedWorld();
 }
@@ -3177,6 +3201,36 @@ checks = 0;
     await bots.TickAsync(t += 50);
     Check(bots.All.Count == 0, "a bot whose leader left the world (lobby, logout) leaves on the next tick");
 }
+// A bot whose leaving throws is still removed, and the other bots keep ticking (the bot loop never stops on one bot).
+{
+    var faultWorld = new SharedWorld(data);
+    var faultOptions = new GameSessionOptions { World = faultWorld, TrainingDummy = true };
+    long t = Now + 2_500_000;
+    var faultLead = new GameSession(data, faultOptions, new Random(41));
+    await faultLead.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), t);
+    await faultLead.HandleAsync(new PacketWriter().U16(0x361b).String("Boss").U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), t);
+    await faultLead.HandleAsync(select, t);
+    await faultLead.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    var faulty = new PlayerBots(data, new BotOptions { Enabled = true, MaxPerAccount = 3, MaxTotal = 3 }, faultWorld);
+    await faulty.CommandAsync(faultLead, "add Broken", t, default);
+    await faulty.CommandAsync(faultLead, "add Fine", t, default);
+    await faulty.TickAsync(t += 50);
+    var broken = faulty.All.Single(b => b.Name == "Broken");
+    var fine = faulty.All.Single(b => b.Name == "Fine");
+    Check(broken.State == PlayerBot.Phase.InWorld && fine.State == PlayerBot.Phase.InWorld, "two bots in the world");
+    faulty.LeaveFault = b => { if (b == broken) throw new InvalidOperationException("leave failed"); };
+    faulty.Remove(faultLead, "Broken");
+    var threw = false;
+    try { await faulty.TickAsync(t += 50); } catch (Exception) { threw = true; }
+    Check(!threw && broken.State == PlayerBot.Phase.Gone && broken.LastError == nameof(InvalidOperationException) && !faulty.All.Contains(broken),
+          "a bot whose leave throws is still removed (Gone, its error kept) and the tick does not throw");
+    var ticked = fine.Session.PlayerKey;
+    for (var k = 0; k < 5; k++) await faulty.TickAsync(t += 50);
+    Check(fine.State == PlayerBot.Phase.InWorld && faulty.All.Single() == fine && faultWorld.Online.ContainsKey(ticked), "the other bot keeps ticking in the world");
+    faulty.LeaveFault = null;
+    faultLead.ExitSharedWorld();
+    await faulty.OwnerLeftAsync(faultLead);
+}
 // Playerbots looking after their group: heals, resurrection, buffs, self-defence, a tank, looting, party dungeons.
 {
     var supWorld = new SharedWorld(data);
@@ -3411,6 +3465,21 @@ checks = 0;
     for (var k = 0; k < 20; k++) await lead.TickAsync(t += 100);
     Check(mob.Position == heldAt && rai.Brains[mob.Key].Pending is null, "a stunned monster neither moves nor attacks");
 
+    // An area cast (at the caster's own key) puts the skill's effects on every monster it hits: two monsters stunned at once.
+    bool Plain(Target m) => m.Hostile && !m.Dead && m.RunSpeed > 0 && m.Key != Combat.TrainingDummyKey && m != mob && !m.Elite;
+    var duo = lead.Targets.Values.Where(Plain).SelectMany(a => lead.Targets.Values.Where(b => b != a && Plain(b) && Apart3(a.Position, b.Position) < 700).Select(b => (a, b)))
+        .OrderBy(x => Apart3(x.a.Position, lead.WorldPosition!.Value)).First();
+    var middle = new Vector3d((duo.a.Position.X + duo.b.Position.X) / 2, (duo.a.Position.Y + duo.b.Position.Y) / 2, duo.a.Position.Z);
+    lead.Teleport(lead.MapId!.Value, middle, t);
+    await lead.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    duo.a.Hp = duo.b.Hp = Sturdy;
+    t += data.Skill(11290000)!.CooldownMs;
+    var wide = await lead.HandleAsync(Cast(11290000, lead.PlayerKey, middle), t);
+    Check(wide[0][3] == 0 && duo.a.Stunned(t) && duo.b.Stunned(t), "an area Mocking Blade stuns both monsters around the caster");
+    mob.Hp = 0;
+    await lead.TickAsync(t += 50);
+    Check(mob.StunImmuneUntil == 0 && mob.StunnedUntil == 0, "a dead monster forgets its stun and stun immunity");
+
     // A boss: a stun only interrupts; every third stun breaks its stagger and holds it for 5 s.
     lead.Teleport(1010, lead.WorldPosition!.Value, t);
     await lead.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
@@ -3504,6 +3573,70 @@ checks = 0;
     await Run(1500, () => prey.Dead);
     Check(prey.Dead, "the party kills the monster");
 
+    // Boss mechanics: a monster on the tank winds up an area special; the Assassin steps out of its reach, the tank stays.
+    await Run(200, () => team.All.All(b => b.Brain!.FightingKey is null));
+    var blast = lead.Targets.Values.Where(Calm).OrderBy(m => Apart3(m.Position, lead.WorldPosition!.Value)).First();
+    await Go(blast);
+    await Run(60);
+    blast.Hp = Sturdy;
+    rai.AreaSkills = new BossAreaSkills(new Dictionary<int, BossAreaSkill> { [blast.NpcId] = new(500, 4) });
+    rai.ForceAggro(blast, guard.Session.PlayerKey, t);
+    await Run(200, () => Apart3(stab.Session.WorldPosition!.Value, blast.Position) < 400 && stab.Brain!.CastsAccepted > 0);
+    rai.ForceAggro(blast, guard.Session.PlayerKey, t);
+    WindUp(blast, t);
+    var reach = rai.WindingArea(blast);
+    await Run(60);
+    Check(reach is > 500 && stab.Brain!.Escapes > 0 && Apart3(stab.Session.WorldPosition!.Value, blast.Position) > reach,
+          $"the Assassin steps out of the boss's area special ({Apart3(stab.Session.WorldPosition!.Value, blast.Position):F0} cm, reach {reach:F0})");
+    Check(guard.Brain!.Escapes == 0, "the tank, its victim, holds its ground");
+    var heldAtEdge = stab.Session.WorldPosition!.Value;
+    await Run(20);
+    Check(Apart3(stab.Session.WorldPosition!.Value, heldAtEdge) < 1, "outside the area the Assassin takes no step back in until the special lands");
+
+    // Dodge: a special lands on the tank soon; the tank dodges just before it, then uses its after-Dodge skill (Shield Rush).
+    bool DodgeReady() => t >= guard.Session.CooldownUntil(12430000) && t >= guard.Session.CooldownUntil(guard.Brain.DodgeSkill!.Value)
+                         && t - guard.Session.LastDodgeAt > BotBrain.ComboWindowMs && rai.CastingSpecial(blast) is null;
+    // (Its own specials are called off meanwhile: each would draw a dodge and the Shield Rush after it.)
+    await Run(1000, () => { if (rai.CastingSpecial(blast) is not null) rai.Brains[blast.Key].Pending = null; return DodgeReady(); });
+    Check(DodgeReady(), "Shield Rush and the Dodge ready, no special on its way");
+    guard.Session.SetResource('S', guard.Session.Resource.SpMax);
+    var dodgesBefore = guard.Brain.Dodges;
+    var dueAt = t + 1000;
+    var landing = blast.Skills.Where(id => data.NpcSkill(id) is not null).Skip(1).First();
+    rai.Brains[blast.Key].Pending = new NpcAi.PendingHit(landing, data.NpcSkill(landing)!, 8, dueAt);
+    for (var k = 0; k < 40 && t <= dueAt + 100; k++)
+    {
+        await team.TickAsync(t += 50);
+        await lead.TickAsync(t);
+        foreach (var sess in team.All.Select(b => b.Session).Append(lead).Where(sess => !sess.Dead)) sess.SetResource('H', sess.Resource.HpMax);
+    }
+    Check(guard.Brain.Dodges == dodgesBefore + 1 && guard.Session.LastDodgeAt >= dueAt - BotBrain.DodgeLeadMs - 50 && guard.Session.LastDodgeAt < dueAt,
+          $"the tank dodges just before the special lands ({dueAt - guard.Session.LastDodgeAt} ms before)");
+    var dodgedAt = guard.Session.LastDodgeAt;
+    await Run(60, () => guard.Brain.CastLog.Any(c => c.Skill == 12430000 && c.At > dodgedAt));
+    Check(guard.Brain.CastLog.Any(c => c.Skill == 12430000 && c.At > dodgedAt && c.At - dodgedAt <= BotBrain.ComboWindowMs),
+          "then Shield Rush, its after-Dodge skill (after_dodge)");
+    // The dodge's evasion window (GameSession.DodgeEvadeMs) on the server side: every hit inside it is evaded, then they land again.
+    var evadeBase = guard.Session.Evasions;
+    guard.Session.SetResource('S', guard.Session.Resource.SpMax);
+    Check(await guard.Session.HandleAsync(Cast(guard.Brain.DodgeSkill!.Value, guard.Session.PlayerKey, guard.Session.WorldPosition!.Value), t += 1000) is [var dodgeReply, ..] && dodgeReply[3] == 0
+          && guard.Session.GuardHit(100, t + 10) == 0 && guard.Session.GuardHit(100, t + GameSession.DodgeEvadeMs - 10) == 0 && guard.Session.Evasions == evadeBase + 2,
+          "a Dodge evades every monster hit for its first half second");
+    rai.Brains[blast.Key].Pending = null;
+    rai.AreaSkills = BossAreaSkills.Embedded;
+
+    // A monster on the ranged Cleric: the Cleric runs to its tank (so the tank picks it up and the monster stays near its spawn).
+    rai.ForceAggro(blast, prayer.Session.PlayerKey, t);
+    var closest = double.MaxValue;
+    await Run(200, () => (closest = Math.Min(closest, Apart3(prayer.Session.WorldPosition!.Value, guard.Session.WorldPosition!.Value))) <= BotBrain.ToTankBeyond
+                         || rai.Brains[blast.Key].VictimKey == guard.Session.PlayerKey);
+    Check(closest <= BotBrain.ToTankBeyond || rai.Brains[blast.Key].VictimKey == guard.Session.PlayerKey,
+          "a monster on the Cleric is brought to the tank, or the tank takes it");
+    blast.Hp = Math.Min(blast.Hp, blast.HpMax);
+    rai.ForceAggro(blast, guard.Session.PlayerKey, t);
+    await Run(1500, () => blast.Dead);
+    Check(blast.Dead, "the party kills it");
+
     // Areas: two monsters on the leader at once; the melee bots use their area skills (cast at their own key).
     await Run(200, () => team.All.All(b => b.Brain!.FightingKey is null));
     var pair = lead.Targets.Values.Where(Calm).SelectMany(a => lead.Targets.Values.Where(b => b != a && Calm(b) && Apart3(a.Position, b.Position) < 500).Select(b => (a, b)))
@@ -3516,6 +3649,11 @@ checks = 0;
     Check(team.All.Any(b => b.Brain!.AreaCasts > 0), "with two monsters on the group a melee bot casts an area skill around itself");
     await Run(2000, () => pair.a.Dead && pair.b.Dead);
     Check(pair.a.Dead && pair.b.Dead, "the party kills both");
+    // Blocks and evasions (GameSession.GuardHit): over these fights the tank blocked hits and someone evaded one; a blocked or
+    // evaded hit opens the after-block skill (Debilitating Smash for the Templar).
+    Check(guard.Session.Blocks > 0 && team.All.Sum(b => b.Session.Evasions) > 0,
+          $"monster hits are blocked ({guard.Session.Blocks}) and evaded ({team.All.Sum(b => b.Session.Evasions)})");
+    Check(guard.Brain!.CastLog.Any(c => c.Skill == 12270000), "the tank uses Debilitating Smash, its after-block skill (after_block)");
     lead.ExitSharedWorld();
     await team.OwnerLeftAsync(lead);
 }
@@ -3782,8 +3920,11 @@ sealed class FakeStore : INativeCharacterStore
         }
         return Task.FromResult(true);
     }
+    /// <summary>GrantLootAsync answers false (a full bag).</summary>
+    public bool RefuseLoot { get; set; }
     public Task<bool> GrantLootAsync(Guid character, IReadOnlyList<(int TemplateId, long Count)> items, CancellationToken ct)
     {
+        if (RefuseLoot) return Task.FromResult(false);
         var wire = Math.Max(Items.Count == 0 ? 0 : Items.Max(i => i.WireId) + 1, 5000);   // granted stacks keep clear of the fixtures' hand-picked wire keys
         var empty = System.Text.Json.JsonSerializer.SerializeToElement(new { });
         foreach (var (template, quantity) in items)

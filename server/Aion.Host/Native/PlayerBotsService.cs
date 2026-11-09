@@ -8,7 +8,20 @@ public sealed class PlayerBotsService(PlayerBots bots, ILogger<PlayerBotsService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         logger.LogInformation("Playerbots on: {Options}", bots.Options);
-        try { await bots.RunAsync(stoppingToken); }
+        try
+        {
+            // A failing tick is logged and the loop goes on: an exception out of ExecuteAsync would stop the whole host
+            // (BackgroundServiceExceptionBehavior.StopHost), taking every player with it.
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                try { await bots.RunAsync(stoppingToken); }
+                catch (Exception error) when (!stoppingToken.IsCancellationRequested)
+                {
+                    logger.LogError(error, "Playerbots: a bot tick failed; the bot loop goes on");
+                    await Task.Delay(PlayerBots.TickMs, stoppingToken);
+                }
+            }
+        }
         catch (OperationCanceledException) { }
         finally
         {

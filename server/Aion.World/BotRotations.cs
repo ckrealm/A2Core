@@ -16,7 +16,10 @@ namespace Aion.World;
 /// (this bot's effect of one of these skills is on it now: a follow-up that needs a debuff),
 /// <see cref="TargetDistanceAbove"/> (cm, gap closers), <see cref="EnemiesAtLeast"/> (monsters fighting the group within the area
 /// of the cast: around the bot for "self" areas, around the target otherwise), <see cref="After"/> (one of these skills was the
-/// bot's last accepted cast within <see cref="AfterWithinMs"/>, 3000 by default: combo chains) and <see cref="SelfMpBelow"/>.
+/// bot's last accepted cast within <see cref="AfterWithinMs"/>, 3000 by default: combo chains), <see cref="AfterCritical"/> (one of the
+/// bot's hits was a critical within that window: crit-only skills), <see cref="AfterBlock"/>, <see cref="AfterEvasion"/> and
+/// <see cref="AfterDodge"/> (the bot blocked or evaded a monster's hit, or dodged, within that window: GameSession.GuardHit) and <see cref="SelfMpBelow"/>. Target "tank": the group's tank
+/// (a tank bot, else the member most monsters attack).
 /// </summary>
 public sealed record BotCondition(
     [property: JsonPropertyName("target")] string Target = "enemy",
@@ -38,12 +41,16 @@ public sealed record BotCondition(
     [property: JsonPropertyName("target_distance_above")] int? TargetDistanceAbove = null,
     [property: JsonPropertyName("enemies_at_least")] int? EnemiesAtLeast = null,
     [property: JsonPropertyName("after")] int[]? After = null,
-    [property: JsonPropertyName("after_within_ms")] int? AfterWithinMs = null)
+    [property: JsonPropertyName("after_within_ms")] int? AfterWithinMs = null,
+    [property: JsonPropertyName("after_critical")] bool? AfterCritical = null,
+    [property: JsonPropertyName("after_block")] bool? AfterBlock = null,
+    [property: JsonPropertyName("after_evasion")] bool? AfterEvasion = null,
+    [property: JsonPropertyName("after_dodge")] bool? AfterDodge = null)
 {
     public static BotCondition Enemy { get; } = new();
-    public static readonly IReadOnlySet<string> SupportedTargets = new HashSet<string> { "enemy", "self", "leader", "ally", "dead_ally" };
+    public static readonly IReadOnlySet<string> SupportedTargets = new HashSet<string> { "enemy", "self", "leader", "ally", "tank", "dead_ally" };
     /// <summary>The entry casts at a player (the bot or a group member), not at the fight's target.</summary>
-    public bool Friendly => Target is "self" or "leader" or "ally" or "dead_ally";
+    public bool Friendly => Target is "self" or "leader" or "ally" or "tank" or "dead_ally";
 }
 
 public sealed record BotRotationStep(

@@ -83,7 +83,7 @@ public sealed partial class GameSession
     }
 
     /// <summary>An accepted cast's skill-effects entry: heals, buffs and resurrection on a friendly player, debuffs and dots on the NPC.</summary>
-    List<byte[]> SkillEffectReplies(int skill, int targetKey, long now)
+    List<byte[]> SkillEffectReplies(int skill, int targetKey, long now, Vector3d? location = null)
     {
         if (SkillEffectData.Of(skill) is not { } set || resources is null) return [];
         var replies = new List<byte[]>();
@@ -91,30 +91,47 @@ public sealed partial class GameSession
         {
             if ((set.Target == "self" ? (this, worldPlayer) : FriendlyTarget(targetKey, set.Target == "dead_friendly")) is not { } to
                 || to.Session.resources is not { } theirs) return [];
-            var packets = new List<byte[]>();
-            foreach (var e in set.Effects)
-                switch (e.Type)
+            // The amounts are the caster's (its power, skill level and random rolls), rolled here on the caster's loop.
+            var amounts = set.Effects.Select(e => e.Type switch
+            {
+                "heal" or "hot" => HealAmount(e, theirs.HpMax, skill),
+                "resurrect" => RollRange(e.HpRatio, rng),
+                _ => 0,
+            }).ToList();
+            if (to.Session == this) return ApplyFriendlyEffects(skill, set, amounts, now);
+            // Another player: its resources, buffs and death belong to its own loop (WorldTurn), so the effects are applied there
+            // (InvokeAsync, as the experience and loot shares are). Its bars go to it; its HP then to the caster and, as a cast
+            // packet, to those who see the caster.
+            var them = to.Session;
+            var key = to.Player?.Key ?? 0;
+            var caster = worldPlayer;
+            _ = them.InvokeAsync(at =>
+            {
+                var packets = them.ApplyFriendlyEffects(skill, set, amounts, at);
+                if (caster is not null && them.resources is { } r)
                 {
-                    case "heal":
-                        packets.AddRange(to.Session.ReceiveHeal(HealAmount(e, theirs.HpMax, skill)));
-                        break;
-                    case "hot":
-                        packets.AddRange(to.Session.AddSkillBuff(skill, e, HealAmount(e, theirs.HpMax, skill), now));
-                        break;
-                    case "buff":
-                        packets.AddRange(to.Session.AddSkillBuff(skill, e, 0, now));
-                        break;
-                    case "resurrect":
-                        packets.AddRange(to.Session.ReviveBySkill(RollRange(e.HpRatio, rng), now));
-                        break;
+                    List<byte[]> hp = [GamePackets.NpcHp(key, r.Hp)];
+                    caster.Send(hp);
+                    caster.Map?.Broadcast(caster, hp);
                 }
-            if (to.Session == this) return packets;
-            // Another player: their bars to them; their HP to the caster (and, as a cast packet, to those nearby).
-            to.Player?.Send(packets);
-            replies.Add(GamePackets.NpcHp(to.Player?.Key ?? 0, theirs.Hp));
+                return (true, packets);
+            });
             return replies;
         }
-        if (targets is null || !targets.TryGetValue(targetKey, out var npc) || !npc.Hostile || npc.Dead) return [];
+        if (targets is null) return [];
+        // An area cast (at the caster's own key) puts its effects on every monster the area hit (CombatReplies, AreaRange).
+        List<Target> struck = targetKey == playerKey && location is { } at
+            ? targets.Values.Where(t => t.Hostile && !t.Dead && t.Position.DistanceSquared(at) <= AreaRange * AreaRange).ToList()
+            : targets.TryGetValue(targetKey, out var one) && one.Hostile && !one.Dead ? [one] : [];
+        foreach (var npc in struck) replies.AddRange(EnemyEffects(skill, set, npc, now));
+        return replies;
+    }
+
+    /// <summary>An enemy skill-effects entry on one monster: debuffs, dots, stuns, taunt and threat.</summary>
+    List<byte[]> EnemyEffects(int skill, SkillEffectSet set, Target npc, long now)
+    {
+        var replies = new List<byte[]>();
+        var targets = this.targets!;
         foreach (var e in set.Effects)
             switch (e.Type)
             {
@@ -167,6 +184,24 @@ public sealed partial class GameSession
     public const int StunImmunityFactor = 3;
     /// <summary>A boss's stagger (OURS stand-in for the official stagger gauge): this many stuns, then held for StaggerMs.</summary>
     public const int BossStaggerStuns = 3, StaggerMs = 5000;
+
+    /// <summary>A friendly skill's effects on this player, with the amounts the caster rolled (one per effect). On this player's loop.</summary>
+    List<byte[]> ApplyFriendlyEffects(int skill, SkillEffectSet set, IReadOnlyList<int> amounts, long now)
+    {
+        var packets = new List<byte[]>();
+        for (var i = 0; i < set.Effects.Length; i++)
+        {
+            var e = set.Effects[i];
+            switch (e.Type)
+            {
+                case "heal": packets.AddRange(ReceiveHeal(amounts[i])); break;
+                case "hot": packets.AddRange(AddSkillBuff(skill, e, amounts[i], now)); break;
+                case "buff": packets.AddRange(AddSkillBuff(skill, e, 0, now)); break;
+                case "resurrect": packets.AddRange(ReviveBySkill(amounts[i], now)); break;
+            }
+        }
+        return packets;
+    }
 
     /// <summary>A heal lands on this player: HP up to its maximum, the bars (0x8d00) as a potion sends them.</summary>
     List<byte[]> ReceiveHeal(int amount)

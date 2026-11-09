@@ -89,6 +89,9 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
     /// <summary>"//bot world" (docs/WORLDBOTS.md): who the world bots are and what they do. Null: no world bots on this host.</summary>
     public WorldBots? WorldBots { get; init; }
 
+    /// <summary>"//ah ..." (docs/MARKET.md): the market for every player. Null: no market on this host (no game database).</summary>
+    public MarketCommands? Market { get; init; }
+
     public async Task<string> HandleAsync(ChatIdentity sender, string userName, string content, CancellationToken ct)
     {
         var text = content.Trim();
@@ -106,6 +109,9 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
         if (actor is null) return "Enter the world first.";
         try
         {
+            // //ah (Aion:Market, docs/MARKET.md): every player; "//ah help" lists its commands.
+            if (line.StartsWith("ah", StringComparison.OrdinalIgnoreCase) && (line.Length == 2 || char.IsWhiteSpace(line[2])))
+                return Market is { } market ? await market.HandleAsync(actor.Session, line[2..].Trim(), ct) : "The market is not available on this server.";
             if (line.StartsWith("bot", StringComparison.OrdinalIgnoreCase) && (line.Length == 3 || char.IsWhiteSpace(line[3])))
                 return await BotAsync(actor.Session, line[3..].Trim(), ct);
             if (line.Length == 0 || line.Equals("help", StringComparison.OrdinalIgnoreCase))
