@@ -2038,7 +2038,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         replies.InsertRange(1, dismount);   // a cast takes the player off its ride before the skill starts
         if (targets?.ContainsKey(request.TargetKey) == true) lastAttack = (request.TargetKey, now);   // what playerbots assist (GameSession.Bots.cs)
         replies.AddRange(CombatReplies(skill, request, now));
-        replies.AddRange(SkillEffectReplies(skill, request.TargetKey, now));
+        replies.AddRange(SkillEffectReplies(skill, request.TargetKey, now, request.Location));
         return replies;
     }
 
@@ -2112,6 +2112,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         {
             target.Hp = Math.Max(0, target.Hp - hit.Amount);
             replies.Add(GamePackets.SkillHit(target.Key, playerKey, skill, hit.EffectId, hit.Amount, hit.Critical, ++seq));
+            if (hit.Critical) LastCriticalAt = now;   // the crit-only follow-ups playerbots wait for (GameSession.Bots.cs)
         }
         replies.Add(GamePackets.NpcHp(target.Key, target.Hp));
         replies.AddRange(MapEventHp(target, now));

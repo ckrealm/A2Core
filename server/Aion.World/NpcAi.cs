@@ -430,6 +430,16 @@ public sealed class NpcAi(Random rng, GameData? data = null)
         return Basic(target) is { } basic && basic.Id == hit.SkillId ? null : hit.SkillId;
     }
 
+    /// <summary>
+    /// The reach of the area special the monster is winding up (a listed boss's, tools/data/boss-area-skills.json: its radius plus
+    /// the boss's own), or null. Players other than its victim within it when the hit lands take it too (<see cref="AreaHits"/>).
+    /// </summary>
+    public double? WindingArea(Target target)
+    {
+        if (CastingSpecial(target) is not { } special) return null;
+        return AreaSkills.Area(target.NpcId, special, Basic(target)?.Id ?? 0) is { } area ? area.Radius + target.Radius : null;
+    }
+
     /// <summary>Interrupts the special being wound up (OURS): its hit never lands and the NPC needs a moment before its next attack.</summary>
     public bool Interrupt(Target target, long now)
     {
@@ -439,6 +449,14 @@ public sealed class NpcAi(Random rng, GameData? data = null)
         brain.NextAttackMs = Math.Max(brain.NextAttackMs, now + InterruptRecoverMs);
         Interrupts++;
         return true;
+    }
+
+    /// <summary>A monster that died or went home forgets players' stuns, stagger and stun immunity.</summary>
+    static void ClearControl(Target target)
+    {
+        target.StunnedUntil = 0;
+        target.StunImmuneUntil = 0;
+        target.StaggerStuns = 0;
     }
 
     /// <summary>An interrupted NPC waits this long before it attacks again (OURS).</summary>
@@ -619,6 +637,7 @@ public sealed class NpcAi(Random rng, GameData? data = null)
         brain.VictimKey = 0;
         brain.Hate.Clear();
         brain.WanderAtMs = WanderDelay(now);
+        ClearControl(target);
         return replies;
     }
 
@@ -734,6 +753,7 @@ public sealed class NpcAi(Random rng, GameData? data = null)
             if (brain.Mode != Mode.Dead)
             {
                 brain.Mode = Mode.Dead; brain.Moving = false; brain.Engaged = false; brain.Pending = null; brain.VictimKey = 0; brain.Hate.Clear();
+                ClearControl(target);
                 target.Position = brain.Home;   // the respawn (0x3641) uses the spawn point
                 target.Direction = brain.HomeHeading;
                 brain.Heading = brain.HomeHeading;

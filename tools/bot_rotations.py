@@ -19,7 +19,8 @@ How a class's list is built:
   * a heal-role bot only spends MP on damage while it has HEAL_ROLE_MP_FLOOR % left.
 
 Skills the bots never use, because the server has no event they need, are listed in SKIPPED with
-the reason (a block, an evasion, a critical hit, a Dodge just before, a spirit). Staggered-only
+the reason (a block, an evasion, a Dodge just before, a spirit). Crit-only skills use
+`after_critical` (the bot's own hit was a critical lately, GameSession.LastCriticalAt). Staggered-only
 skills use `target_stunned`: a stunned monster, or a boss whose stagger broke
 (GameSession.BossStaggerStuns).
 
@@ -59,7 +60,8 @@ SUPPORT = {
     ('friendly', 'heal'): [({'target': 'ally', 'target_hp_below': 70}, 'heal'),
                            ({'target': 'ally', 'target_hp_below': 35}, 'other')],
     ('self', 'heal'): [({'target': 'self', 'target_hp_below': 50}, None)],
-    ('friendly', 'hot'): [({'target': 'ally', 'target_hp_below': 90, 'buff_missing': True}, 'heal'),
+    ('friendly', 'hot'): [({'target': 'tank', 'in_combat': True, 'buff_missing': True}, 'heal'),
+                          ({'target': 'ally', 'target_hp_below': 90, 'buff_missing': True}, 'heal'),
                           ({'target': 'self', 'target_hp_below': 70, 'buff_missing': True}, 'other')],
     ('self', 'hot'): [({'target': 'self', 'target_hp_below': 80, 'buff_missing': True}, None)],
     ('dead_friendly', 'resurrect'): [({'target': 'dead_ally', 'in_combat': False}, None)],
@@ -69,10 +71,12 @@ SUPPORT = {
 # Priority among the support entries (heal > resurrection > buff upkeep, mod-playerbots' order).
 SUPPORT_ORDER = ('heal', 'hot', 'resurrect', 'buff')
 # The effect types a target of a rotation entry may use, and the skill-effects targets it may name.
-FRIENDLY_TARGETS = {'self': {'self', 'friendly'}, 'ally': {'friendly'}, 'leader': {'friendly'}, 'dead_ally': {'dead_friendly'}}
+FRIENDLY_TARGETS = {'self': {'self', 'friendly'}, 'ally': {'friendly'}, 'leader': {'friendly'}, 'tank': {'friendly'},
+                    'dead_ally': {'dead_friendly'}}
 CONDITIONS = {'target', 'target_hp_below', 'target_hp_above', 'self_hp_below', 'self_mp_above', 'self_mp_below', 'in_combat',
               'buff_missing', 'target_casting', 'target_stunned', 'target_slowed', 'target_elite', 'target_boss', 'target_on_self',
-              'target_effect_missing', 'target_has', 'target_distance_above', 'enemies_at_least', 'after', 'after_within_ms'}
+              'target_effect_missing', 'target_has', 'target_distance_above', 'enemies_at_least', 'after', 'after_within_ms',
+              'after_critical'}
 # Conditions that only make sense on an entry aimed at the fight's target.
 ENEMY_ONLY = {'target_casting', 'target_stunned', 'target_slowed', 'target_elite', 'target_boss', 'target_on_self',
               'target_effect_missing', 'target_has', 'target_distance_above', 'enemies_at_least'}
@@ -113,7 +117,7 @@ PLAN = {
         E(11170000, target_stunned=True),                                  # Overhead Slam: the knockdown payoff
         E(11170000, after=[11290000, 11300000]),                           # ... right after its opener (a boss is not held)
         E(11280000, target_stunned=True),                                  # Sword Aura Rampage: staggered targets only
-        E(11290000),                                                       # Mocking Blade on cooldown opens the chain
+        E(11290000, target_boss=False),                                    # Mocking Blade on cooldown (kept for a boss's casts)
         E(11050000, area='self', enemies_at_least=PACK),                   # Crushing Wave: up to 4 within 5 m
         E(11010000, area='self', enemies_at_least=PACK, self_mp_above=20, filler=True),   # Rending Blow on a pack
         E(11020000, area='self', enemies_at_least=PACK, filler=True),                      # Keen Strike on a pack
@@ -128,7 +132,7 @@ PLAN = {
         E(12300000, after=[12100000]),
         E(12240000, after=[12100000, 12350000]),                           # Judgment: after a shield skill
         E(12340000, target_stunned=True),                                  # Flash Rampage: staggered targets only
-        E(12100000),                                                       # Shield Smite on cooldown
+        E(12100000, target_boss=False),                                    # Shield Smite on cooldown (kept for a boss's casts)
         E(12350000, roles=['tank'], self_hp_below=70),                     # Warding Strike: the tank's damage-tolerance window
         E(12350000, roles=['dps']),
         E(12090000),                                                       # Punishment on cooldown (Executor)
@@ -144,6 +148,8 @@ PLAN = {
         E(13340000, target_stunned=True),                                  # Storm Rampage: staggered targets only
         E(13130000, area='target', enemies_at_least=PACK, after=[13100000], after_within_ms=10000),  # Insignia Explosion
         E(13130000, after=[13100000], after_within_ms=10000),
+        E(13350000, area='self', enemies_at_least=PACK, after_critical=True),   # Heart Gore after a critical hit
+        E(13350000, after_critical=True),
         E(13060000),                                                       # Ambush: the back attack
         E(13050000, area='target', enemies_at_least=PACK),                 # Flash Slice: up to 4 at the target
         E(13050000),
@@ -161,8 +167,9 @@ PLAN = {
         E(14330000, target_stunned=True),                                  # Arrow Scattershot: staggered targets only
         E(14130000, target_effect_missing=True),                           # Snare Shot: the slow Burst Arrow needs
         E(14080000, target_slowed=True),                                   # Burst Arrow on a slowed target
+        E(14050000, after_critical=True),                                  # Drill Dart after a critical hit
         E(14010000, after=[14090000], after_within_ms=10000),              # Deadshot with Precision
-        E(14070000, target_elite=True, after=[14090000], after_within_ms=10000),   # Suppressing Arrow: stagger an elite
+        E(14070000, target_elite=True, target_boss=False, after=[14090000], after_within_ms=10000),   # Suppressing Arrow on an elite
         E(14010000, target_elite=True),
         E(14340000, area='target', enemies_at_least=PACK, self_mp_above=20, filler=True),  # Tempest Shot on a pack
         E(14340000, self_mp_above=40, filler=True),
@@ -178,7 +185,7 @@ PLAN = {
         E(15060000, target_elite=True),                                    # ... or an elite / boss
         E(15110000, area='target', enemies_at_least=BIG_PACK),             # Winter's Shackles on a pack
         E(15110000, target_elite=True),
-        E(15150000, target_elite=True),                                    # Frost on cooldown at an elite (stagger, Frost Burst)
+        E(15150000, target_elite=True, target_boss=False),                 # Frost on an elite (a boss's casts keep it)
         E(15040000, self_mp_above=30),                                     # Firestorm: 5 hits
         E(15050000, after=[15210000, 15040000, 15060000], after_within_ms=10000),   # Blaze on a Fire Mark
         E(15090000, area='target', enemies_at_least=BIG_PACK, self_mp_above=40, filler=True),  # Ice Chain on a pack
@@ -214,7 +221,7 @@ PLAN = {
         E(18300000, target_stunned=True),                                  # Gust Rampage: staggered targets only
         E(18290000, area='target', enemies_at_least=PACK),                 # Spinning Strike: crit damage buff, opens Dark Crush
         E(18290000),
-        E(18060000),                                                       # Impactful Crush on cooldown (opens Dark Crush)
+        E(18060000, target_boss=False),                                    # Impactful Crush on cooldown (kept for a boss's casts)
         E(18090000),
         E(18040000, area='self', enemies_at_least=BIG_PACK, self_mp_above=50, filler=True),    # Incandescent Blow on a pack
         E(18010000, area='self', enemies_at_least=PACK, filler=True),      # Onslaught on a pack
@@ -230,9 +237,7 @@ SKIPPED = {
     12270000: 'Debilitating Smash: only after a successful block',
     12430000: 'Shield Rush: only after a Dodge',
     13210000: 'Whirlwind Slice: only after a successful evasion',
-    13350000: 'Heart Gore: only after a critical hit',
     13360000: 'Infiltrate: only after a Dodge',
-    14050000: 'Drill Dart: only after a critical hit',
     16330000: 'Dimensional Control: fires when a spirit uses a skill (no spirits)',
     16300000: 'Elemental Fusion: needs Four Elements stacks from spirits (no spirits)',
     18150000: 'Heat Wave Blow: only after a successful block',

@@ -83,7 +83,7 @@ public sealed partial class GameSession
     }
 
     /// <summary>An accepted cast's skill-effects entry: heals, buffs and resurrection on a friendly player, debuffs and dots on the NPC.</summary>
-    List<byte[]> SkillEffectReplies(int skill, int targetKey, long now)
+    List<byte[]> SkillEffectReplies(int skill, int targetKey, long now, Vector3d? location = null)
     {
         if (SkillEffectData.Of(skill) is not { } set || resources is null) return [];
         var replies = new List<byte[]>();
@@ -114,7 +114,20 @@ public sealed partial class GameSession
             replies.Add(GamePackets.NpcHp(to.Player?.Key ?? 0, theirs.Hp));
             return replies;
         }
-        if (targets is null || !targets.TryGetValue(targetKey, out var npc) || !npc.Hostile || npc.Dead) return [];
+        if (targets is null) return [];
+        // An area cast (at the caster's own key) puts its effects on every monster the area hit (CombatReplies, AreaRange).
+        List<Target> struck = targetKey == playerKey && location is { } at
+            ? targets.Values.Where(t => t.Hostile && !t.Dead && t.Position.DistanceSquared(at) <= AreaRange * AreaRange).ToList()
+            : targets.TryGetValue(targetKey, out var one) && one.Hostile && !one.Dead ? [one] : [];
+        foreach (var npc in struck) replies.AddRange(EnemyEffects(skill, set, npc, now));
+        return replies;
+    }
+
+    /// <summary>An enemy skill-effects entry on one monster: debuffs, dots, stuns, taunt and threat.</summary>
+    List<byte[]> EnemyEffects(int skill, SkillEffectSet set, Target npc, long now)
+    {
+        var replies = new List<byte[]>();
+        var targets = this.targets!;
         foreach (var e in set.Effects)
             switch (e.Type)
             {

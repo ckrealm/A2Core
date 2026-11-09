@@ -86,6 +86,20 @@ class BotRotationTests(unittest.TestCase):
             with self.subTest(name):
                 self.assertTrue(all(s['when'].get('target_stunned') for s in self.steps(name, sid)))
 
+    def test_round_two_entries(self):
+        # Crit-only follow-ups wait for the bot's own critical hit.
+        for name, sid in (('Assassin', 13350000), ('Ranger', 14050000)):
+            with self.subTest(name):
+                self.assertTrue(self.steps(name, sid) and all(s['when'].get('after_critical') for s in self.steps(name, sid)))
+        # Interrupt skills are kept for a boss's casts: their other copies skip bosses.
+        for name, sid in (('Gladiator', 11290000), ('Templar', 12100000), ('Chanter', 18060000)):
+            with self.subTest(name):
+                others = [s for s in self.steps(name, sid) if not s['when'].get('target_casting')]
+                self.assertTrue(others and all(s['when'].get('target_boss') is False for s in others))
+        # The heal Cleric keeps its HoT on the tank in a fight.
+        hot = [s for s in self.steps('Cleric', 17090000) if s['when']['target'] == 'tank']
+        self.assertEqual([(s['roles'], s['when'].get('in_combat')) for s in hot], [(['heal'], True)])
+
     def test_skipped_skills_stay_out(self):
         for name, entry in self.tracked['classes'].items():
             for step in entry['rotation']:

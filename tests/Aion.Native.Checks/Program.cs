@@ -3411,6 +3411,21 @@ checks = 0;
     for (var k = 0; k < 20; k++) await lead.TickAsync(t += 100);
     Check(mob.Position == heldAt && rai.Brains[mob.Key].Pending is null, "a stunned monster neither moves nor attacks");
 
+    // An area cast (at the caster's own key) puts the skill's effects on every monster it hits: two monsters stunned at once.
+    bool Plain(Target m) => m.Hostile && !m.Dead && m.RunSpeed > 0 && m.Key != Combat.TrainingDummyKey && m != mob && !m.Elite;
+    var duo = lead.Targets.Values.Where(Plain).SelectMany(a => lead.Targets.Values.Where(b => b != a && Plain(b) && Apart3(a.Position, b.Position) < 700).Select(b => (a, b)))
+        .OrderBy(x => Apart3(x.a.Position, lead.WorldPosition!.Value)).First();
+    var middle = new Vector3d((duo.a.Position.X + duo.b.Position.X) / 2, (duo.a.Position.Y + duo.b.Position.Y) / 2, duo.a.Position.Z);
+    lead.Teleport(lead.MapId!.Value, middle, t);
+    await lead.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    duo.a.Hp = duo.b.Hp = Sturdy;
+    t += data.Skill(11290000)!.CooldownMs;
+    var wide = await lead.HandleAsync(Cast(11290000, lead.PlayerKey, middle), t);
+    Check(wide[0][3] == 0 && duo.a.Stunned(t) && duo.b.Stunned(t), "an area Mocking Blade stuns both monsters around the caster");
+    mob.Hp = 0;
+    await lead.TickAsync(t += 50);
+    Check(mob.StunImmuneUntil == 0 && mob.StunnedUntil == 0, "a dead monster forgets its stun and stun immunity");
+
     // A boss: a stun only interrupts; every third stun breaks its stagger and holds it for 5 s.
     lead.Teleport(1010, lead.WorldPosition!.Value, t);
     await lead.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
@@ -3503,6 +3518,37 @@ checks = 0;
     rai.ForceAggro(prey, guard.Session.PlayerKey, t);
     await Run(1500, () => prey.Dead);
     Check(prey.Dead, "the party kills the monster");
+
+    // Boss mechanics: a monster on the tank winds up an area special; the Assassin steps out of its reach, the tank stays.
+    await Run(200, () => team.All.All(b => b.Brain!.FightingKey is null));
+    var blast = lead.Targets.Values.Where(Calm).OrderBy(m => Apart3(m.Position, lead.WorldPosition!.Value)).First();
+    await Go(blast);
+    await Run(60);
+    blast.Hp = Sturdy;
+    rai.AreaSkills = new BossAreaSkills(new Dictionary<int, BossAreaSkill> { [blast.NpcId] = new(500, 4) });
+    rai.ForceAggro(blast, guard.Session.PlayerKey, t);
+    await Run(200, () => Apart3(stab.Session.WorldPosition!.Value, blast.Position) < 400 && stab.Brain!.CastsAccepted > 0);
+    rai.ForceAggro(blast, guard.Session.PlayerKey, t);
+    WindUp(blast, t);
+    var reach = rai.WindingArea(blast);
+    await Run(60);
+    Check(reach is > 500 && stab.Brain!.Escapes > 0 && Apart3(stab.Session.WorldPosition!.Value, blast.Position) > reach,
+          $"the Assassin steps out of the boss's area special ({Apart3(stab.Session.WorldPosition!.Value, blast.Position):F0} cm, reach {reach:F0})");
+    Check(guard.Brain!.Escapes == 0, "the tank, its victim, holds its ground");
+    rai.Brains[blast.Key].Pending = null;
+    rai.AreaSkills = BossAreaSkills.Embedded;
+
+    // A monster on the ranged Cleric: the Cleric runs to its tank (so the tank picks it up and the monster stays near its spawn).
+    rai.ForceAggro(blast, prayer.Session.PlayerKey, t);
+    var closest = double.MaxValue;
+    await Run(200, () => (closest = Math.Min(closest, Apart3(prayer.Session.WorldPosition!.Value, guard.Session.WorldPosition!.Value))) <= BotBrain.ToTankBeyond
+                         || rai.Brains[blast.Key].VictimKey == guard.Session.PlayerKey);
+    Check(closest <= BotBrain.ToTankBeyond || rai.Brains[blast.Key].VictimKey == guard.Session.PlayerKey,
+          "a monster on the Cleric is brought to the tank, or the tank takes it");
+    blast.Hp = Math.Min(blast.Hp, blast.HpMax);
+    rai.ForceAggro(blast, guard.Session.PlayerKey, t);
+    await Run(1500, () => blast.Dead);
+    Check(blast.Dead, "the party kills it");
 
     // Areas: two monsters on the leader at once; the melee bots use their area skills (cast at their own key).
     await Run(200, () => team.All.All(b => b.Brain!.FightingKey is null));
