@@ -2878,7 +2878,7 @@ checks = 0;
     var slowed = await sorcerer.HandleAsync(Cast(BittercoldWind, Combat.TrainingDummyKey, dummyNpc.Position), t + 10);
     Check(wish[0][3] == 0 && sorcerer.BuffStatOf("FixingDamage") == 30 && slowed[0][3] == 0
           && sorcerer.Resource.Mp == mpWish - data.Skill(BittercoldWind)!.Cost.Mp * 7000 / 10_000, "Wish of Concentration: FixingDamage and cheaper casts (MPUseDecrease)");
-    Check(dummyNpc.SpeedScale(t + 20) == 0.5 && dummyNpc.SpeedScale(t + 10 + 6_000) == 1.0, "Bittercold Wind halves the monster's speed for 6 s");
+    Check(dummyNpc.SpeedScale(t + 20) < 0.01 && dummyNpc.SpeedScale(t + 10 + 3_000) == 1.0, "Bittercold Wind roots the monster for 3 s (a speed of 1/10000)");
     // Debuff and damage over time on the dummyNpc.
     t += 30_000;
     dummyNpc.Hp = dummyNpc.HpMax;
@@ -3549,7 +3549,8 @@ checks = 0;
     await Run(200, () => guard.Brain.CastsAccepted > guardCasts && m2.Hp < Sturdy);
     var dealt = Sturdy - m2.Hp;
     var m2Brain = supAi.Brains[m2.Key];
-    Check(dealt > 0 && m2Brain.Hate.GetValueOrDefault(guard.Session.PlayerKey) == (long)Math.Round(dealt * embeddedRotations.TankHateMultiplier)
+    // At least the multiplied damage: the Templar's enmity attacks (skill-effects "threat") add hate of their own.
+    Check(dealt > 0 && m2Brain.Hate.GetValueOrDefault(guard.Session.PlayerKey) >= (long)Math.Round(dealt * embeddedRotations.TankHateMultiplier)
           && m2Brain.VictimKey == guard.Session.PlayerKey, $"the tank's hits count x{embeddedRotations.TankHateMultiplier} in the hate table and the monster turns to it ({dealt} damage, {m2Brain.Hate.GetValueOrDefault(guard.Session.PlayerKey)} hate)");
     await squad.CommandAsync(chief, "assist", t, default);
     m2.Hp = Math.Min(m2.Hp, m2.HpMax);
@@ -3575,6 +3576,246 @@ checks = 0;
     Check(chief.MapId == 1010 && squad.All.All(b => b.Session.InstanceKey == 0 && b.Session.MapId == 1010), "when the leader leaves the copy, the bots leave it too (0x4004)");
     chief.ExitSharedWorld();
     await squad.OwnerLeftAsync(chief);
+}
+// Class rotations (tools/bot_rotations.py): interrupts, stuns and bigBoss stagger, taunts and threat, areas, combos, positioning.
+{
+    static double Apart3(Vector3d a, Vector3d b) => Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
+    var rots = BotRotations.Embedded;
+    Check(rots.Classes.Where(c => c.Key != "Cleric").All(c => c.Value.Rotation.Any(s => s.Condition.TargetCasting == true))
+          && rots.For("Assassin")!.Position == "behind" && rots.For("Templar")!.Position == "front"
+          && rots.For("Cleric")!.RangeFor("heal") == 1500 && rots.For("Cleric")!.RangeFor("dps") == 1800,
+          "bot-rotations.json: every class but the Cleric has an interrupt; positions and role ranges load");
+    var rotWorld = new SharedWorld(data);
+    var rotOptions = new GameSessionOptions { World = rotWorld, TrainingDummy = true, CharacterLevel = 20 };
+    long t = Now + 5_000_000;
+    var lead = new GameSession(data, rotOptions, new Random(41));
+    await lead.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), t);
+    await lead.HandleAsync(new PacketWriter().U16(0x361b).String("Lead").U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), t);
+    await lead.HandleAsync(select, t);
+    await lead.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    var rai = lead.SharedMap!.Ai;
+    bool Calm(Target m) => m.Hostile && !m.Dead && !m.Aggressive && m.RunSpeed > 0 && m.Key != Combat.TrainingDummyKey && m.HpMax > 500
+                           && !m.Elite && m.Skills.Count(id => data.NpcSkill(id) is not null) >= 2;
+    // A special being wound up: the monster's second damaging skill, its hit due later.
+    void WindUp(Target m, long now)
+    {
+        var special = m.Skills.Where(id => data.NpcSkill(id) is not null).Skip(1).First();
+        rai.Brains[m.Key].Pending = new NpcAi.PendingHit(special, data.NpcSkill(special)!, 7, now + 60_000);
+    }
+    async Task Go(Target m)
+    {
+        lead.Teleport(lead.MapId!.Value, m.Position with { X = m.Position.X + 500 }, t);
+        await lead.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    }
+
+    // The server side: a stun holds an ordinary monster and interrupts its special (Mocking Blade, the Gladiator's knockdown).
+    var mob = lead.Targets.Values.Where(Calm).OrderBy(m => Apart3(m.Position, lead.WorldPosition!.Value)).First();
+    await Go(mob);
+    await lead.TickAsync(t += 50);
+    const int Sturdy = 1_000_000;   // HP raised for the checks, so the monsters live through the hits
+    mob.Hp = Sturdy;
+    rai.Engage(lead.Targets, mob, t, lead.PlayerKey);
+    WindUp(mob, t);
+    Check(rai.CastingSpecial(mob) is not null, "the monster winds up a special");
+    var knock = await lead.HandleAsync(Cast(11290000, mob.Key, mob.Position), t += 50);
+    Check(knock[0][3] == 0 && mob.Stunned(t) && rai.CastingSpecial(mob) is null && rai.Interrupts == 1
+          && mob.StunImmuneUntil == t + 3000 * GameSession.StunImmunityFactor,
+          "Mocking Blade stuns the monster for 3 s and interrupts its special; it then shrugs off stuns for a while");
+    var heldAt = mob.Position;
+    for (var k = 0; k < 20; k++) await lead.TickAsync(t += 100);
+    Check(mob.Position == heldAt && rai.Brains[mob.Key].Pending is null, "a stunned monster neither moves nor attacks");
+
+    // An area cast (at the caster's own key) puts the skill's effects on every monster it hits: two monsters stunned at once.
+    bool Plain(Target m) => m.Hostile && !m.Dead && m.RunSpeed > 0 && m.Key != Combat.TrainingDummyKey && m != mob && !m.Elite;
+    var duo = lead.Targets.Values.Where(Plain).SelectMany(a => lead.Targets.Values.Where(b => b != a && Plain(b) && Apart3(a.Position, b.Position) < 700).Select(b => (a, b)))
+        .OrderBy(x => Apart3(x.a.Position, lead.WorldPosition!.Value)).First();
+    var middle = new Vector3d((duo.a.Position.X + duo.b.Position.X) / 2, (duo.a.Position.Y + duo.b.Position.Y) / 2, duo.a.Position.Z);
+    lead.Teleport(lead.MapId!.Value, middle, t);
+    await lead.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    duo.a.Hp = duo.b.Hp = Sturdy;
+    t += data.Skill(11290000)!.CooldownMs;
+    var wide = await lead.HandleAsync(Cast(11290000, lead.PlayerKey, middle), t);
+    Check(wide[0][3] == 0 && duo.a.Stunned(t) && duo.b.Stunned(t), "an area Mocking Blade stuns both monsters around the caster");
+    mob.Hp = 0;
+    await lead.TickAsync(t += 50);
+    Check(mob.StunImmuneUntil == 0 && mob.StunnedUntil == 0, "a dead monster forgets its stun and stun immunity");
+
+    // A boss: a stun only interrupts; every third stun breaks its stagger and holds it for 5 s.
+    lead.Teleport(1010, lead.WorldPosition!.Value, t);
+    await lead.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    rai = lead.SharedMap!.Ai;
+    var bigBoss = lead.Targets.Values.Where(m => m.Boss && !m.Dead && m.RunSpeed > 0 && m.Skills.Count(id => data.NpcSkill(id) is not null) >= 2)
+        .OrderBy(m => Apart3(m.Position, lead.WorldPosition!.Value)).First();
+    await Go(bigBoss);
+    bigBoss.Hp = Sturdy;
+    t += data.Skill(11290000)!.CooldownMs;   // Mocking Blade off cooldown again
+    var bossHits = new List<bool>();
+    for (var n = 0; n < 3; n++)
+    {
+        lead.SetResource('H', lead.Resource.HpMax);
+        lead.SetResource('M', lead.Resource.MpMax);
+        rai.Engage(lead.Targets, bigBoss, t, lead.PlayerKey);
+        WindUp(bigBoss, t);
+        var bossReply = await lead.HandleAsync(Cast(11290000, bigBoss.Key, bigBoss.Position), t += 50);
+        bossHits.Add(bossReply[0][3] == 0 && rai.CastingSpecial(bigBoss) is null);
+        if (n < 2) Check(!bigBoss.Stunned(t), $"stun {n + 1} on the boss interrupts but does not hold it");
+        if (n < 2) t += data.Skill(11290000)!.CooldownMs + 100;
+    }
+    Check(bossHits.All(x => x) && bigBoss.Stunned(t) && bigBoss.StunnedUntil == t + GameSession.StaggerMs && bigBoss.StaggerStuns == 0,
+          "every stun interrupts the boss's special; the third breaks its stagger (held 5 s)");
+    lead.Teleport(1010, lead.WorldPosition!.Value with { X = lead.WorldPosition!.Value.X + 6000 }, t);   // away from the boss
+    await lead.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), t);
+    t += 60_000;
+
+    // The bots: a tank Templar, an Assassin and a dps Cleric with the embedded rotations.
+    var team = new PlayerBots(data, new BotOptions { Enabled = true, MaxPerAccount = 3, MaxTotal = 5 }, rotWorld);
+    foreach (var (name, cls) in new[] { ("Guard", "Templar"), ("Stab", "Assassin"), ("Prayer", "Cleric") })
+        Check(await team.CommandAsync(lead, $"add {name} {cls}", t, default) == $"Summoning {name}.", $"a {cls} bot joins");
+    await team.TickAsync(t += 50);
+    var guard = team.All.Single(b => b.Name == "Guard");
+    var stab = team.All.Single(b => b.Name == "Stab");
+    var prayer = team.All.Single(b => b.Name == "Prayer");
+    await team.CommandAsync(lead, "role dps Prayer", t, default);
+    async Task Run(int ticks, Func<bool>? until = null)
+    {
+        for (var k = 0; k < ticks && until?.Invoke() != true; k++)
+        {
+            await team.TickAsync(t += 50);
+            await lead.TickAsync(t);
+            // Nobody dies in these checks (a dead victim sends its monster home at full HP): the monsters' hits are healed away.
+            foreach (var s in team.All.Select(b => b.Session).Append(lead).Where(s => !s.Dead)) s.SetResource('H', s.Resource.HpMax);
+        }
+    }
+    await Run(40);
+    Check(guard.Brain!.Role == "tank" && prayer.Brain!.Role == "dps" && prayer.Brain.Range == 1800, "a tank Templar, an Assassin, a dps Cleric at 18 m");
+
+    // Taunt: a monster attacks the leader; the tank hooks it off (Poach) and it turns to the tank.
+    await team.CommandAsync(lead, "passive Stab", t, default);
+    await team.CommandAsync(lead, "passive Prayer", t, default);
+    var prey = lead.Targets.Values.Where(Calm).OrderBy(m => Apart3(m.Position, lead.WorldPosition!.Value)).First();
+    await Go(prey);
+    await Run(40);
+    prey.Hp = Sturdy;
+    rai.ForceAggro(prey, lead.PlayerKey, t);
+    await Run(200, () => guard.Brain!.CastLog.Any(c => c.Skill == 12130000));
+    Check(guard.Brain!.CastLog.Any(c => c.Skill == 12130000), "the tank Templar hooks the monster off its leader (Poach, a taunt)");
+    Check(rai.Brains[prey.Key].VictimKey == guard.Session.PlayerKey, "the monster turns on the tank");
+
+    // Interrupt: the monster winds up a special; the tank stuns it (Shield Smite).
+    await Run(400, () => t >= guard.Session.CooldownUntil(12100000) && !prey.Stunned(t));   // Shield Smite ready, the monster free
+    WindUp(prey, t);
+    var interruptsBefore = rai.Interrupts;
+    await Run(100, () => rai.Interrupts > interruptsBefore);
+    Check(rai.Interrupts > interruptsBefore && guard.Brain.Interrupts > 0 && guard.Brain.CastLog.Any(c => c.Skill == 12100000),
+          "the tank interrupts the special with Shield Smite (target_casting)");
+    var smiteAt = guard.Brain.CastLog.Last(c => c.Skill == 12100000).At;
+    await Run(60);
+    Check(guard.Brain.CastLog.Where(c => c.At > smiteAt).Take(2).Any(c => c.Skill is 12300000 or 12240000),
+          "the stun opens its follow-ups (Annihilate on a stunned target, Judgment after a shield skill)");
+
+    // Behind: the Assassin works from the monster's back while the monster attacks the tank.
+    await team.CommandAsync(lead, "assist Stab", t, default);
+    await Run(200, () => stab.Brain!.CastsAccepted > 3);
+    var stabAt = stab.Session.WorldPosition!.Value;
+    var facing = prey.Direction * Math.PI / 180;
+    var along = (stabAt.X - prey.Position.X) * Math.Cos(facing) + (stabAt.Y - prey.Position.Y) * Math.Sin(facing);
+    Check(stab.Brain!.CastsAccepted > 3 && along < 0, $"the Assassin fights from behind the monster ({along:F0} cm along its facing)");
+
+    // Debuff upkeep and a follow-up: the Cleric keeps Chain of Torment up and casts Condemnation only while it is on.
+    await team.CommandAsync(lead, "assist Prayer", t, default);
+    await Run(300, () => prayer.Brain!.CastLog.Count(c => c.Skill == 17350000) >= 2 || prey.Dead);
+    var clericLog = prayer.Brain!.CastLog.Select(c => c.Skill).ToList();
+    Check(clericLog.Contains(17070000) && clericLog.Contains(17350000) && clericLog.IndexOf(17070000) < clericLog.IndexOf(17350000),
+          "the Cleric opens with Chain of Torment, then Condemnation on it (target_has)");
+    Check(clericLog.Count(c => c == 17070000) <= 1 + prayer.Brain.CastLog.Count / 8, "it does not recast the dot while it runs (target_effect_missing)");
+    prey.Hp = Math.Min(prey.Hp, prey.HpMax);
+    rai.ForceAggro(prey, guard.Session.PlayerKey, t);
+    await Run(1500, () => prey.Dead);
+    Check(prey.Dead, "the party kills the monster");
+
+    // Boss mechanics: a monster on the tank winds up an area special; the Assassin steps out of its reach, the tank stays.
+    await Run(200, () => team.All.All(b => b.Brain!.FightingKey is null));
+    var blast = lead.Targets.Values.Where(Calm).OrderBy(m => Apart3(m.Position, lead.WorldPosition!.Value)).First();
+    await Go(blast);
+    await Run(60);
+    blast.Hp = Sturdy;
+    rai.AreaSkills = new BossAreaSkills(new Dictionary<int, BossAreaSkill> { [blast.NpcId] = new(500, 4) });
+    rai.ForceAggro(blast, guard.Session.PlayerKey, t);
+    await Run(200, () => Apart3(stab.Session.WorldPosition!.Value, blast.Position) < 400 && stab.Brain!.CastsAccepted > 0);
+    rai.ForceAggro(blast, guard.Session.PlayerKey, t);
+    WindUp(blast, t);
+    var reach = rai.WindingArea(blast);
+    await Run(60);
+    Check(reach is > 500 && stab.Brain!.Escapes > 0 && Apart3(stab.Session.WorldPosition!.Value, blast.Position) > reach,
+          $"the Assassin steps out of the boss's area special ({Apart3(stab.Session.WorldPosition!.Value, blast.Position):F0} cm, reach {reach:F0})");
+    Check(guard.Brain!.Escapes == 0, "the tank, its victim, holds its ground");
+    var heldAtEdge = stab.Session.WorldPosition!.Value;
+    await Run(20);
+    Check(Apart3(stab.Session.WorldPosition!.Value, heldAtEdge) < 1, "outside the area the Assassin takes no step back in until the special lands");
+
+    // Dodge: a special lands on the tank soon; the tank dodges just before it, then uses its after-Dodge skill (Shield Rush).
+    bool DodgeReady() => t >= guard.Session.CooldownUntil(12430000) && t >= guard.Session.CooldownUntil(guard.Brain.DodgeSkill!.Value)
+                         && t - guard.Session.LastDodgeAt > BotBrain.ComboWindowMs && rai.CastingSpecial(blast) is null;
+    // (Its own specials are called off meanwhile: each would draw a dodge and the Shield Rush after it.)
+    await Run(1000, () => { if (rai.CastingSpecial(blast) is not null) rai.Brains[blast.Key].Pending = null; return DodgeReady(); });
+    Check(DodgeReady(), "Shield Rush and the Dodge ready, no special on its way");
+    guard.Session.SetResource('S', guard.Session.Resource.SpMax);
+    var dodgesBefore = guard.Brain.Dodges;
+    var dueAt = t + 1000;
+    var landing = blast.Skills.Where(id => data.NpcSkill(id) is not null).Skip(1).First();
+    rai.Brains[blast.Key].Pending = new NpcAi.PendingHit(landing, data.NpcSkill(landing)!, 8, dueAt);
+    for (var k = 0; k < 40 && t <= dueAt + 100; k++)
+    {
+        await team.TickAsync(t += 50);
+        await lead.TickAsync(t);
+        foreach (var sess in team.All.Select(b => b.Session).Append(lead).Where(sess => !sess.Dead)) sess.SetResource('H', sess.Resource.HpMax);
+    }
+    Check(guard.Brain.Dodges == dodgesBefore + 1 && guard.Session.LastDodgeAt >= dueAt - BotBrain.DodgeLeadMs - 50 && guard.Session.LastDodgeAt < dueAt,
+          $"the tank dodges just before the special lands ({dueAt - guard.Session.LastDodgeAt} ms before)");
+    var dodgedAt = guard.Session.LastDodgeAt;
+    await Run(60, () => guard.Brain.CastLog.Any(c => c.Skill == 12430000 && c.At > dodgedAt));
+    Check(guard.Brain.CastLog.Any(c => c.Skill == 12430000 && c.At > dodgedAt && c.At - dodgedAt <= BotBrain.ComboWindowMs),
+          "then Shield Rush, its after-Dodge skill (after_dodge)");
+    // The dodge's evasion window (GameSession.DodgeEvadeMs) on the server side: every hit inside it is evaded, then they land again.
+    var evadeBase = guard.Session.Evasions;
+    guard.Session.SetResource('S', guard.Session.Resource.SpMax);
+    Check(await guard.Session.HandleAsync(Cast(guard.Brain.DodgeSkill!.Value, guard.Session.PlayerKey, guard.Session.WorldPosition!.Value), t += 1000) is [var dodgeReply, ..] && dodgeReply[3] == 0
+          && guard.Session.GuardHit(100, t + 10) == 0 && guard.Session.GuardHit(100, t + GameSession.DodgeEvadeMs - 10) == 0 && guard.Session.Evasions == evadeBase + 2,
+          "a Dodge evades every monster hit for its first half second");
+    rai.Brains[blast.Key].Pending = null;
+    rai.AreaSkills = BossAreaSkills.Embedded;
+
+    // A monster on the ranged Cleric: the Cleric runs to its tank (so the tank picks it up and the monster stays near its spawn).
+    rai.ForceAggro(blast, prayer.Session.PlayerKey, t);
+    var closest = double.MaxValue;
+    await Run(200, () => (closest = Math.Min(closest, Apart3(prayer.Session.WorldPosition!.Value, guard.Session.WorldPosition!.Value))) <= BotBrain.ToTankBeyond
+                         || rai.Brains[blast.Key].VictimKey == guard.Session.PlayerKey);
+    Check(closest <= BotBrain.ToTankBeyond || rai.Brains[blast.Key].VictimKey == guard.Session.PlayerKey,
+          "a monster on the Cleric is brought to the tank, or the tank takes it");
+    blast.Hp = Math.Min(blast.Hp, blast.HpMax);
+    rai.ForceAggro(blast, guard.Session.PlayerKey, t);
+    await Run(1500, () => blast.Dead);
+    Check(blast.Dead, "the party kills it");
+
+    // Areas: two monsters on the leader at once; the melee bots use their area skills (cast at their own key).
+    await Run(200, () => team.All.All(b => b.Brain!.FightingKey is null));
+    var pair = lead.Targets.Values.Where(Calm).SelectMany(a => lead.Targets.Values.Where(b => b != a && Calm(b) && Apart3(a.Position, b.Position) < 500).Select(b => (a, b)))
+        .OrderBy(x => Apart3(x.a.Position, lead.WorldPosition!.Value)).First();
+    await Go(pair.a);
+    await Run(60);
+    rai.ForceAggro(pair.a, lead.PlayerKey, t);
+    rai.ForceAggro(pair.b, lead.PlayerKey, t);
+    await Run(600, () => team.All.Any(b => b.Brain!.AreaCasts > 0));
+    Check(team.All.Any(b => b.Brain!.AreaCasts > 0), "with two monsters on the group a melee bot casts an area skill around itself");
+    await Run(2000, () => pair.a.Dead && pair.b.Dead);
+    Check(pair.a.Dead && pair.b.Dead, "the party kills both");
+    // Blocks and evasions (GameSession.GuardHit): over these fights the tank blocked hits and someone evaded one; a blocked or
+    // evaded hit opens the after-block skill (Debilitating Smash for the Templar).
+    Check(guard.Session.Blocks > 0 && team.All.Sum(b => b.Session.Evasions) > 0,
+          $"monster hits are blocked ({guard.Session.Blocks}) and evaded ({team.All.Sum(b => b.Session.Evasions)})");
+    Check(guard.Brain!.CastLog.Any(c => c.Skill == 12270000), "the tank uses Debilitating Smash, its after-block skill (after_block)");
+    lead.ExitSharedWorld();
+    await team.OwnerLeftAsync(lead);
 }
 Console.WriteLine($"{checks} playerbot checks passed (Aion:Bots).");
 
@@ -3637,6 +3878,108 @@ checks = 0;
 }
 Console.WriteLine($"{checks} progression checks passed (unlocks past 25, fallback damage, skill-level scaling, MP max, combat power).");
 
+// ---------- Daevanion boards (docs/DAEVANION.md): a small board in the client tables' shape ----------
+checks = 0;
+{
+    const string boardJson = """
+    {"boards":{"101":{"class":"Gladiator","level":10,"order":1,"point":1,"reset":"Gold","title":"Nezakan"},
+               "102":{"class":"Gladiator","level":50,"order":2,"point":1,"reset":"Gold","title":"Later"},
+               "201":{"class":"Templar","level":10,"order":1,"point":1,"reset":"Gold","title":"Other"}},
+     "nodes":{"1001":{"b":101,"r":0,"c":0,"g":"Common","t":1,"auto":false,"lv":0,"ct":0,"cv":"","cost":0,"gold":0,"v":[],"n":"Start"},
+              "1002":{"b":101,"r":0,"c":1,"g":"Common","t":2,"auto":false,"lv":0,"ct":0,"cv":"","cost":2,"gold":1000,"v":["HPMax","500"],"n":"HP"},
+              "1003":{"b":101,"r":0,"c":2,"g":"Rare","t":2,"auto":false,"lv":0,"ct":0,"cv":"","cost":19,"gold":1000,"v":["EStat::Critical:40"],"n":"Crit"},
+              "1004":{"b":101,"r":1,"c":1,"g":"Rare","t":4,"auto":false,"lv":0,"ct":0,"cv":"","cost":2,"gold":1000,"v":["11010000","2"],"n":"Skill"},
+              "1005":{"b":101,"r":5,"c":5,"g":"Common","t":2,"auto":false,"lv":0,"ct":0,"cv":"","cost":1,"gold":0,"v":["MPMax","10"],"n":"Far"},
+              "1006":{"b":101,"r":1,"c":0,"g":"Common","t":2,"auto":false,"lv":30,"ct":0,"cv":"","cost":1,"gold":0,"v":["MPMax","10"],"n":"Late"},
+              "1101":{"b":102,"r":0,"c":0,"g":"Common","t":1,"auto":false,"lv":0,"ct":0,"cv":"","cost":0,"gold":0,"v":[],"n":"Start"},
+              "2001":{"b":201,"r":0,"c":0,"g":"Common","t":1,"auto":false,"lv":0,"ct":0,"cv":"","cost":0,"gold":0,"v":[],"n":"Start"},
+              "2002":{"b":201,"r":0,"c":1,"g":"Common","t":2,"auto":false,"lv":0,"ct":0,"cv":"","cost":1,"gold":0,"v":["HPMax","1"],"n":"HP"}},
+     "capacity":{"1":100},
+     "level_points":{"1":{"1":1},"2":{"1":1},"3":{"1":1},"4":{"1":1},"5":{"1":1},"6":{"1":1},"7":{"1":1},"8":{"1":1},"9":{"1":1},"10":{"1":1},
+                     "11":{"1":1},"12":{"1":1},"13":{"1":1},"14":{"1":1},"15":{"1":1},"16":{"1":1},"17":{"1":1},"18":{"1":1},"19":{"1":1},"20":{"1":1}},
+     "stats":{"HPMax":193,"MPMax":199,"Critical":128,"FixingDamage":19}}
+    """;
+    var tables = DaevanionTables.Parse(boardJson);
+    async Task<GameSession> BoardSession(DaevanionOptions? daevanion = null, int level = 20, uint creation = 1)
+    {
+        var session = new GameSession(data, new GameSessionOptions { CharacterLevel = level, Daevanion = (daevanion ?? new DaevanionOptions()) with { Tables = tables } }, new Random(5));
+        await session.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+        await session.HandleAsync(new PacketWriter().U16(0x361b).String("Daeva").U8(1).U32(creation).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
+        await session.HandleAsync(select, Now);
+        return session;
+    }
+    static byte[] NodeRq(ushort op, int id) => new PacketWriter().U16(op).I32(id).ToArray();
+    static ushort Result(byte[] rs) => BitConverter.ToUInt16(rs, 2);
+
+    Check(tables.Boards.Count == 3 && tables.NodesOf(101).Count == 6 && tables.Node(1002)!.Stats.SequenceEqual([("HPMax", 500)]) && tables.Node(1003)!.Stats.SequenceEqual([("Critical", 40)])
+          && tables.Node(1004)!.SkillLevels.SequenceEqual([(11010000, 2)]) && tables.Neighbours(tables.Node(1002)!).Select(n => n.Id).Order().SequenceEqual([1001, 1003, 1004]),
+          "daevanion.json: boards, nodes, stat and skill-level values, grid neighbours");
+    Check(DaevanionTables.ParseStats(["Critical, 5", "EStat::HPMax:100"]).SequenceEqual([("Critical", 5), ("HPMax", 100)]) && DaevanionTables.ParseSkillLevels(["11010000", "11020000,3"]).SequenceEqual([(11010000, 1), (11020000, 3)]),
+          "node values parse in the plain, comma and EStat:: forms");
+    Check(tables.LevelPoints(1, 20) == 20 && tables.LevelPoints(1, 20, "cumulative") == 1 && DaevanionTables.Embedded.StatId("HPMax") == 193 && DaevanionTables.Embedded.StatId("Critical") == 128,
+          "level points: per level summed (auto); the embedded table loads with the EStat ids");
+
+    var dvGlad = await BoardSession();
+    var dvHp = 0;
+    var entry = await dvGlad.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    dvHp = dvGlad.Resource.HpMax;
+    Check(entry.Any(b => Convert.ToHexStringLower(b) == "2ee2" + "05010000020000030000040000050000")
+          && entry.Any(b => Convert.ToHexStringLower(b) == "26e2" + "01" + "65000000" + "01" + "e9030000"),
+          "world entry: the used points as the official zero sample, the board list with the Start node dvOpened (board 101, node 1001)");
+    Check(dvGlad.DaevanionPoints(1) == 20 && dvGlad.DaevanionLeft(1) == 20, "a level-20 character has 20 points of the board's type");
+    var dvOpened = await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionOpenNodeRq, 1002), Now);
+    Check(Convert.ToHexStringLower(dvOpened[0]) == "28e2" + "0000" + "ea030000" && Op(dvOpened[1]) == GameSession.DaevanionOpenNodeNt
+          && Convert.ToHexStringLower(dvOpened[2]) == "2ee2" + "05" + "010200" + "020000030000040000050000" && dvGlad.Resource.HpMax == dvHp + 500 && dvOpened.Any(b => Op(b) == 0x364a),
+          "opening a node next to the start: 0xe228 result 0, 0xe229, 2 points used, HPMax +500 on the stat sheet");
+    Check(Result((await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionOpenNodeRq, 1005), Now))[0]) == GameSession.DaevanionNodeNeighbourNotOpen
+          && Result((await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionOpenNodeRq, 1006), Now))[0]) == GameSession.DaevanionNodeNotEnoughLevel
+          && Result((await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionOpenNodeRq, 1002), Now))[0]) == GameSession.DaevanionNodeAlreadyOpen
+          && Result((await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionOpenNodeRq, 1003), Now))[0]) == GameSession.DaevanionNodeNotEnoughPoint
+          && Result((await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionOpenNodeRq, 1101), Now))[0]) == GameSession.DaevanionNodeNotActiveBoard
+          && Result((await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionOpenNodeRq, 2002), Now))[0]) == GameSession.DaevanionNodeNotActiveBoard
+          && Result((await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionOpenNodeRq, 9999), Now))[0]) == GameSession.DaevanionNodeNotFound,
+          "refusals: not next to an dvOpened node, level, already open, points, a level-50 board, another class's board, an unknown node");
+    Check(Result((await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionResetBoardRq, 201), Now))[0]) == GameSession.DaevanionBoardInvalidClass
+          && Result((await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionResetBoardRq, 102), Now))[0]) == 0
+          && (await dvGlad.GrantDaevanionPointsAsync(1, -5, default)).Count == 0 && dvGlad.DaevanionPoints(1) == 20,
+          "board reset: another class is refused (15589); a board not reached yet resets (nothing to close); negative grants are refused");
+    await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionOpenNodeRq, 1004), Now);
+    Check(dvGlad.DaevanionSkillBonus(11010000) == 2 && dvGlad.DaevanionUsed(1) == 4, "a SkillLevel node adds its levels to the skill in combat");
+    Check(Result((await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionCloseNodeRq, 1002), Now))[0]) == GameSession.DaevanionNodeNeighbourOpened
+          && Result((await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionCloseNodeRq, 1001), Now))[0]) == GameSession.DaevanionNodeNotOpen,
+          "a node others hang on stays open (15581); the start node never closes");
+    var closed = await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionCloseNodeRq, 1004), Now);
+    Check(Result(closed[0]) == 0 && dvGlad.DaevanionUsed(1) == 2 && dvGlad.DaevanionSkillBonus(11010000) == 0 && !dvGlad.DaevanionNodes.Contains(1004),
+          "closing the outer node returns its points (development logins pay no Kina)");
+    var reset = await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionResetBoardRq, 101), Now);
+    Check(Result(reset[0]) == 0 && dvGlad.DaevanionNodes.SetEquals([1001]) && dvGlad.DaevanionUsed(1) == 0 && dvGlad.Resource.HpMax == dvHp,
+          "a board reset closes every node but the start: points back, stats gone");
+    var all = await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionOpenAllRq, 101), Now);
+    var allReader = new PacketReader(all[0]) { Offset = 2 };
+    Check(allReader.U16() == 0 && allReader.I32() == 101 && allReader.Varint() == 2 && dvGlad.DaevanionNodes.SetEquals([1001, 1002, 1004]) && dvGlad.DaevanionUsed(1) == 4,
+          "open all: every node the points reach, cheapest first (the 19-point node waits)");
+    await dvGlad.HandleAsync(NodeRq(GameSession.DaevanionResetBoardRq, 101), Now);
+    var route = await dvGlad.HandleAsync(new PacketWriter().U16(GameSession.DaevanionOpenRouteRq).I32(101).Varint(3).I32(1002).I32(1003).I32(1004).ToArray(), Now);
+    var routeReader = new PacketReader(route[0]) { Offset = 2 };
+    Check(routeReader.U16() == GameSession.DaevanionNodeNotEnoughPoint && routeReader.I32() == 101 && routeReader.Varint() == 1 && routeReader.I32() == 1002,
+          "a route opens in order and stops at the first node it cannot open");
+
+    var rich = await BoardSession(new DaevanionOptions { PointRate = 2, ExtraPoints = 5 });
+    await rich.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    Check(rich.DaevanionPoints(1) == 45 && rich.DaevanionBonus(1) == 25, "Aion:Daevanion PointRate 2 and ExtraPoints 5: 20 level points become 45 (bonus 25)");
+    await rich.HandleAsync(NodeRq(GameSession.DaevanionOpenNodeRq, 1002), Now);
+    Check(Result((await rich.HandleAsync(NodeRq(GameSession.DaevanionOpenNodeRq, 1003), Now))[0]) == 0 && rich.Resource.HpMax > 0, "with the extra points the 19-point node opens");
+    var young = await BoardSession(level: 5);
+    var youngEntry = await young.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    Check(youngEntry.Any(b => Convert.ToHexStringLower(b) == "26e2" + "00") && young.DaevanionNodes.Count == 0, "below the board's level nothing is open");
+    var dvHidden = await BoardSession(new DaevanionOptions { MaxBoardLevel = 5 });
+    await dvHidden.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+    Check(dvHidden.DaevanionNodes.Count == 0 && !dvHidden.ActiveBoards().Any(), "Aion:Daevanion:MaxBoardLevel hides the boards above it");
+    Rejects2(() => new DaevanionOptions { PointRate = -1 }.Validated(), "a negative point rate stops the host");
+    Rejects2(() => new DaevanionOptions { LevelPoints = "sometimes" }.Validated(), "an unknown LevelPoints stops the host");
+}
+Console.WriteLine($"{checks} Daevanion board checks passed (open, close, reset, open all, routes, points, Aion:Daevanion).");
+
 int DarkCreation(GameData d) => Enumerable.Range(1, 64).First(c => d.Profile(c, 1) is { Race: 2 });
 
 byte[] Strings(ushort opcode, params string[] values)
@@ -3658,6 +4001,13 @@ void Check(bool condition, string name)
 {
     if (!condition) throw new Exception("Check failed: " + name);
     checks++;
+}
+
+void Rejects2(Action action, string name)
+{
+    try { action(); }
+    catch (InvalidOperationException) { checks++; return; }
+    throw new Exception("Expected rejection: " + name);
 }
 
 void Rejects(Action action, string name)

@@ -6,7 +6,9 @@ namespace Aion.World;
 /// <summary>
 /// One effect of a class skill beyond its Damage rows (tools/data/skill-effects.json, OURS until extracted):
 /// heal, hot (heal over time), buff (stats on a player), debuff (an NPC's damage taken / speed), dot (damage over time
-/// on an NPC), resurrect. Ranges are [min, max]; ratios in 1/10000.
+/// on an NPC), resurrect, and on an NPC: stun (held for duration_ms, a special being wound up is interrupted; bosses are only
+/// interrupted), interrupt (only the interrupt), taunt (the caster goes to the top of its hate table), threat (extra hate:
+/// flat + power x ratio / 10000). Ranges are [min, max]; ratios in 1/10000.
 /// </summary>
 public sealed record SkillEffect(
     [property: JsonPropertyName("type")] string Type,

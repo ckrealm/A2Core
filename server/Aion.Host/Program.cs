@@ -105,6 +105,8 @@ var marketReferences = market.PriceFile is { Length: > 0 } priceFile ? Aion.Worl
     : ((Dictionary<int, long> ById, Dictionary<string, long> ByName)?)null;
 
 builder.Services.AddSingleton(dungeonRules);
+// Aion:Daevanion (OURS, docs/DAEVANION.md): PointRate, ExtraPoints, FreeReset, MaxBoardLevel, DisabledBoards, LevelPoints.
+builder.Services.AddSingleton((builder.Configuration.GetSection("Aion:Daevanion").Get<Aion.World.DaevanionOptions>() ?? Aion.World.DaevanionOptions.Default).Validated());
 if (native.LoginPort is not null || native.GamePort is not null)
 {
     if (!native.Development && !accountsReady)
