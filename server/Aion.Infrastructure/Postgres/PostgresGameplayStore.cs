@@ -848,7 +848,7 @@ public sealed partial class PostgresGameplayStore(NpgsqlDataSource source) : IGa
         var attachmentsText=await Scalar(c,t,"SELECT attachments::text FROM game.character_posts WHERE post_id=$1 AND character_id=$2 AND NOT taken AND NOT deleted FOR UPDATE",ct,id,character) as string;
         if(attachmentsText is null) return false;
         // A player's item (migration 040) waits under the recipient in location 'mail': it moves into the bag as it is.
-        await Execute(c,t,"UPDATE game.item_instances SET location='bag',slot=NULL,character_id=$2 WHERE location='mail' AND instance_id=ANY((SELECT attached_items FROM game.character_posts WHERE post_id=$1))",ct,id,character);
+        await Execute(c,t,"UPDATE game.item_instances SET location='bag',slot=NULL,character_id=$2 WHERE location='mail' AND instance_id IN (SELECT unnest(attached_items) FROM game.character_posts WHERE post_id=$1)",ct,id,character);
         var build=await Scalar(c,t,"SELECT build_id FROM catalog.builds ORDER BY imported_at DESC LIMIT 1",ct) as string;
         foreach(var a in JsonSerializer.Deserialize<long[][]>(attachmentsText) ?? [])
             if(a.Length>=2 && a[1]>0 && build is not null && await Scalar(c,t,"SELECT template_id FROM catalog.items WHERE build_id=$1 AND template_id=$2",ct,build,(int)a[0]) is not null)
