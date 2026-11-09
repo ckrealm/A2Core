@@ -430,6 +430,20 @@ public sealed class NpcAi(Random rng, GameData? data = null)
         return Basic(target) is { } basic && basic.Id == hit.SkillId ? null : hit.SkillId;
     }
 
+    /// <summary>
+    /// The reach of the area special the monster is winding up (a listed boss's, tools/data/boss-area-skills.json: its radius plus
+    /// the boss's own), or null. Players other than its victim within it when the hit lands take it too (<see cref="AreaHits"/>).
+    /// </summary>
+    public double? WindingArea(Target target)
+    {
+        if (CastingSpecial(target) is not { } special) return null;
+        return AreaSkills.Area(target.NpcId, special, Basic(target)?.Id ?? 0) is { } area ? area.Radius + target.Radius : null;
+    }
+
+    /// <summary>When the special this NPC winds up lands (ms), or null (no special pending).</summary>
+    public long? SpecialDueAt(Target target) =>
+        CastingSpecial(target) is not null && brains.TryGetValue(target.Key, out var brain) && brain.Pending is { } hit ? hit.DueMs : null;
+
     /// <summary>Interrupts the special being wound up (OURS): its hit never lands and the NPC needs a moment before its next attack.</summary>
     public bool Interrupt(Target target, long now)
     {
@@ -439,6 +453,14 @@ public sealed class NpcAi(Random rng, GameData? data = null)
         brain.NextAttackMs = Math.Max(brain.NextAttackMs, now + InterruptRecoverMs);
         Interrupts++;
         return true;
+    }
+
+    /// <summary>A monster that died or went home forgets players' stuns, stagger and stun immunity.</summary>
+    static void ClearControl(Target target)
+    {
+        target.StunnedUntil = 0;
+        target.StunImmuneUntil = 0;
+        target.StaggerStuns = 0;
     }
 
     /// <summary>An interrupted NPC waits this long before it attacks again (OURS).</summary>
@@ -619,6 +641,7 @@ public sealed class NpcAi(Random rng, GameData? data = null)
         brain.VictimKey = 0;
         brain.Hate.Clear();
         brain.WanderAtMs = WanderDelay(now);
+        ClearControl(target);
         return replies;
     }
 
@@ -695,11 +718,18 @@ public sealed class NpcAi(Random rng, GameData? data = null)
         // The victim's defense reduces the hit (the CANDIDATE 1000/(1000+defense) used for players' hits).
         var defense = brain.VictimIsNpc && current?.GetValueOrDefault(victim) is { } prey ? prey.Defense : DefenseOf?.Invoke(victim) ?? 0;
         var damage = Math.Max(1, (int)Math.Round(Damage(target, hit.Skill) * 1000.0 / (1000 + Math.Max(0, defense))));
+        if (!brain.VictimIsNpc && Guard is { } guard) damage = guard(victim, damage, now);
         LastAttacker = target.Key;
         List<byte[]> replies = [GamePackets.NpcSkillHit(victim, target.Key, hit.SkillId, hit.ActionSeq, hit.Skill.Effect, damage), .. hitPlayer(damage)];
-        if (!brain.VictimIsNpc) replies.AddRange(AreaHits(target, brain, hit));
+        if (!brain.VictimIsNpc) replies.AddRange(AreaHits(target, brain, hit, now));
         return replies;
     }
+
+    /// <summary>
+    /// A player's guard against a landing hit (player key, damage, now) → the damage taken: 0 for an evaded hit (a dodge in
+    /// progress or the evasion roll), less for a blocked one (GameSession.GuardHit, OURS). Null: every hit lands whole.
+    /// </summary>
+    public Func<int, int, long, int>? Guard { get; set; }
 
     /// <summary>Named bosses' area specials (tools/data/boss-area-skills.json, OURS): every NPC skill hits one victim otherwise.</summary>
     public BossAreaSkills AreaSkills { get; set; } = BossAreaSkills.Embedded;
@@ -708,7 +738,7 @@ public sealed class NpcAi(Random rng, GameData? data = null)
     /// A listed boss's area special: the other players within its radius (nearest first, up to its target count with the
     /// victim) take their own roll of the hit, each through the same per-target hit message (0x3804) and the host's hit.
     /// </summary>
-    List<byte[]> AreaHits(Target target, Brain brain, PendingHit hit)
+    List<byte[]> AreaHits(Target target, Brain brain, PendingHit hit, long now)
     {
         if (tickPlayers is not { Count: > 1 } players || tickHit is null) return [];
         if (AreaSkills.Area(target.NpcId, hit.SkillId, Basic(target)?.Id ?? 0) is not { } area) return [];
@@ -719,6 +749,7 @@ public sealed class NpcAi(Random rng, GameData? data = null)
                      .Where(p => p.D <= reach).OrderBy(p => p.D).ThenBy(p => p.Key).Take(area.MaxTargets - 1))
         {
             var damage = Math.Max(1, (int)Math.Round(Damage(target, hit.Skill) * 1000.0 / (1000 + Math.Max(0, DefenseOf?.Invoke(key) ?? 0))));
+            if (Guard is { } guard) damage = guard(key, damage, now);
             replies.Add(GamePackets.NpcSkillHit(key, target.Key, hit.SkillId, hit.ActionSeq, hit.Skill.Effect, damage));
             replies.AddRange(tickHit(key, damage));
         }
@@ -734,6 +765,7 @@ public sealed class NpcAi(Random rng, GameData? data = null)
             if (brain.Mode != Mode.Dead)
             {
                 brain.Mode = Mode.Dead; brain.Moving = false; brain.Engaged = false; brain.Pending = null; brain.VictimKey = 0; brain.Hate.Clear();
+                ClearControl(target);
                 target.Position = brain.Home;   // the respawn (0x3641) uses the spawn point
                 target.Direction = brain.HomeHeading;
                 brain.Heading = brain.HomeHeading;

@@ -89,9 +89,16 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
     /// <summary>"//bot world" (docs/WORLDBOTS.md): who the world bots are and what they do. Null: no world bots on this host.</summary>
     public WorldBots? WorldBots { get; init; }
 
+    /// <summary>"//ah ..." (docs/MARKET.md): the market for every player. Null: no market on this host (no game database).</summary>
+    public MarketCommands? Market { get; init; }
+
     public async Task<string> HandleAsync(ChatIdentity sender, string userName, string content, CancellationToken ct)
     {
         var text = content.Trim();
+        // /dungeon (player command, single slash; //dungeon works too).
+        var bare = text.TrimStart('/');
+        if (bare.StartsWith("dungeon", StringComparison.OrdinalIgnoreCase) && (bare.Length == 7 || char.IsWhiteSpace(bare[7])))
+            return await DungeonAsync(userName, bare[7..].Trim(), ct);
         if (!text.StartsWith("//", StringComparison.Ordinal)) return "Unknown command. Use //help.";
         var line = text[2..].Trim();
         if (line.StartsWith("report", StringComparison.OrdinalIgnoreCase) && (line.Length == 6 || char.IsWhiteSpace(line[6])))
@@ -106,6 +113,9 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
         if (actor is null) return "Enter the world first.";
         try
         {
+            // //ah (Aion:Market, docs/MARKET.md): every player; "//ah help" lists its commands.
+            if (line.StartsWith("ah", StringComparison.OrdinalIgnoreCase) && (line.Length == 2 || char.IsWhiteSpace(line[2])))
+                return Market is { } market ? await market.HandleAsync(actor.Session, line[2..].Trim(), ct) : "The market is not available on this server.";
             if (line.StartsWith("bot", StringComparison.OrdinalIgnoreCase) && (line.Length == 3 || char.IsWhiteSpace(line[3])))
                 return await BotAsync(actor.Session, line[3..].Trim(), ct);
             if (Word(line, "abyss") is { } abyssArgs) return await AbyssAsync(actor.Session, abyssArgs, ct);
@@ -114,7 +124,8 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
                 return await builder.AllowedAsync(actor.Session, ct)
                     ? "Builder commands (in chat: //<command>; console: s <command>): " + string.Join(", ", BuilderCommands.Supported)
                         + (Bots is { Options.Enabled: true } ? "; //bot add <character> for playerbots" : "")
-                    : "Commands: //report <text> sends a report to the staff. //abyss shows the siege, rifts and battlefield; //abyss bf queues for the battlefield; //rift on|off switches rift PvP."
+                    : "Commands: //report <text> sends a report to the staff. " + GameSession.DungeonHelp
+                        + " //abyss shows the siege, rifts and battlefield; //abyss bf queues for the battlefield; //rift on|off switches rift PvP."
                         + (Bots is { Options: { Enabled: true, PlayersMayUse: true } } ? " //bot add <character> summons one of your characters as a bot." : "");
             return await actor.Session.InvokeAsync(async now =>
             {
@@ -173,6 +184,22 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
         return WorldBots!.Speakers().FirstOrDefault(b => b.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) is { } bot
             ? $"{bot.Name}: level {bot.Level} {(bot.Race == 2 ? "Asmodian" : "Elyos")} {bot.ClassName}, {bot.Activity}{(bot.Place is { } p ? " in " + p : "")}."
             : $"No world bot named {name}.";
+    }
+
+    /// <summary>/dungeon (GameSession.DungeonCommand): every player; runs on the sender's game loop.</summary>
+    async Task<string> DungeonAsync(string userName, string args, CancellationToken ct)
+    {
+        var actor = presence.Find(userName) ?? presence.Find(Aion.Core.Characters.CharacterNames.Stored(userName));
+        if (actor is null) return "Enter the world first.";
+        if (actor.Session.Bot) return "Bots follow their party.";
+        try
+        {
+            return await actor.Session.InvokeAsync(now => actor.Session.DungeonCommand(args, now)).WaitAsync(TimeSpan.FromSeconds(10), ct);
+        }
+        catch (Exception error) when (error is TimeoutException or TaskCanceledException)
+        {
+            return "The game connection did not respond.";
+        }
     }
 
     /// <summary>//bot: allowed for staff, or for everyone with Aion:Bots:PlayersMayUse; runs on the sender's game loop.</summary>

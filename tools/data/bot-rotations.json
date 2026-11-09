@@ -4,18 +4,8 @@
  "global_cooldown_ms": 1000,
  "tank_hate_multiplier": 3,
  "skipped": {
-  "11200000": "Ankle Slice: only after a successful block",
-  "11360000": "Rush Strike: only after a Dodge",
-  "12270000": "Debilitating Smash: only after a successful block",
-  "12430000": "Shield Rush: only after a Dodge",
-  "13210000": "Whirlwind Slice: only after a successful evasion",
-  "13350000": "Heart Gore: only after a critical hit",
-  "13360000": "Infiltrate: only after a Dodge",
-  "14050000": "Drill Dart: only after a critical hit",
   "16300000": "Elemental Fusion: needs Four Elements stacks from spirits (no spirits)",
-  "16330000": "Dimensional Control: fires when a spirit uses a skill (no spirits)",
-  "18150000": "Heat Wave Blow: only after a successful block",
-  "18210000": "Tremor Crush: only after a Dodge"
+  "16330000": "Dimensional Control: fires when a spirit uses a skill (no spirits)"
  },
  "classes": {
   "Gladiator": {
@@ -44,6 +34,24 @@
      "when": {
       "target": "enemy",
       "target_casting": true
+     }
+    },
+    {
+     "skill": 11360000,
+     "name": "Rush Strike",
+     "level": 10,
+     "when": {
+      "target": "enemy",
+      "after_dodge": true
+     }
+    },
+    {
+     "skill": 11200000,
+     "name": "Ankle Slice",
+     "level": 7,
+     "when": {
+      "target": "enemy",
+      "after_block": true
      }
     },
     {
@@ -108,7 +116,8 @@
      "name": "Mocking Blade",
      "level": 3,
      "when": {
-      "target": "enemy"
+      "target": "enemy",
+      "target_boss": false
      }
     },
     {
@@ -278,6 +287,24 @@
      }
     },
     {
+     "skill": 12430000,
+     "name": "Shield Rush",
+     "level": 10,
+     "when": {
+      "target": "enemy",
+      "after_dodge": true
+     }
+    },
+    {
+     "skill": 12270000,
+     "name": "Debilitating Smash",
+     "level": 7,
+     "when": {
+      "target": "enemy",
+      "after_block": true
+     }
+    },
+    {
      "skill": 12130000,
      "name": "Poach",
      "level": 1,
@@ -344,7 +371,8 @@
      "name": "Shield Smite",
      "level": 3,
      "when": {
-      "target": "enemy"
+      "target": "enemy",
+      "target_boss": false
      }
     },
     {
@@ -536,6 +564,24 @@
      }
     },
     {
+     "skill": 13360000,
+     "name": "Infiltrate",
+     "level": 10,
+     "when": {
+      "target": "enemy",
+      "after_dodge": true
+     }
+    },
+    {
+     "skill": 13210000,
+     "name": "Whirlwind Slice",
+     "level": 7,
+     "when": {
+      "target": "enemy",
+      "after_evasion": true
+     }
+    },
+    {
      "skill": 13220000,
      "name": "Shadow Fall",
      "level": 12,
@@ -589,6 +635,26 @@
        13100000
       ],
       "after_within_ms": 10000
+     }
+    },
+    {
+     "skill": 13350000,
+     "name": "Heart Gore",
+     "level": 4,
+     "when": {
+      "target": "enemy",
+      "enemies_at_least": 2,
+      "after_critical": true
+     },
+     "area": "self"
+    },
+    {
+     "skill": 13350000,
+     "name": "Heart Gore",
+     "level": 4,
+     "when": {
+      "target": "enemy",
+      "after_critical": true
      }
     },
     {
@@ -789,6 +855,19 @@
       "target": "self",
       "target_hp_below": 50
      }
+    },
+    {
+     "skill": 17090000,
+     "name": "Light of Regeneration",
+     "level": 7,
+     "when": {
+      "target": "tank",
+      "in_combat": true,
+      "buff_missing": true
+     },
+     "roles": [
+      "heal"
+     ]
     },
     {
      "skill": 17090000,
@@ -1357,6 +1436,15 @@
      }
     },
     {
+     "skill": 14050000,
+     "name": "Drill Dart",
+     "level": 4,
+     "when": {
+      "target": "enemy",
+      "after_critical": true
+     }
+    },
+    {
      "skill": 14010000,
      "name": "Deadshot",
      "level": 14,
@@ -1375,6 +1463,7 @@
      "when": {
       "target": "enemy",
       "target_elite": true,
+      "target_boss": false,
       "after": [
        14090000
       ],
@@ -1811,7 +1900,8 @@
      "level": 7,
      "when": {
       "target": "enemy",
-      "target_elite": true
+      "target_elite": true,
+      "target_boss": false
      }
     },
     {
@@ -1993,6 +2083,24 @@
      }
     },
     {
+     "skill": 18210000,
+     "name": "Tremor Crush",
+     "level": 10,
+     "when": {
+      "target": "enemy",
+      "after_dodge": true
+     }
+    },
+    {
+     "skill": 18150000,
+     "name": "Heat Wave Blow",
+     "level": 7,
+     "when": {
+      "target": "enemy",
+      "after_block": true
+     }
+    },
+    {
      "skill": 18100000,
      "name": "Dark Crush",
      "level": 4,
@@ -2078,6 +2186,7 @@
      "level": 3,
      "when": {
       "target": "enemy",
+      "target_boss": false,
       "self_mp_above": 40
      },
      "roles": [
@@ -2089,7 +2198,8 @@
      "name": "Impactful Crush",
      "level": 3,
      "when": {
-      "target": "enemy"
+      "target": "enemy",
+      "target_boss": false
      },
      "roles": [
       "dps"

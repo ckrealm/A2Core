@@ -298,7 +298,8 @@ public sealed class BotChatter(BotChatOptions options, Func<IReadOnlyList<BotSpe
     public static string? PlaceName(string? area)
     {
         if (string.IsNullOrWhiteSpace(area)) return null;
-        var name = Regex.Replace(area, @"_?Subzone(_\w+)?$", "", RegexOptions.IgnoreCase);
+        var name = Regex.Replace(area, @"_?Subzone\w*$", "", RegexOptions.IgnoreCase);
+        name = Regex.Replace(name, @"(?<=[a-z])(of|the)(?=[A-Z])", " $1 ");
         name = Regex.Replace(name, @"^L\d_", "");
         name = Regex.Replace(name, @"(?<=[a-z])(?=[A-Z])|_", " ");
         name = Regex.Replace(name, @"\b(default|pc|\d+)\b", "", RegexOptions.IgnoreCase);

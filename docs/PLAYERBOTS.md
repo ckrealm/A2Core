@@ -112,6 +112,23 @@ mod-playerbots splits a bot into *strategies* (which triggers are active), *trig
 The brain checks them in this order every tick: support entries (by their place in the rotation), then the fight,
 then loot, then follow. The "group" is the bot, its leader and their party members on the same map and copy.
 
+### Staying alive in boss fights
+
+- **Area specials.** While a monster fighting the group winds up an area special (a listed boss's,
+  `tools/data/boss-area-skills.json`, `NpcAi.WindingArea`), every bot but its victim steps straight away from it to 2 m
+  outside its reach and takes no step until the hit lands (it still casts whatever reaches from there). The victim
+  (normally the tank) stays.
+- **Dodging.** The victim of a monster's special dodges 0.3 s before it lands, with its class's own Dodge (11000100 ...
+  18000100, 30,000 SP), once per special (`BotBrain.DodgeSpecial`). A dodge evades every monster hit for 0.5 s
+  (`GameSession.DodgeEvadeMs`).
+- **Blocks and evasions** (OURS, `GameSession.GuardHit`, `NpcAi.Guard`): every monster hit on a player, bot or not, may be
+  evaded (5%; Ranger 10%, Assassin 12%) or blocked (the weapon's Block stat / 1000, at most 40%: Sword 20%, Greatsword
+  15%, Staff 12.5%, Dagger and Mace 5%); a blocked hit deals half. No evasion stat is extracted yet.
+- **Bring it to the tank.** A monster attacking a non-tank bot makes that bot run to its group's tank bot (within 2.5 m)
+  before it does anything else, so the tank picks the monster up and the monster is not dragged off to its leash.
+- **Interrupts are kept for bosses.** An interrupt skill's "on cooldown" entries skip bosses (`target_boss: false`), so
+  it is ready when the boss winds up its special.
+
 ### Who a bot fights
 
 1. A **tank** bot first takes monsters that attack someone else in the group, healers first (a heal bot, or a player
@@ -157,7 +174,8 @@ Kills by bots go through the session's normal kill and loot path (`GameSession.L
 decides who gets what:
 
 - **killer**: everything lies on the ground for the killer. When a bot is the killer, the loot is its own.
-- **roundrobin** and **freeforall**: the other members' parts go straight into their bags, as for players. The killer's
+- **roundrobin** and **freeforall**: the other members' parts go straight into their bags, as for players (a part a bag
+  cannot take, a dead member's or a full bag's, lies on the ground at the kill site for that member). The killer's
   part, which can be a bot's, lies on the ground.
 
 A bot picks up what lies on the ground for it. After the fight it walks to its own drops (within 2500 cm of itself
@@ -212,7 +230,7 @@ The rotations live in `tools/data/bot-rotations.json`. `tools/bot_rotations.py` 
  "marker": "OURS",
  "global_cooldown_ms": 1000,
  "tank_hate_multiplier": 3,
- "skipped": {"11200000": "Ankle Slice: only after a successful block"},
+ "skipped": {"16330000": "Dimensional Control: fires when a spirit uses a skill (no spirits)"},
  "classes": {
   "Templar": {
    "weapon_type": "Sword", "range": 300, "position": "front", "roles": ["tank", "dps"],
@@ -234,10 +252,10 @@ The rotations live in `tools/data/bot-rotations.json`. `tools/bot_rotations.py` 
 - `level` is the class unlock level: class-skills.json up to 25, progression.json past it. `roles` (optional) limits an
   entry to tank, dps or heal bots.
 - `area` (optional): `self` or `target`. The bot casts the skill at its own key, so the server's area path hits every
-  monster within 4 m of the bot (`self`) or of its target (`target`). Area casts carry no debuff or stun (those need the
-  monster's key), so control skills are always single-target entries.
-- `position` (class): `front`, `behind` (melee damage that works from the monster's back while the monster attacks someone
-  else) or `ranged`. `range` is how close the bot gets before it casts; `role_ranges` overrides it per role.
+  monster within 4 m of the bot (`self`) or of its target (`target`), and puts the skill's enemy effects (debuffs, dots,
+  stuns, threat) on each of them.
+- `position` (class): `front`, `behind` (a melee dps bot walks to the monster's back between casts while the monster
+  attacks someone else) or `ranged`. `range` is how close the bot gets before it casts; `role_ranges` overrides it per role.
 - `when` conditions. A missing condition holds.
   - `target`: `enemy` (the fight's target), `self` (the bot), `leader`, `ally` (the living group member with the lowest
     HP share that meets the conditions; the bot itself is one) or `dead_ally` (a dead group member, for resurrection).
@@ -255,10 +273,16 @@ The rotations live in `tools/data/bot-rotations.json`. `tools/bot_rotations.py` 
     - `target_on_self`: true when the monster attacks this bot, false when it attacks someone else (taunts, peels).
     - `target_effect_missing`: this bot's debuff, dot or stun of this skill is not on the monster now (debuff upkeep).
     - `target_has`: this bot's effect of one of these skills is on the monster now (a follow-up that needs a debuff).
-    - `target_distance_above` (cm): gap closers and ranged openers, cast from where the bot stands.
+    - `target_distance_above` (cm): gap closers and ranged openers, cast from where the bot stands (up to 20 m; farther,
+      the bot walks first).
     - `enemies_at_least`: monsters fighting the group within 4 m of the area's centre (the bot for `self` areas, the
       target otherwise).
     - `after` and `after_within_ms` (3000 by default): the bot's last accepted cast was one of these skills (combo chains).
+    - `after_critical`: one of the bot's hits was a critical within `after_within_ms` (crit-only skills).
+    - `after_block`, `after_evasion`, `after_dodge`: the bot blocked or evaded a monster's hit, or dodged, within
+      `after_within_ms` (the proc skills).
+  - `target: tank` (friendly entries): the group's tank, a tank bot, else the member most monsters attack. Every `ally`
+    heal also counts the tank 10 HP points needier than it is.
 - `tank_hate_multiplier` (top level): the factor a tank bot's hits count in a monster's hate table.
 - `skipped` (top level): Active skills no plan may use, with the reason (see [Class plans](#class-plans)).
 
@@ -306,9 +330,10 @@ allthings.how, iggm, gamerblurb and roonby class guides, 2026). The orders, thre
 | Cleric | heal (dps possible), ranged 18 m (15 m as healer) | Heals, HoT and Defiance first · Lightning Strike Scattershot (staggered only) · Chain of Torment kept up · Condemnation on Chain of Torment · Debilitating Mark kept up · Divine Aura · Bolt on 3+ or an elite · Judgment Thunder · Earth's Retribution (MP back). No interrupt: its kit has no stun before level 26. |
 | Chanter | heal (dps possible), melee behind | Recuperation and Defiance first · Impactful Crush interrupts (stun) · Rushing Smash in from range · Dark Crush after Impactful Crush / Spinning Strike · Wave Blow on a stunned target · Gust Rampage (staggered only) · Spinning Strike (area on 2+) · Impactful Crush · Rushing Smash · Incandescent Blow / Onslaught around itself on packs · Onslaught (MP back) |
 
-Left out (`SKIPPED`): Ankle Slice, Debilitating Smash and Heat Wave Blow (after a block), Whirlwind Slice (after an
-evasion), Heart Gore and Drill Dart (after a critical hit), Rush Strike, Shield Rush, Infiltrate and Tremor Crush (after a
-Dodge), Dimensional Control and Elemental Fusion (spirits).
+Heart Gore (Assassin) and Drill Dart (Ranger) follow the bot's own critical hits (`after_critical`). Ankle Slice,
+Debilitating Smash and Heat Wave Blow follow a block (`after_block`), Whirlwind Slice an evasion (`after_evasion`), Rush
+Strike, Shield Rush, Infiltrate and Tremor Crush a Dodge (`after_dodge`). Left out (`SKIPPED`): Dimensional Control and
+Elemental Fusion (spirits).
 
 ## Configuration
 
@@ -345,10 +370,10 @@ the bots of a map into one map turn.
 ## Not done yet
 
 - **Hate from heals.** Heals add no hate.
-- **Proc skills.** Skills that need a block, an evasion, a critical hit or a Dodge just before are left out
-  (`SKIPPED` in the builder). The server has no such events yet.
 - **Spirits.** Elementalist summons do nothing on the server, so the Elementalist bot fights without a spirit.
-- **Kiting and dodging.** Ranged bots stand still at their range; nobody dodges telegraphed attacks.
+- **Kiting.** Ranged bots stand still at their range. Only the victim of a special dodges; others step out of area
+  specials but do not dodge.
+- **Block and evasion values.** The chances are ours; the client's real formulas (and an evasion stat) are not extracted.
 - **Mismatches with the official kits.** Our skill-effects table still has Defiance as +200 Defense (officially a
   crowd-control break), Healing Light, Radiant Recovery and Recuperation as single-target heals (officially party
   heals), and Debilitating Mark as a damage-taken debuff. The rotations use them the way our server implements them.
@@ -356,8 +381,8 @@ the bots of a map into one map turn.
   skill-effects.json yet (the class data carries none). The checks use a table entry of their own.
 - **Solo instances and unrecorded entries.** See [Instances](#instances).
 - **Quest sharing.** None.
-- **Random bots** (mod-playerbots' `randombots`). These would be bot accounts with generated characters that
-  wander and level on their own. They need an account and character factory, plus a "grind/quest" strategy set.
+- **Random bots** (mod-playerbots' `randombots`): done as world bots, see [WORLDBOTS.md](WORLDBOTS.md). They are generated,
+  unsaved characters; summoning or inviting them into a player's party is not done.
 - **Bot accounts.** Summoning another account's characters, or server-owned ones, needs a store opened without a
   client ticket. Today a bot always uses its leader's account store.
 - **Console command.** `s bot ...` through `0x362e` is not wired. Only the `//bot` chat command is.

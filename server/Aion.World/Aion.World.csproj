@@ -41,11 +41,14 @@
     <EmbeddedResource Include="../../tools/data/map-events.json" LogicalName="map-events.json" />
     <EmbeddedResource Include="../../tools/data/titles.json" LogicalName="titles.json" />
     <EmbeddedResource Include="../../tools/data/skins.json" LogicalName="skins.json" />
+    <!-- Daevanion boards: tools/daevanion_data.py from DaevanionBoard/DaevanionNode/DaevanionMaxCapacity/Exp .dat (docs/DAEVANION.md). -->
+    <EmbeddedResource Include="../../tools/data/daevanion.json" LogicalName="daevanion.json" />
     <!-- OURS: heal/buff/debuff values of class skills until their SkillEffect rows are extracted (see the file's "regenerate"). -->
     <EmbeddedResource Include="../../tools/data/skill-effects.json" LogicalName="skill-effects.json" />
 
     <!-- Playerbot rotations (OURS), tools/bot_rotations.py from class-skills.json; see docs/PLAYERBOTS.md. -->
     <EmbeddedResource Include="../../tools/data/bot-rotations.json" LogicalName="bot-rotations.json" />
+    <EmbeddedResource Include="../../tools/data/market-prices.csv" LogicalName="market-prices.csv" />
 
     <!-- OURS: unlocks after level 25, fallback skills/damage, skill-level scaling, MPMax curve, combat power (docs/PROGRESSION.md). -->
     <EmbeddedResource Include="../../tools/data/progression.json" LogicalName="progression.json" />

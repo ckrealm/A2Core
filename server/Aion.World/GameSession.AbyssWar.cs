@@ -198,9 +198,9 @@ public sealed partial class GameSession
     IReadOnlyList<Hit> ArenaSkillHits(ArenaMatch match, int skill, GameSession victim)
     {
         if (match.Battlefield is not { } o)
-            return Combat.SkillHits(data, skill, className, level, equippedWeapon, victim.Defense, rng, pvp: true, fixingBonus: BuffStat("FixingDamage"), skillLevel: SkillLevel(skill));
+            return Combat.SkillHits(data, skill, className, level, StatWeapon, victim.Defense, rng, pvp: true, fixingBonus: BuffStat("FixingDamage") + DaevanionStat("FixingDamage"), skillLevel: CombatSkillLevel(skill));
         var defense = data.BaseStats(victim.className, o.NormalizedLevel).GetValueOrDefault("Defense");
-        var hits = Combat.SkillHits(data, skill, className, o.NormalizedLevel, equippedWeapon, defense, rng, pvp: true);
+        var hits = Combat.SkillHits(data, skill, className, o.NormalizedLevel, StatWeapon, defense, rng, pvp: true);
         // Everyone's HP counts as the class's base at that level: a hit takes the same share of anyone's bar.
         var baseHp = data.BaseStats(victim.className, o.NormalizedLevel).GetValueOrDefault("HPMax") is > 0 and var b ? b : GamePackets.SpawnHpMax;
         var scale = (victim.resources?.HpMax ?? baseHp) / (double)Math.Max(1, baseHp);
