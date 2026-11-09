@@ -106,14 +106,26 @@ def environment(args, credentials):
 
 
 # Rates and host switches (OURS: the server owner's choice). Each is written only when given, so the host's defaults
-# (official rates, PvP on, 30 s respawn, round-robin party loot, fallback loot on, no player cap, no dungeon entry limits,
-# untracked objectives done after 30 s) apply otherwise.
+# (friends rates, PvP on, 30 s respawn, round-robin party loot, fallback loot on, no player cap, no dungeon entry limits,
+# untracked objectives done after 30 s, no time gates, no unlocks, crafts always succeed, pets at half the souls) apply otherwise.
 GAMEPLAY = {
     'rates_profile': 'Aion__Rates__Profile',
     'exp_rate': 'Aion__Rates__Experience',
     'quest_exp_rate': 'Aion__Rates__QuestExperience',
     'kinah_rate': 'Aion__Rates__Kinah',
     'drop_rate': 'Aion__Rates__Drop',
+    'kinah_chance': 'Aion__Rates__KinahChance',
+    'gather_exp_rate': 'Aion__Rates__GatherExperience',
+    'craft_exp_rate': 'Aion__Rates__CraftExperience',
+    'pet_exp_rate': 'Aion__Rates__PetExperience',
+    'shop_limits': 'Aion__TimeGates__ShopLimits',
+    'dungeon_timers': 'Aion__TimeGates__DungeonTimeLimits',
+    'collection_rotation': 'Aion__TimeGates__CollectionRotation',
+    'gather_respawn_seconds': 'Aion__TimeGates__GatherRespawnSeconds',
+    'all_skins': 'Aion__Unlocks__AllSkins',
+    'all_pets': 'Aion__Unlocks__AllPets',
+    'craft_always_succeeds': 'Aion__Unlocks__CraftAlwaysSucceeds',
+    'pet_soul_cost': 'Aion__Unlocks__PetSoulCost',
     'max_players': 'Aion__Native__MaxPlayers',
     'respawn_seconds': 'Aion__Rules__RespawnSeconds',
     'pvp': 'Aion__Rules__Pvp',
@@ -126,13 +138,17 @@ GAMEPLAY = {
 }
 
 
+SWITCHES = ('pvp', 'fallback_loot', 'dungeon_limits', 'shop_limits', 'dungeon_timers', 'collection_rotation',
+            'all_skins', 'all_pets', 'craft_always_succeeds')
+
+
 def gameplay(args):
     env = {}
     for name, key in GAMEPLAY.items():
         value = getattr(args, name, None)
         if value is None:
             continue
-        if name in ('pvp', 'fallback_loot', 'dungeon_limits'):
+        if name in SWITCHES:
             value = 'true' if value == 'on' else 'false'
         env[key] = value
     # Per-dungeon daily entries (Dungeon.dat id or name = count, 0 no limit): Aion:Dungeons:Entries:<dungeon>.
@@ -170,12 +186,17 @@ def main(argv=None):
     parser.add_argument('--max-connections', type=int, default=200, help='per native port')
     parser.add_argument('--preload', type=int, nargs='*', default=[1000], help='maps loaded at startup')
     rates = parser.add_argument_group('rates and rules (unset: the host defaults)')
-    rates.add_argument('--rates-profile', choices=['official', 'accelerated'],
-                       help='official: all rates 1; accelerated: experience 5, Kinah 3, drops 3 (explicit rates override)')
+    rates.add_argument('--rates-profile', choices=['friends', 'official', 'accelerated'],
+                       help='friends (the host default): experience 10, Kinah 10, Kinah chance 2, drops 3, professions and pets 5; '
+                            'official: all rates 1; accelerated: experience 5, Kinah 3, drops 3 (explicit rates override)')
     rates.add_argument('--exp-rate', type=rate, help='kill experience multiplier')
     rates.add_argument('--quest-exp-rate', type=rate, help='quest experience multiplier (default: the experience rate)')
     rates.add_argument('--kinah-rate', type=rate, help='Kinah gained from quests, drops, chests and rewards')
     rates.add_argument('--drop-rate', type=rate, help='loot table rolls per kill')
+    rates.add_argument('--kinah-chance', type=rate, help="multiplies a monster's chance to drop Kinah (capped at certain)")
+    rates.add_argument('--gather-exp-rate', type=rate, help='gathering mastery experience multiplier')
+    rates.add_argument('--craft-exp-rate', type=rate, help='crafting mastery experience multiplier')
+    rates.add_argument('--pet-exp-rate', type=rate, help='pet (creature board) experience multiplier')
     rates.add_argument('--max-players', type=int, help='refuse logins beyond this many players (0: no cap)')
     rates.add_argument('--respawn-seconds', type=int, help='monster respawn after a kill (5-3600, default 30)')
     rates.add_argument('--pvp', choices=['on', 'off'], help='duels, arenas and Abyss player damage (default on)')
@@ -192,6 +213,16 @@ def main(argv=None):
     dungeons.add_argument('--dungeon-reset-hour', type=int, help='server local hour the daily counts reset (0-23, default 9)')
     dungeons.add_argument('--untracked-objective-seconds', type=int,
                           help='map-event objectives the server cannot follow count as done after this long (1-3600, default 30)')
+    gates = parser.add_argument_group('time gates (unset: the host defaults, all off)')
+    gates.add_argument('--shop-limits', choices=['on', 'off'], help="merchants' daily/weekly/monthly/one-time purchase caps")
+    gates.add_argument('--dungeon-timers', choices=['on', 'off'], help='timed dungeons fail when their timer runs out')
+    gates.add_argument('--collection-rotation', choices=['on', 'off'], help='daily/weekly collections open one day or week at a time')
+    gates.add_argument('--gather-respawn-seconds', type=int, help='a gathered node is back for that player after this long (0-3600, default 10)')
+    unlocks = parser.add_argument_group('unlocks (unset: the host defaults)')
+    unlocks.add_argument('--all-skins', choices=['on', 'off'], help='every character gets every skin at its next world entry (default off)')
+    unlocks.add_argument('--all-pets', choices=['on', 'off'], help='every character gets every pet at its top level, boards maxed (default off)')
+    unlocks.add_argument('--craft-always-succeeds', choices=['on', 'off'], help='crafts never fail (default on)')
+    unlocks.add_argument('--pet-soul-cost', type=float, help='multiplies the souls pets cost to acquire and level (0-10, default 0.5)')
     parser.add_argument('--geolocation', default='59.9139,10.7522,NO', metavar='LAT,LON,CC',
                         help="server location for the region screen ('off' to omit)")
     args = parser.parse_args(argv)
@@ -211,6 +242,10 @@ def main(argv=None):
         parser.error('--dungeon-entries must be between 0 and 1000')
     if args.dungeon_reset_hour is not None and not 0 <= args.dungeon_reset_hour <= 23:
         parser.error('--dungeon-reset-hour must be between 0 and 23')
+    if args.gather_respawn_seconds is not None and not 0 <= args.gather_respawn_seconds <= 3600:
+        parser.error('--gather-respawn-seconds must be between 0 and 3600')
+    if args.pet_soul_cost is not None and not 0 <= args.pet_soul_cost <= 10:
+        parser.error('--pet-soul-cost must be between 0 and 10')
     if args.untracked_objective_seconds is not None and not 1 <= args.untracked_objective_seconds <= 3600:
         parser.error('--untracked-objective-seconds must be between 1 and 3600')
     if args.staff_path is not None and (len(args.staff_path) < 9 or not args.staff_path.startswith('/')

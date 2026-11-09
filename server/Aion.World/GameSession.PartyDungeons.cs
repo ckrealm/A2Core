@@ -56,7 +56,7 @@ public sealed partial class GameSession
         DungeonCopy Fresh()
         {
             var limit = room.Limit > 0 ? room.Limit : room.Progress;
-            var fresh = new DungeonCopy(this, id, now) { DeadlineMs = limit > 0 && Timed(room) ? now + (room.Ready + limit) * 1000L : 0 };
+            var fresh = new DungeonCopy(this, id, now) { DeadlineMs = limit > 0 && Timed(room) && options.TimeGates.DungeonTimeLimits ? now + (room.Ready + limit) * 1000L : 0 };
             if (room.Ready > 0) { fresh.Phase = "Prepare"; fresh.ProcessAtMs = now + room.Ready * 1000L; }
             return fresh;
         }

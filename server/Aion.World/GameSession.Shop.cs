@@ -128,7 +128,7 @@ public sealed partial class GameSession
         var ok = targets?.TryGetValue((int)key, out npc) == true && Shops.IsMerchant(npc!.NpcId);
         openShop = ok ? (int)key : null;
         var bought = new List<(int Goods, int Count)>();
-        if (ok && Store is { } store && CharacterId is { } character)
+        if (ok && options.TimeGates.ShopLimits && Store is { } store && CharacterId is { } character)
         {
             var limited = Shops.LimitedGoods(npc!.NpcId, profileRace).ToList();
             if (limited.Count > 0)
@@ -193,7 +193,7 @@ public sealed partial class GameSession
             if (count < 1 || count > 10_000 || Shops.Goods(npc!.NpcId, profileRace, (int)goodsId) is not { } g || level < g.Level) return [Reply(1, npcKey)];
             rewards.Add((g.ItemId, g.Bundle * count));
             prices[g.Currency] = prices.GetValueOrDefault(g.Currency) + g.Price * count;
-            if (g.Limit > 0) limits.Add((g.LimitTarget, (int)goodsId, ShopTables.Period(g.LimitPeriod, at), (int)count, g.Limit));
+            if (g.Limit > 0 && options.TimeGates.ShopLimits) limits.Add((g.LimitTarget, (int)goodsId, ShopTables.Period(g.LimitPeriod, at), (int)count, g.Limit));
         }
         var costs = new List<(Guid, long, int)>();
         foreach (var (currency, price) in prices)

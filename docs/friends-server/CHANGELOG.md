@@ -31,3 +31,10 @@
 ## 2026-11-09 — progression merged; pushed to the fork
 - Skills unlock to level 100 (OURS spread of the client's dev-menu class kits over 26–100), +10% damage/heal per skill level, fallback damage rows for skills without data, MP max by level and class, combat power computed and sent in the existing appear-message field. 17 checks. See PROGRESSION.md.
 - `dev` pushed to `BrandonGWoW/A2Core` as branch `friends-server`.
+
+## 2026-11-09 — no time gates, faster leveling, alt perks
+- **`friends` rates profile, now the host default**: experience and quest experience 10, Kinah 10, Kinah drop chance x2, drops 3, gathering/crafting/pet experience 5. New keys `Aion:Rates:KinahChance`, `GatherExperience`, `CraftExperience`, `PetExperience`. `official` and `accelerated` unchanged.
+- **Time gates, all off by default** (`Aion:TimeGates:*`): shop purchase caps, dungeon timers, daily/weekly collection rotation; gather nodes back after 10 s (was 60). Dungeon entry limits stay off. Audit of what else gates play by time: RATES.md.
+- **Professions and pets** (`Aion:Unlocks:*`): crafts always succeed (default on), pets cost half the souls (default 0.5); opt-in `AllSkins` and `AllPets` (every skin; every pet at its top level and boards maxed) for every character at its next world entry, once.
+- `wsl-install.sh` and `server_env.py` take all of these as options. Checks: 34 rate/rule, 229 stored session, 147 PostgreSQL repository, 520 Python tests passing.
+- Note for an existing install: a `game.env` that says `Aion__Rates__Profile=accelerated` keeps those rates; `wsl-install.sh --rates-only --rates-profile friends` switches.

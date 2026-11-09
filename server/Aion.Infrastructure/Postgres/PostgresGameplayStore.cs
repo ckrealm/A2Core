@@ -185,6 +185,22 @@ public sealed class PostgresGameplayStore(NpgsqlDataSource source) : IGameplaySt
         await t.CommitAsync(ct); return true;
     }
 
+    public async Task<bool> GrantUnlocksAsync(VerifiedAccount account, Guid character, IReadOnlyList<int> skins, IReadOnlyList<(int RideId, int Level)> rides, CancellationToken ct=default)
+    {
+        if(skins.Count>100_000 || rides.Count>10_000 || skins.Any(s=>s<=0) || rides.Any(r=>r.RideId<=0 || r.Level is <1 or >100)) throw new GameplayException("invalid_unlocks");
+        await using var c=await source.OpenConnectionAsync(ct); await using var t=await c.BeginTransactionAsync(ct);
+        if(!await Own(c,t,account.AccountId,character,ct)) return false;
+        if(skins.Count>0)
+            await Execute(c,t,"INSERT INTO game.character_skins(character_id,skin_id) SELECT $1,s FROM unnest($2::integer[]) AS s ON CONFLICT (character_id,skin_id) DO NOTHING",ct,character,skins.Distinct().ToArray());
+        if(rides.Count>0)
+            await Execute(c,t,"INSERT INTO game.character_rides(character_id,ride_id,level,owned) SELECT $1,r.id,r.lvl,true FROM unnest($2::integer[],$3::smallint[]) AS r(id,lvl) "
+                +"ON CONFLICT (character_id,ride_id) DO UPDATE SET owned=true,level=GREATEST(game.character_rides.level,EXCLUDED.level)",
+                ct,character,rides.Select(r=>r.RideId).ToArray(),rides.Select(r=>(short)r.Level).ToArray());
+        await Execute(c,t,"INSERT INTO audit.events(action,character_id,actor_id,details) VALUES('unlocks_granted',$1,$2,$3)",ct,character,account.AccountId,
+            Json(new {skins=skins.Count,rides=rides.Count}));
+        await t.CommitAsync(ct); return true;
+    }
+
     public async Task<bool> SetSkinEquipsAsync(VerifiedAccount account, Guid character, IReadOnlyDictionary<int, int> equips, CancellationToken ct=default)
     {
         if(equips.Count is 0 or >32 || equips.Any(e=>e.Key is <1 or >27 || e.Value<0)) throw new GameplayException("invalid_skin_equips");

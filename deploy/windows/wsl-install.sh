@@ -3,9 +3,9 @@
 # Run as root from a checkout of this repository in the WSL file system (not under /mnt/c):
 #   sudo deploy/windows/wsl-install.sh --data data/aion-server-data.tar.gz \
 #       --certificate /mnt/c/Users/<you>/AppData/Local/A2Core/tls/cert.pem --key /mnt/c/Users/<you>/AppData/Local/A2Core/tls/key.pem \
-#       --rates-profile accelerated --max-players 10
+#       --max-players 10                      (rates: the friends profile unless --rates-profile says otherwise)
 # Other runs: no --data (the data stays unpacked). Only the rates/rules (no rebuild):
-#   sudo deploy/windows/wsl-install.sh --rates-only --rates-profile official --pvp off
+#   sudo deploy/windows/wsl-install.sh --rates-only --exp-rate 15 --all-skins on --all-pets on
 # It installs the packages (dotnet-sdk-10.0, postgresql, python3, openssl from the Ubuntu archive; Node.js 22 from
 # NodeSource when the system's is older than the web build needs), writes the rates and rules you give into
 # /etc/aion/game.env (other lines there are kept), then runs deploy/linux/install.sh with --public-address set to the
@@ -25,8 +25,13 @@ Options:
   --tailscale-ip 100.x.y.z     the same as --public-address (older name)
   --data FILE                  server data bundle (first install)
   --certificate FILE --key FILE   account-site certificate (tailscale cert); or --self-signed
-  --rates-profile official|accelerated, --exp-rate N, --quest-exp-rate N, --kinah-rate N, --drop-rate N (0-100)
+  --rates-profile friends|official|accelerated (default friends), --exp-rate N, --quest-exp-rate N, --kinah-rate N,
+  --kinah-chance N, --drop-rate N, --gather-exp-rate N, --craft-exp-rate N, --pet-exp-rate N (0-100)
   --max-players N (0: no cap), --respawn-seconds N (5-3600), --pvp on|off
+  Time gates (default all off): --shop-limits on|off, --dungeon-timers on|off, --collection-rotation on|off,
+  --dungeon-limits on|off, --gather-respawn-seconds N (0-3600, default 10)
+  Unlocks: --all-skins on|off, --all-pets on|off (default off), --craft-always-succeeds on|off (default on),
+  --pet-soul-cost N (0-10, default 0.5)
   --rates-only                 write game.env and restart aion-host; no install
   --skip-packages              do not run apt-get
 EOF
@@ -36,6 +41,10 @@ rate() {
   if ! [[ "$2" =~ ^[0-9]+([.][0-9]+)?$ ]] || ! awk -v v="$2" 'BEGIN { exit !(v >= 0 && v <= 100) }'; then
     echo "$1 must be a number from 0 to 100" >&2; exit 2
   fi
+}
+switch() {
+  [[ "$2" == on || "$2" == off ]] || { echo "$1 is on or off" >&2; exit 2; }
+  if [[ "$2" == on ]]; then GAME[$3]=true; else GAME[$3]=false; fi
 }
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -47,8 +56,25 @@ while [[ $# -gt 0 ]]; do
     --rates-only) RATES_ONLY=1; shift ;;
     --skip-packages) SKIP_PACKAGES=1; shift ;;
     --rates-profile)
-      [[ "$2" == official || "$2" == accelerated ]] || { echo "--rates-profile is official or accelerated" >&2; exit 2; }
+      [[ "$2" == friends || "$2" == official || "$2" == accelerated ]] || { echo "--rates-profile is friends, official or accelerated" >&2; exit 2; }
       GAME[Aion__Rates__Profile]="$2"; shift 2 ;;
+    --kinah-chance) rate "$1" "$2"; GAME[Aion__Rates__KinahChance]="$2"; shift 2 ;;
+    --gather-exp-rate) rate "$1" "$2"; GAME[Aion__Rates__GatherExperience]="$2"; shift 2 ;;
+    --craft-exp-rate) rate "$1" "$2"; GAME[Aion__Rates__CraftExperience]="$2"; shift 2 ;;
+    --pet-exp-rate) rate "$1" "$2"; GAME[Aion__Rates__PetExperience]="$2"; shift 2 ;;
+    --shop-limits) switch "$1" "$2" Aion__TimeGates__ShopLimits; shift 2 ;;
+    --dungeon-timers) switch "$1" "$2" Aion__TimeGates__DungeonTimeLimits; shift 2 ;;
+    --collection-rotation) switch "$1" "$2" Aion__TimeGates__CollectionRotation; shift 2 ;;
+    --dungeon-limits) switch "$1" "$2" Aion__Dungeons__EntryLimits; shift 2 ;;
+    --gather-respawn-seconds)
+      if ! [[ "$2" =~ ^[0-9]{1,4}$ ]] || ((10#$2 > 3600)); then echo "--gather-respawn-seconds must be 0-3600" >&2; exit 2; fi
+      GAME[Aion__TimeGates__GatherRespawnSeconds]="$2"; shift 2 ;;
+    --all-skins) switch "$1" "$2" Aion__Unlocks__AllSkins; shift 2 ;;
+    --all-pets) switch "$1" "$2" Aion__Unlocks__AllPets; shift 2 ;;
+    --craft-always-succeeds) switch "$1" "$2" Aion__Unlocks__CraftAlwaysSucceeds; shift 2 ;;
+    --pet-soul-cost)
+      if ! [[ "$2" =~ ^[0-9]+([.][0-9]+)?$ ]] || ! awk -v v="$2" 'BEGIN { exit !(v >= 0 && v <= 10) }'; then echo "--pet-soul-cost must be 0-10" >&2; exit 2; fi
+      GAME[Aion__Unlocks__PetSoulCost]="$2"; shift 2 ;;
     --exp-rate) rate "$1" "$2"; GAME[Aion__Rates__Experience]="$2"; shift 2 ;;
     --quest-exp-rate) rate "$1" "$2"; GAME[Aion__Rates__QuestExperience]="$2"; shift 2 ;;
     --kinah-rate) rate "$1" "$2"; GAME[Aion__Rates__Kinah]="$2"; shift 2 ;;
@@ -91,7 +117,7 @@ write_game_env() {
   chmod 640 "$tmp"
   mv -- "$tmp" "$file"
   echo "Rates and rules in $file:"
-  grep -E '^Aion__(Rates|Rules|Native__MaxPlayers)' "$file" | sed 's/^/  /'
+  grep -E '^Aion__(Rates|Rules|TimeGates|Unlocks|Dungeons|Native__MaxPlayers)' "$file" | sed 's/^/  /'
 }
 
 if [[ $RATES_ONLY -eq 1 ]]; then

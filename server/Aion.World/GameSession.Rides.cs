@@ -57,7 +57,8 @@ public sealed partial class GameSession
     /// <summary>The ride's board after a ride gained a level (1 = acquired): exp added, the acquire/level message's board part.</summary>
     async Task<(List<byte[]> Extra, CreatureBoard? Board)> RideBoardAsync(RideInfo info, int rideLevel, CancellationToken ct)
     {
-        var extra = await AddBoardExpAsync(info.Type, Boxes.RideBoardExp(rideLevel), ct);
+        var exp = (int)Math.Min(int.MaxValue, ServerRates.Scaled(Boxes.RideBoardExp(rideLevel), options.Rates.PetExperience));   // Aion:Rates:PetExperience
+        var extra = await AddBoardExpAsync(info.Type, exp, ct);
         return (extra, boards.GetValueOrDefault((byte)info.Type));
     }
 
@@ -328,14 +329,15 @@ public sealed partial class GameSession
     /// <summary>0x9007 CharRideAcquire_RQ {i32 ride}: a ride with enough soul points (VehicleList NeedSoul) is acquired.</summary>
     async Task<List<byte[]>> AcquireRideAsync(int rideId, CancellationToken ct)
     {
+        var need = Boxes.Ride(rideId) is { } known ? options.Unlocks.SoulCost(known.NeedSoul) : 0;   // Aion:Unlocks:PetSoulCost (OURS)
         if (Store is not { } store || CharacterId is not { } character || Boxes.Ride(rideId) is not { } info || info.NeedSoul < 1
-            || OwnsRide(rideId) || !CanPay(rideId, info.NeedSoul))
+            || OwnsRide(rideId) || !CanPay(rideId, need))
             return [RidePackets.AcquireReply(playerKey, 1)];
         var soulsBefore = rides.TryGetValue(rideId, out var entry) ? entry.SoulPoints : 0;
         RideRecord? ride = null;
-        await Stored(async () => (ride = await store.AcquireRideWithSoulsAsync(character, rideId, info.NeedSoul, info.Crystal, ct)) is null ? [] : [[]]);
+        await Stored(async () => (ride = await store.AcquireRideWithSoulsAsync(character, rideId, need, info.Crystal, ct)) is null ? [] : [[]]);
         if (ride is null) return [RidePackets.AcquireReply(playerKey, 1)];
-        var paid = Paid(rideId, soulsBefore, info.NeedSoul);
+        var paid = Paid(rideId, soulsBefore, need);
         Remember(ride);
         var (extra, board) = await RideBoardAsync(info, 1, ct);
         return [RidePackets.AcquireReply(playerKey, 0), .. paid, RidePackets.Acquired(playerKey, rideId, ride.Level, (byte)info.Type, board?.Level ?? 1, board?.Exp ?? 0),
@@ -348,7 +350,7 @@ public sealed partial class GameSession
         var info = Boxes.Ride(rideId);
         rides.TryGetValue(rideId, out var entry);
         List<byte[]> Fail() => [RidePackets.LevelUpReply(1, rideId, entry?.Level ?? 0, (byte)(info?.Type ?? 0))];
-        var cost = entry is null ? 0 : Boxes.RideLevelCost(entry.Level);
+        var cost = entry is null ? 0 : options.Unlocks.SoulCost(Boxes.RideLevelCost(entry.Level));   // Aion:Unlocks:PetSoulCost (OURS)
         if (Store is not { } store || CharacterId is not { } character || info is null || entry is not { Owned: true } || cost < 1 || !CanPay(rideId, cost))
             return Fail();
         RideRecord? ride = null;

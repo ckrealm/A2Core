@@ -84,6 +84,33 @@ class ServerEnvTests(unittest.TestCase):
             with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
                 server_env.main(['--public-address', '203.0.113.5', '--data', '.', '--state', '.', '--proxy', *argv])
 
+    def test_time_gates_and_unlocks(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            server_data(root / 'data')
+            env = server_env.environment(self.args(root, rates_profile='friends', kinah_chance=2.5, gather_exp_rate=8,
+                                                   craft_exp_rate=6, pet_exp_rate=4, shop_limits='on', dungeon_timers='off',
+                                                   collection_rotation='off', gather_respawn_seconds=0, all_skins='on',
+                                                   all_pets='on', craft_always_succeeds='off', pet_soul_cost=0.25),
+                                         {'aion_app': 'a', 'aion_auth': 'b'})
+        self.assertEqual(env['Aion__Rates__Profile'], 'friends')
+        self.assertEqual(env['Aion__Rates__KinahChance'], 2.5)
+        self.assertEqual(env['Aion__Rates__GatherExperience'], 8)
+        self.assertEqual(env['Aion__Rates__CraftExperience'], 6)
+        self.assertEqual(env['Aion__Rates__PetExperience'], 4)
+        self.assertEqual(env['Aion__TimeGates__ShopLimits'], 'true')
+        self.assertEqual(env['Aion__TimeGates__DungeonTimeLimits'], 'false')
+        self.assertEqual(env['Aion__TimeGates__CollectionRotation'], 'false')
+        self.assertEqual(env['Aion__TimeGates__GatherRespawnSeconds'], 0)
+        self.assertEqual(env['Aion__Unlocks__AllSkins'], 'true')
+        self.assertEqual(env['Aion__Unlocks__AllPets'], 'true')
+        self.assertEqual(env['Aion__Unlocks__CraftAlwaysSucceeds'], 'false')
+        self.assertEqual(env['Aion__Unlocks__PetSoulCost'], 0.25)
+        for argv in (['--shop-limits', 'yes'], ['--gather-respawn-seconds', '-1'], ['--gather-respawn-seconds', '3601'],
+                     ['--pet-soul-cost', '11'], ['--kinah-chance', '101'], ['--all-pets', 'maybe']):
+            with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+                server_env.main(['--public-address', '203.0.113.5', '--data', '.', '--state', '.', '--proxy', *argv])
+
     def test_rate_checks(self):
         for argv in (['--exp-rate', '-1'], ['--drop-rate', '101'], ['--rates-profile', 'fast'], ['--respawn-seconds', '2'],
                      ['--max-players', '-3'], ['--pvp', 'maybe'], ['--party-loot', 'needgreed'], ['--fallback-loot', 'yes']):

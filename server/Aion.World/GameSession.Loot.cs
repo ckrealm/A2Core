@@ -37,7 +37,7 @@ public sealed partial class GameSession
         for (var i = 0; i < rolls; i++)
             rolled.AddRange(generic ? MonsterRewards.Embedded.Fallback(target.SubType, target.Level, rng) : LootTables.Embedded.Roll(target.NpcId, profileRace, rng));
         rolled = options.Rates.WithKinah(rolled);
-        var kinah = options.Rates.KinahAmount(MonsterRewards.Embedded.Kinah(target.SubType, target.Level, rng));
+        var kinah = options.Rates.KinahAmount(MonsterRewards.Embedded.Kinah(target.SubType, target.Level, rng, options.Rates.KinahChance));
         var mine = ShareLootWithParty(rolled, kinah);
         if (mine.Count == 0) return [];
         var placed = new List<DropItem>();

@@ -4,16 +4,25 @@ namespace Aion.World;
 
 /// <summary>
 /// Aion:Rates as configured (OURS: a server owner's choice, nothing observed). A profile presets the rates ("official": all
-/// 1.0; "accelerated": experience 5, Kinah 3, drops 3); any rate set explicitly overrides the preset. Unset QuestExperience
-/// follows the resolved Experience. <see cref="Resolve"/> checks the values and gives the rates the game uses.
+/// 1.0; "accelerated": experience 5, Kinah 3, drops 3; "friends", the host default: experience 10, Kinah 10, Kinah drop
+/// chance x2, drops 3, gathering/crafting/pet experience 5); any rate set explicitly overrides the preset. Unset
+/// QuestExperience follows the resolved Experience. <see cref="Resolve"/> checks the values and gives the rates the game uses.
 /// </summary>
 public sealed record RatesOptions
 {
-    public string Profile { get; init; } = ServerRates.OfficialProfile;
+    public string Profile { get; init; } = ServerRates.FriendsProfile;
     public double? Experience { get; init; }
     public double? Kinah { get; init; }
     public double? Drop { get; init; }
     public double? QuestExperience { get; init; }
+    /// <summary>Multiplies a monster's chance to drop Kinah (the chance is capped at 100%).</summary>
+    public double? KinahChance { get; init; }
+    /// <summary>Gathering mastery experience per gather.</summary>
+    public double? GatherExperience { get; init; }
+    /// <summary>Crafting mastery experience per craft.</summary>
+    public double? CraftExperience { get; init; }
+    /// <summary>Pet (creature board) experience.</summary>
+    public double? PetExperience { get; init; }
 
     /// <summary>The effective base rates: the profile's preset with the explicit values over it. Invalid values throw.</summary>
     public ServerRates Resolve()
@@ -21,9 +30,10 @@ public sealed record RatesOptions
         var profile = (Profile ?? "").Trim().ToLowerInvariant();
         var preset = profile switch
         {
-            "" or ServerRates.OfficialProfile => ServerRates.Official,
+            ServerRates.OfficialProfile => ServerRates.Official,
             ServerRates.AcceleratedProfile => ServerRates.Accelerated,
-            _ => throw new InvalidOperationException($"Aion:Rates:Profile must be \"{ServerRates.OfficialProfile}\" or \"{ServerRates.AcceleratedProfile}\" (got \"{Profile}\")."),
+            "" or ServerRates.FriendsProfile => ServerRates.Friends,
+            _ => throw new InvalidOperationException($"Aion:Rates:Profile must be \"{ServerRates.OfficialProfile}\", \"{ServerRates.AcceleratedProfile}\" or \"{ServerRates.FriendsProfile}\" (got \"{Profile}\")."),
         };
         var experience = Checked(Experience ?? preset.Experience, nameof(Experience));
         return new ServerRates(
@@ -31,7 +41,13 @@ public sealed record RatesOptions
             experience,
             Checked(Kinah ?? preset.Kinah, nameof(Kinah)),
             Checked(Drop ?? preset.Drop, nameof(Drop)),
-            Checked(QuestExperience ?? experience, nameof(QuestExperience)));
+            Checked(QuestExperience ?? experience, nameof(QuestExperience)))
+        {
+            KinahChance = Checked(KinahChance ?? preset.KinahChance, nameof(KinahChance)),
+            GatherExperience = Checked(GatherExperience ?? preset.GatherExperience, nameof(GatherExperience)),
+            CraftExperience = Checked(CraftExperience ?? preset.CraftExperience, nameof(CraftExperience)),
+            PetExperience = Checked(PetExperience ?? preset.PetExperience, nameof(PetExperience)),
+        };
     }
 
     static double Checked(double value, string name) =>
@@ -46,7 +62,7 @@ public sealed record RatesOptions
 /// </summary>
 public sealed record ServerRates(string Profile, double Experience, double Kinah, double Drop, double QuestExperience)
 {
-    public const string OfficialProfile = "official", AcceleratedProfile = "accelerated";
+    public const string OfficialProfile = "official", AcceleratedProfile = "accelerated", FriendsProfile = "friends";
     /// <summary>OURS: the largest base rate accepted at startup.</summary>
     public const double MaxRate = 100;
     /// <summary>OURS: at most this many loot-table rolls per kill, whatever the rates (a guard on drop counts and message size).</summary>
@@ -54,6 +70,24 @@ public sealed record ServerRates(string Profile, double Experience, double Kinah
 
     public static ServerRates Official { get; } = new(OfficialProfile, 1, 1, 1, 1);
     public static ServerRates Accelerated { get; } = new(AcceleratedProfile, 5, 3, 3, 5);
+    /// <summary>OURS: the host default for a small friends server (fast leveling, plenty of Kinah, quick professions and pets).</summary>
+    public static ServerRates Friends { get; } = new(FriendsProfile, 10, 10, 3, 10)
+    {
+        KinahChance = 2, GatherExperience = 5, CraftExperience = 5, PetExperience = 5,
+    };
+
+    /// <summary>Multiplies the chance of a monster's Kinah drop (capped at certain).</summary>
+    public double KinahChance { get; init; } = 1;
+    /// <summary>Multiplies gathering mastery experience.</summary>
+    public double GatherExperience { get; init; } = 1;
+    /// <summary>Multiplies crafting mastery experience.</summary>
+    public double CraftExperience { get; init; } = 1;
+    /// <summary>Multiplies pet (creature board) experience.</summary>
+    public double PetExperience { get; init; } = 1;
+
+    /// <summary>A profession or pet experience gain after its rate: at least 1 when anything was due and the rate is not 0.</summary>
+    public static long Scaled(long amount, double rate) =>
+        amount <= 0 || rate == 1 ? amount : rate == 0 ? 0 : Math.Max(1, (long)Math.Min(long.MaxValue / 4, Math.Round(amount * rate)));
 
     /// <summary>Kill experience after the base rate and the event boost.</summary>
     public long KillExperience(long experience, double eventRate) => Math.Max(0, (long)Math.Round(experience * Experience * eventRate));
@@ -87,7 +121,7 @@ public sealed record ServerRates(string Profile, double Experience, double Kinah
     }
 
     public override string ToString() => string.Create(CultureInfo.InvariantCulture,
-        $"profile {Profile}: experience x{Experience}, quest experience x{QuestExperience}, Kinah x{Kinah}, drops x{Drop}");
+        $"profile {Profile}: experience x{Experience}, quest experience x{QuestExperience}, Kinah x{Kinah}, Kinah drop chance x{KinahChance}, drops x{Drop}, gathering x{GatherExperience}, crafting x{CraftExperience}, pets x{PetExperience}");
 }
 
 /// <summary>

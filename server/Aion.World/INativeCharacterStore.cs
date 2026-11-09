@@ -131,6 +131,8 @@ public interface INativeCharacterStore : IAsyncDisposable
     Task<bool> GrantTitleAsync(Guid character, int titleId, CancellationToken ct) => Task.FromResult(false);
     Task<bool> SetTitleAsync(Guid character, int category, int titleId, CancellationToken ct) => Task.FromResult(false);
     Task<bool> GrantSkinsAsync(Guid character, IReadOnlyList<int> skins, CancellationToken ct) => Task.FromResult(false);
+    /// <summary>Aion:Unlocks: skins added (owned ones kept) and rides owned at least at the given level.</summary>
+    Task<bool> GrantUnlocksAsync(Guid character, IReadOnlyList<int> skins, IReadOnlyList<(int RideId, int Level)> rides, CancellationToken ct) => Task.FromResult(false);
     Task<bool> SetSkinEquipsAsync(Guid character, IReadOnlyDictionary<int, int> equips, CancellationToken ct) => Task.FromResult(false);
     Task<bool> SaveMasteryAsync(Guid character, string kind, int category, int level, long exp, CancellationToken ct) => Task.FromResult(false);
     /// <summary>Stores a soul bind (bind count) on an owned item.</summary>

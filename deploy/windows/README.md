@@ -229,7 +229,7 @@ cd ~/a2core
 sudo deploy/windows/wsl-install.sh --data data/aion-server-data.tar.gz \
     --certificate /mnt/c/Users/<you>/AppData/Local/A2Core/tls/cert.pem \
     --key /mnt/c/Users/<you>/AppData/Local/A2Core/tls/key.pem \
-    --rates-profile accelerated --max-players 10
+    --max-players 10
 ```
 
 What `wsl-install.sh` does:
@@ -309,12 +309,15 @@ printed at the end of the install (`grep StaffPath /etc/aion/aion.env`); from th
 ### A7. Rates and rules
 
 `wsl-install.sh` writes these options into `/etc/aion/game.env`, replacing only the keys you give (`deploy/linux/README.md`
-"Rates and rules" has their meaning): `--rates-profile official|accelerated`, `--exp-rate`, `--quest-exp-rate`,
-`--kinah-rate`, `--drop-rate` (0-100), `--max-players N` (0: no cap), `--respawn-seconds` (5-3600), `--pvp on|off`.
+"Rates and rules" and docs/friends-server/RATES.md have their meaning): `--rates-profile friends|official|accelerated`
+(default friends), `--exp-rate`, `--quest-exp-rate`, `--kinah-rate`, `--kinah-chance`, `--drop-rate`, `--gather-exp-rate`,
+`--craft-exp-rate`, `--pet-exp-rate` (0-100), `--max-players N` (0: no cap), `--respawn-seconds` (5-3600), `--pvp on|off`;
+time gates (all off by default) `--shop-limits`, `--dungeon-timers`, `--collection-rotation`, `--dungeon-limits` (on|off),
+`--gather-respawn-seconds` (0-3600); unlocks `--all-skins`, `--all-pets`, `--craft-always-succeeds` (on|off), `--pet-soul-cost` (0-10).
 To change them later without reinstalling:
 
 ```bash
-sudo deploy/windows/wsl-install.sh --rates-only --rates-profile official --max-players 8
+sudo deploy/windows/wsl-install.sh --rates-only --exp-rate 15 --all-skins on --all-pets on
 journalctl -u aion-host | grep "World rates" | tail -1   # what the host uses
 ```
 
@@ -436,7 +439,7 @@ cd web; npm ci --no-audit --no-fund; npm run build; cd ..
 dotnet publish server\Aion.Host\Aion.Host.csproj -c Release -o C:\A2Core\host --nologo
 # Environment file (same as on Linux), with the Tailscale address and tailscale cert files (renew-cert.ps1 -OutDir).
 python tools\server_env.py --public-address 100.x.y.z --data C:\A2Core\data --state C:\A2Core\state `
-    --certificate C:\A2Core\tls\cert.pem --key C:\A2Core\tls\key.pem --rates-profile accelerated --max-players 10 > C:\A2Core\aion.env
+    --certificate C:\A2Core\tls\cert.pem --key C:\A2Core\tls\key.pem --max-players 10 > C:\A2Core\aion.env
 ```
 
 `configure_starters.py`, `class_skills.py` and `equipment_rules.py` are the steps `install.sh` runs on a first

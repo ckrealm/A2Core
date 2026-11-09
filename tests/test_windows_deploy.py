@@ -250,6 +250,25 @@ class WslInstallTests(unittest.TestCase):
                                                  'Aion__Rules__Pvp=false'])
             self.assertEqual((config / 'game.env').stat().st_mode & 0o777, 0o640)
 
+    def test_time_gates_and_unlocks_options(self):
+        with tempfile.TemporaryDirectory() as temp:
+            config = Path(temp)
+            result = self.run_install(config, '--rates-only', '--rates-profile', 'friends', '--kinah-chance', '2',
+                                      '--pet-exp-rate', '5', '--shop-limits', 'on', '--dungeon-timers', 'off',
+                                      '--collection-rotation', 'off', '--dungeon-limits', 'off', '--gather-respawn-seconds', '0',
+                                      '--all-skins', 'on', '--all-pets', 'on', '--craft-always-succeeds', 'off', '--pet-soul-cost', '0.25')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            lines = sorted((config / 'game.env').read_text(encoding='utf-8').splitlines())
+            self.assertEqual(lines, ['Aion__Dungeons__EntryLimits=false', 'Aion__Rates__KinahChance=2', 'Aion__Rates__PetExperience=5',
+                                     'Aion__Rates__Profile=friends', 'Aion__TimeGates__CollectionRotation=false',
+                                     'Aion__TimeGates__DungeonTimeLimits=false', 'Aion__TimeGates__GatherRespawnSeconds=0',
+                                     'Aion__TimeGates__ShopLimits=true', 'Aion__Unlocks__AllPets=true', 'Aion__Unlocks__AllSkins=true',
+                                     'Aion__Unlocks__CraftAlwaysSucceeds=false', 'Aion__Unlocks__PetSoulCost=0.25'])
+            self.assertIn('Aion__TimeGates__ShopLimits=true', result.stdout)
+            for args in (['--rates-only', '--shop-limits', 'yes'], ['--rates-only', '--gather-respawn-seconds', '3601'],
+                         ['--rates-only', '--pet-soul-cost', '11'], ['--rates-only', '--all-pets', 'maybe']):
+                self.assertEqual(self.run_install(Path(temp) / 'other', *args).returncode, 2, args)
+
     def test_public_address_option(self):
         with tempfile.TemporaryDirectory() as temp:
             result = self.run_install(Path(temp), '--public-address', '100.64.0.1', '--rates-only', '--pvp', 'on')

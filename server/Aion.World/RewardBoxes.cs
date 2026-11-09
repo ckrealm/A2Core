@@ -101,6 +101,9 @@ public sealed class RewardBoxes
 
     public RideInfo? Ride(int rideId) => file.Rides.GetValueOrDefault(Key(rideId));
 
+    /// <summary>Every ride id of VehicleList (Aion:Unlocks:AllPets).</summary>
+    public IReadOnlyList<int> AllRides => file.Rides.Keys.Select(k => int.Parse(k, System.Globalization.CultureInfo.InvariantCulture)).Where(id => id > 0).OrderBy(id => id).ToList();
+
     /// <summary>The permanent abnormals a skill's Abnormal_Passive effects give (class passives, e.g. weapon equip permission).</summary>
     public IReadOnlyList<int> Passives(int skillId) => file.Passives.GetValueOrDefault(Key(skillId)) ?? [];
 

@@ -38,6 +38,11 @@ public sealed record GameSessionOptions
     public WorldRules Rules { get; init; } = WorldRules.Default;
     /// <summary>Aion:Dungeons: daily entry limits (off by default) and the untracked-objective fallback delay.</summary>
     public DungeonOptions Dungeons { get; init; } = DungeonOptions.Default;
+    /// <summary>Aion:TimeGates (shop limits, dungeon timers, collection rotation, gather node respawn). The host defaults to
+    /// none (<see cref="TimeGateOptions.Default"/>); a session built without options keeps the official-like behaviour.</summary>
+    public TimeGateOptions TimeGates { get; init; } = TimeGateOptions.Official;
+    /// <summary>Aion:Unlocks (all skins, all pets maxed, crafting and pet costs); official-like unless the host passes its own.</summary>
+    public UnlockOptions Unlocks { get; init; } = UnlockOptions.Official;
     /// <summary>Heal/buff/debuff effects of class skills; null: the embedded tools/data/skill-effects.json (OURS values).</summary>
     public SkillEffectTable? SkillEffects { get; init; }
 }
@@ -1629,6 +1634,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
                 experience = state.Progress.Experience;
                 registeredWings.Clear();
                 registeredWings.UnionWith(await store.WingsAsync(state.Summary.CharacterId, ct));
+                var unlocked = await GrantUnlocksAsync(store, state.Summary.CharacterId, ct);   // Aion:Unlocks (OURS), before the loads below
                 var extras = await store.ExtrasAsync(state.Summary.CharacterId, ct);
                 LoadSkillLevels(await store.SkillsAsync(state.Summary.CharacterId, ct));
                 LoadAchievements(await store.AchievementsAsync(state.Summary.CharacterId, ct), await store.GroupRewardsTakenAsync(state.Summary.CharacterId, ct), now);
@@ -1639,6 +1645,7 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
                 LoadSkins(extras);
                 LoadMasteries(extras);
                 await LoadRidesAsync(store, state.Summary.CharacterId, ct);
+                if (unlocked.Pets) await MaxBoardsAsync(store, state.Summary.CharacterId, ct);
                 await LoadQuickSlotsAsync(store, state.Summary.CharacterId, ct);
                 LoadSettings(await store.CharacterSettingsAsync(state.Summary.CharacterId, ct));
                 await LoadBuybackAsync(store, state.Summary.CharacterId, ct);
