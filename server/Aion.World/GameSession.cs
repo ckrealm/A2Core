@@ -2340,8 +2340,9 @@ public sealed partial class GameSession(GameData data, GameSessionOptions option
         dead = false;
         if (resources is null) return [];
         (resources.Hp, resources.Mp) = (resources.HpMax, resources.MpMax);
-        // A hard mode's revives used up: back outside instead (Aion:Dungeons:HardModeRevives).
-        if (OutOfRevives()) return [resources.Update(), .. LeaveInstance(now)];
+        // A hard mode's revives used up: the respawn is outside (Aion:Dungeons:HardModeRevives). A resurrection in place
+        // (a Cleric's skill, a rebirth buff or item) keeps the player in.
+        if (!inPlace && OutOfRevives()) return [resources.Update(), .. LeaveInstance(now)];
         if (inPlace && diedAt is { } fell) return [resources.Update(), .. Teleport(worldMap, fell, now)];
         // Inside a dungeon: the running stage's revival point, else the dungeon's start (the reload keeps the events).
         var raceWord = profileRace == 2 ? "Dark" : "Light";

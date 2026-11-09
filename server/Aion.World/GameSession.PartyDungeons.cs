@@ -30,8 +30,8 @@ public sealed class DungeonCopy(GameSession host, int dungeonId, long now)
     public HashSet<int> CubeBossesKilled { get; } = [];
     /// <summary>Player deaths in this copy (the death-limit achievements).</summary>
     public int Deaths { get; set; }
-    /// <summary>Deaths per player key (the hard modes' revive limit, Aion:Dungeons:HardModeRevives).</summary>
-    public Dictionary<int, int> PlayerDeaths { get; } = [];
+    /// <summary>Deaths per character (stored id, else name: the hard modes' revive limit, Aion:Dungeons:HardModeRevives); survives a relog or a rejoin.</summary>
+    public Dictionary<string, int> PlayerDeaths { get; } = [];
     /// <summary>The final boss's cube reward each player took (player key → items), once per run.</summary>
     public Dictionary<int, List<(int ItemId, long Count)>> CubeTaken { get; } = [];
 }
@@ -113,15 +113,20 @@ public sealed partial class GameSession
     List<byte[]> HardModeDeath(DungeonCopy c)
     {
         if (DungeonRules.HardModeRevives <= 0 || MapEventData.Dungeon(c.DungeonId) is not { } room || !DungeonOptions.IsHardMode(room)) return [];
-        var deaths = c.PlayerDeaths[playerKey] = c.PlayerDeaths.GetValueOrDefault(playerKey) + 1;
+        var deaths = c.PlayerDeaths[DeathKey] = c.PlayerDeaths.GetValueOrDefault(DeathKey) + 1;
         var left = DungeonRules.HardModeRevives - deaths + 1;
         return [Notice(left > 0 ? $"Revives left in this hard mode: {left}." : "No revives left: you will leave the dungeon when you revive.", color: "FF6060")];
     }
 
-    /// <summary>The player used up the hard mode's revives (staff never do).</summary>
-    bool OutOfRevives() => !IsAdmin && instanceKey != 0 && DungeonRules.HardModeRevives > 0 && copy is { } c
+    /// <summary>The character's key in <see cref="DungeonCopy.PlayerDeaths"/> (the player key changes with every login).</summary>
+    string DeathKey => CharacterId?.ToString() ?? CharacterName ?? playerKey.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>The player used up the hard mode's revives in this copy (staff never do).</summary>
+    bool OutOfRevives() => instanceKey != 0 && copy is { } c && OutOfRevivesIn(c);
+
+    bool OutOfRevivesIn(DungeonCopy c) => !IsAdmin && DungeonRules.HardModeRevives > 0
         && MapEventData.Dungeon(c.DungeonId) is { } room && DungeonOptions.IsHardMode(room)
-        && c.PlayerDeaths.GetValueOrDefault(playerKey) > DungeonRules.HardModeRevives;
+        && c.PlayerDeaths.GetValueOrDefault(DeathKey) > DungeonRules.HardModeRevives;
 
     /// <summary>The copy a party member would join is full (MapEntrance MaxMember).</summary>
     static bool CopyFull(MapInstance inside, DungeonInfo room) => room.MaxMember > 0 && inside.Players.Count >= room.MaxMember;

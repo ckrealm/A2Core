@@ -3062,6 +3062,8 @@ checks = 0;
             await Adventurer(dungeons, name, new FakeStore(), s => s.States[0] = s.States[0] with { Progress = s.States[0].Progress with { Level = lvl } });
         var low = await AtLevel(rules, "Lowbie", 29);
         Check(low.EnterDungeonById(900003, noon).Count == 0 && low.MapEventNotes.Any(n => n.Contains("Dungeon_Daily_0002: entry refused (level 29 < 30)")), "a level 29 is refused from a daily dungeon (30)");
+        low.NpcHitsPlayer(1, noon + 5);
+        Check(low.InCombat && low.DungeonCommand("daily3", noon + 6).Reply == "Not while in combat.", "/dungeon is no escape from a fight");
         var thirty = await AtLevel(rules, "Thirty", 30);
         Check(await Run(thirty, 900003, noon), "level 30 enters the daily dungeon the client marks 99");
         var korea = await AtLevel(rules, "Capped45", 45);
@@ -3084,7 +3086,7 @@ checks = 0;
               && thirty.DungeonCommand("daily1", noon + 700).Reply == "Leave this dungeon first.", "/dungeon daily3 moves the player; inside, another /dungeon waits");
     }
 
-    // Hard-mode revives (Aion:Dungeons:HardModeRevives, global 3): the fourth dying's revive puts the player outside.
+    // Hard-mode revives (Aion:Dungeons:HardModeRevives, global 3): the fourth death's revive puts the player outside.
     {
         var diver = await Adventurer(DungeonOptions.Default with { Zone = TimeZoneInfo.Utc }, "Diver");
         diver.EnterDungeonById(600004, noon);
@@ -3101,10 +3103,13 @@ checks = 0;
         var lastDeath = diver.NpcHitsPlayer(diver.Resource.HpMax * 10, noon + 50_000, killerKey: 2001);
         Check(insideHard && stillInside && lastDeath.Any(b => b.SequenceEqual(GameSession.Notice("No revives left: you will leave the dungeon when you revive.", color: "FF6060"))),
               "three deaths in a hard mode revive inside; the fourth warns that no revives are left");
+        diver.StaffRestore(noon + 50_050);
+        Check(!diver.Dead && diver.InstanceKey != 0, "a resurrection in place (staff, a Cleric, a rebirth) keeps the player in, even out of revives");
+        diver.NpcHitsPlayer(diver.Resource.HpMax * 10, noon + 50_080, killerKey: 2001);
         await diver.HandleAsync(new PacketWriter().U16(0x8d22).U8(2).I64(0).ToArray(), noon + 50_100);
         await diver.TickAsync(noon + 50_150);
         await diver.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), noon + 50_200);
-        Check(!diver.Dead && diver.InstanceKey == 0, "the revive after the fourth dying is outside the dungeon");
+        Check(!diver.Dead && diver.InstanceKey == 0, "the revive after the fourth death is outside the dungeon");
         var easyDiver = await Adventurer(DungeonOptions.Default with { Zone = TimeZoneInfo.Utc }, "EasyDiver");
         easyDiver.EnterDungeonById(600002, noon);
         await easyDiver.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), noon + 10);
@@ -3115,6 +3120,45 @@ checks = 0;
             await easyDiver.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), noon + dying * 10_000 + 200);
         }
         Check(easyDiver.InstanceKey != 0 && !easyDiver.Dead, "no revive limit outside the hard modes");
+
+        // Out of revives, a party member's copy can't be rejoined (counted per character, not per login).
+        // The playerbot block's area-skill fight later in this file turns out differently when the host-wide map-event run id
+        // counter has moved further, so this block puts it back (the bot check depends on run order, not on this change).
+        var idField = typeof(GameSession).GetField("nextMapEventId", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        var savedId = idField.GetValue(null);
+        var reviveWorld = new SharedWorld(data);
+        async Task<GameSession> Raider(string name)
+        {
+            var session = new GameSession(data, new GameSessionOptions { World = reviveWorld, Dungeons = DungeonOptions.Default }, new Random(23));
+            await session.HandleAsync(Strings(0x3613, Session, "", "t", "").Concat(new byte[9]).ToArray(), Now);
+            await session.HandleAsync(new PacketWriter().U16(0x361b).String(name).U8(1).U32(1).Bytes([0x0c, 0x64]).U8(2).U8(1).U8(0).ToArray(), Now);
+            await session.HandleAsync(select, Now);
+            await session.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), Now);
+            return session;
+        }
+        var tank = await Raider("Tank");
+        var dps = await Raider("Dps");
+        await tank.HandleAsync(SocialRequests.EncodeServerAndName(SocialOpcodes.PartyInviteRq, 1204, dps.CharacterName!), noon);
+        var raidInvite = (await dps.TickAsync(noon + 1)).Single(b => (b[0] | b[1] << 8) == SocialOpcodes.PartyInviteNt);
+        await dps.HandleAsync(SocialRequests.EncodePartyInviteResponse([new PartyInviteReply(BitConverter.ToInt64(raidInvite, 2), PartyInviteAnswer.Accept)]), noon + 2);
+        await tank.TickAsync(noon + 3);
+        tank.EnterDungeonById(600004, noon + 10);
+        await tank.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), noon + 20);
+        dps.EnterDungeonById(600004, noon + 30);
+        await dps.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), noon + 40);
+        var sameCopy = dps.InstanceKey != 0 && dps.InstanceKey == tank.InstanceKey;
+        for (var dying = 1; dying <= 4; dying++)
+        {
+            dps.NpcHitsPlayer(dps.Resource.HpMax * 10, noon + dying * 10_000, killerKey: 2001);
+            await dps.HandleAsync(new PacketWriter().U16(0x8d22).U8(2).I64(0).ToArray(), noon + dying * 10_000 + 100);
+            await dps.TickAsync(noon + dying * 10_000 + 150);
+            await dps.HandleAsync(new PacketWriter().U16(0x3622).I32(1).ToArray(), noon + dying * 10_000 + 200);
+        }
+        Check(sameCopy && dps.InstanceKey == 0 && tank.InstanceKey != 0, "the member out of revives is put out; the party stays in");
+        Check(dps.EnterDungeonById(600004, noon + 60_000).Count == 0 && dps.MapEventNotes.Any(n => n.Contains("KraoCave_Hard: entry refused (no revives left in this copy)")),
+              "and can't rejoin that copy for a fresh life");
+        tank.ExitSharedWorld(); dps.ExitSharedWorld();
+        idField.SetValue(null, savedId);
     }
 
     // Boss area attacks (tools/data/boss-area-skills.json, OURS): the expeditions' final bosses; their basic attack stays single-target.

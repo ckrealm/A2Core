@@ -82,10 +82,22 @@ public sealed partial class GameSession
         if (MapEventData.Dungeon(mode.Id) is not { } room) return ($"{choice.Name} ({mode.Difficulty}) is not in this server's data.", []);
         if (instanceKey != 0) return ("Leave this dungeon first.", []);
         if (dead || reloading) return ("Not now.", []);
+        if (inCombat) return ("Not while in combat.", []);
         if (!IsAdmin && !MeetsEntry(room, out var why)) return ($"{choice.Name} ({mode.Difficulty}): {why}.", []);
+        var notesBefore = MapEventNotes.Count;
         var moved = EnterDungeonById(mode.Id, now);
         return moved.Count > 0 ? ($"Entering {choice.Name} ({mode.Difficulty}).", moved)
-            : ($"{choice.Name} ({mode.Difficulty}) can't be entered now (daily limit, or its map is not served).", []);
+            : ($"{choice.Name} ({mode.Difficulty}) can't be entered now: {EntryRefusal(room, notesBefore)}.", []);
+    }
+
+    /// <summary>Why the move did not happen: the refusal this attempt noted, else its events cannot start yet.</summary>
+    string EntryRefusal(DungeonInfo room, int notesBefore)
+    {
+        var prefix = $"dungeon {room.Name}: ";
+        var note = MapEventNotes.Skip(notesBefore).LastOrDefault(n => n.StartsWith(prefix, StringComparison.Ordinal));
+        if (note is not null && note.IndexOf("entry refused (", StringComparison.Ordinal) is var at and >= 0) return note[(at + 15)..].TrimEnd(')');
+        if (note is not null && note.Contains("is not served", StringComparison.Ordinal)) return "its map is not served";
+        return "its events cannot start yet (a quest step or phase it waits for)";
     }
 
     string DungeonList()
