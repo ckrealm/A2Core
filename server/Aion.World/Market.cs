@@ -29,6 +29,8 @@ public sealed record MarketOptions
     /// are listed by the seller bot around that price and bought by the buyer bot below it. Null: vendor values only.
     /// </summary>
     public string? PriceFile { get; init; }
+    /// <summary>Without a PriceFile: use the bundled table (tools/data/market-prices.csv). False: vendor values only.</summary>
+    public bool BundledPrices { get; init; } = true;
     public MarketSellerOptions Seller { get; init; } = new();
     public MarketBuyerOptions Buyer { get; init; } = new();
 
@@ -358,6 +360,14 @@ public static class MarketReferencePrices
             }
         }
         return (byId, byName);
+    }
+
+    /// <summary>The bundled table (tools/data/market-prices.csv), used when Aion:Market:PriceFile is not set.</summary>
+    public static (Dictionary<int, long> ById, Dictionary<string, long> ByName) Embedded()
+    {
+        using var stream = typeof(MarketReferencePrices).Assembly.GetManifestResourceStream("market-prices.csv") ?? throw new InvalidOperationException("Missing embedded game data market-prices.csv");
+        using var reader = new StreamReader(stream);
+        return Parse(reader.ReadToEnd(), json: false);
     }
 
     public static (Dictionary<int, long> ById, Dictionary<string, long> ByName) Load(string path) =>

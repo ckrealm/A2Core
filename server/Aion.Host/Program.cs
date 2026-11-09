@@ -112,6 +112,7 @@ var bots = (builder.Configuration.GetSection("Aion:Bots").Get<Aion.World.BotOpti
 var market = (builder.Configuration.GetSection("Aion:Market").Get<Aion.World.MarketOptions>() ?? new Aion.World.MarketOptions()).Validated();
 // Aion:Market:PriceFile: reference prices (docs/MARKET.md); a bad file stops the host here with the reason.
 var marketReferences = market.PriceFile is { Length: > 0 } priceFile ? Aion.World.MarketReferencePrices.Load(priceFile)
+    : market.BundledPrices ? Aion.World.MarketReferencePrices.Embedded()
     : ((Dictionary<int, long> ById, Dictionary<string, long> ByName)?)null;
 
 builder.Services.AddSingleton(dungeonRules);
