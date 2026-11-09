@@ -87,16 +87,38 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
     /// <summary>"//bot ..." (docs/PLAYERBOTS.md): staff, or every player with Aion:Bots:PlayersMayUse. Null: no playerbots on this host.</summary>
     public PlayerBots? Bots { get; init; }
 
+    /// <summary>"//ah ..." (docs/MARKET.md): the market for every player. Null: no market on this host (no game database).</summary>
+    public MarketCommands? Market { get; init; }
+
+    /// <summary>"//buff" and "//hub" (Aion:Fun, docs/friends-server/FUN.md) for every player. Null: off on this host.</summary>
+    public FunFeatures? Fun { get; init; }
+
+    /// <summary>Commands every player may type with a single slash (the client's own slash commands never reach the server).</summary>
+    static readonly HashSet<string> PlayerWords = new(StringComparer.OrdinalIgnoreCase) { "help", "report", "buff", "hub", "bot", "ah", "boost", "mail", "pmail", "sendkinah", "senditem", "dungeon", "stigma", "stigmas" };
+
+    static bool Is(string line, string word) =>
+        line.StartsWith(word, StringComparison.OrdinalIgnoreCase) && (line.Length == word.Length || char.IsWhiteSpace(line[word.Length]));
+
     public async Task<string> HandleAsync(ChatIdentity sender, string userName, string content, CancellationToken ct)
     {
         var text = content.Trim();
-        if (!text.StartsWith("//", StringComparison.Ordinal)) return "Unknown command. Use //help.";
-        var line = text[2..].Trim();
+        string line;
+        if (text.StartsWith("//", StringComparison.Ordinal)) line = text[2..].Trim();
+        // One slash works for the player commands (/buff, /hub, /report, /help, /bot, /ah, /boost, /mail, /pmail, /sendkinah, /senditem,
+        // /dungeon, /stigma);
+        // "//" works for them too, and builder (GM) commands keep "//".
+        else if (text.StartsWith('/') && text[1..].Split(' ', 2)[0] is var word && PlayerWords.Contains(word)) line = text[1..].Trim();
+        else return "Unknown command. Use /help.";
+        if (Is(line, "dungeon")) return await DungeonAsync(userName, line[7..].Trim(), ct);
+        // /stigma (docs/STIGMAS.md): the player's Stigma Shards, slots and stigmas (read-only, like //ah's reads).
+        if (line.Equals("stigma", StringComparison.OrdinalIgnoreCase) || line.Equals("stigmas", StringComparison.OrdinalIgnoreCase))
+            return (presence.Find(userName) ?? presence.Find(Aion.Core.Characters.CharacterNames.Stored(userName))) is { } player
+                ? player.Session.StigmaSummary() : "Enter the world first.";
         if (line.StartsWith("report", StringComparison.OrdinalIgnoreCase) && (line.Length == 6 || char.IsWhiteSpace(line[6])))
         {
             var report = line[6..].Trim();
             if (Report is null) return "Reports are not available on this server.";
-            if (report.Length < 3) return "Write what happened: //report <text> (a bug, a player, or being stuck).";
+            if (report.Length < 3) return "Write what happened: /report <text> (a bug, a player, or being stuck).";
             return await Report(sender, Aion.Core.Characters.CharacterNames.Stored(userName), report, ct);
         }
         // The client may send the displayed name ("[GM] Elyra"); the world knows the stored one.
@@ -104,26 +126,54 @@ public sealed class GmCommands(WorldPresence presence, BuilderCommands builder) 
         if (actor is null) return "Enter the world first.";
         try
         {
+            // //ah (Aion:Market, docs/MARKET.md): every player; "//ah help" lists its commands.
+            if (line.StartsWith("ah", StringComparison.OrdinalIgnoreCase) && (line.Length == 2 || char.IsWhiteSpace(line[2])))
+                return Market is { } market ? await market.HandleAsync(actor.Session, line[2..].Trim(), ct) : "The market is not available on this server.";
             if (line.StartsWith("bot", StringComparison.OrdinalIgnoreCase) && (line.Length == 3 || char.IsWhiteSpace(line[3])))
                 return await BotAsync(actor.Session, line[3..].Trim(), ct);
-            // //boost (Aion:Boost, OURS): every player; runs on the sender's game loop.
-            if (line.StartsWith("boost", StringComparison.OrdinalIgnoreCase) && (line.Length == 5 || char.IsWhiteSpace(line[5])))
+            // /boost or //boost (Aion:Boost, OURS): every player; runs on the sender's game loop.
+            if (Is(line, "boost"))
             {
                 var boostArgs = line[5..].Trim();
-                return await actor.Session.InvokeAsync(async _ => await actor.Session.BoostCommandAsync(boostArgs, ct)).WaitAsync(TimeSpan.FromSeconds(30), ct);
+                try { return await actor.Session.InvokeAsync(async _ => await actor.Session.BoostCommandAsync(boostArgs, ct)).WaitAsync(TimeSpan.FromSeconds(30), ct); }
+                catch (TimeoutException) { return "The boost is still being saved. Type /boost in a moment to see whether it finished; you are never charged twice."; }
             }
+            if (Fun is { Options.BuffCommand: true } && Is(line, "buff"))
+                return await actor.Session.InvokeAsync(now => actor.Session.FunBuff(now)).WaitAsync(TimeSpan.FromSeconds(10), ct);
+            if (Fun is { Options.HubCommand: true } && Is(line, "hub"))
+                return await actor.Session.InvokeAsync(now => actor.Session.FunHub(line[3..].Trim(), now)).WaitAsync(TimeSpan.FromSeconds(10), ct);
             if (line.Length == 0 || line.Equals("help", StringComparison.OrdinalIgnoreCase))
                 return await builder.AllowedAsync(actor.Session, ct)
                     ? "Builder commands (in chat: //<command>; console: s <command>): " + string.Join(", ", BuilderCommands.Supported)
                         + (Bots is { Options.Enabled: true } ? "; //bot add <character> for playerbots" : "")
-                    : "Commands: //report <text> sends a report to the staff."
-                        + (actor.Session.BoostEnabled ? " //boost raises an alt to the boost level once your account has a character there." : "")
-                        + (Bots is { Options: { Enabled: true, PlayersMayUse: true } } ? " //bot add <character> summons one of your characters as a bot." : "");
+                    : "Commands: /report <text> sends a report to the staff. " + GameSession.DungeonHelp
+                        + (actor.Session.BoostEnabled ? " /boost raises an alt to the boost level once your account has a character there." : "")
+                    : "Commands: /report <text> sends a report to the staff. /stigma shows your Stigma Shards and slots. " + GameSession.DungeonHelp
+                        + (Fun is { Options.BuffCommand: true } ? " /buff gives you the food and scroll buffs." : "")
+                        + (Fun is { Options.HubCommand: true } ? " /hub teleports to a town or the Abyss." : "")
+                        + (Market is not null ? " /ah help shows the auction house commands." : "")
+                        + (Bots is { Options: { Enabled: true, PlayersMayUse: true } } ? " /bot add <character> summons one of your characters as a bot." : "");
             return await actor.Session.InvokeAsync(async now =>
             {
                 var outcome = await builder.RunAsync(actor.Session, line, now, ct);
                 return (outcome.Message, outcome.Packets);
             }).WaitAsync(TimeSpan.FromSeconds(10), ct);
+        }
+        catch (Exception error) when (error is TimeoutException or TaskCanceledException)
+        {
+            return "The game connection did not respond.";
+        }
+    }
+
+    /// <summary>/dungeon (GameSession.DungeonCommand): every player; runs on the sender's game loop.</summary>
+    async Task<string> DungeonAsync(string userName, string args, CancellationToken ct)
+    {
+        var actor = presence.Find(userName) ?? presence.Find(Aion.Core.Characters.CharacterNames.Stored(userName));
+        if (actor is null) return "Enter the world first.";
+        if (actor.Session.Bot) return "Bots follow their party.";
+        try
+        {
+            return await actor.Session.InvokeAsync(now => actor.Session.DungeonCommand(args, now)).WaitAsync(TimeSpan.FromSeconds(10), ct);
         }
         catch (Exception error) when (error is TimeoutException or TaskCanceledException)
         {

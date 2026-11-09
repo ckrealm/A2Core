@@ -226,6 +226,27 @@ public sealed class PostgresGameplayStore(NpgsqlDataSource source) : IGameplaySt
         await t.CommitAsync(ct); return set;
     }
 
+    public async Task<IReadOnlyList<StigmaState>?> StigmasAsync(VerifiedAccount account, Guid character, CancellationToken ct=default)
+    {
+        await using var c=await source.OpenConnectionAsync(ct); await using var t=await c.BeginTransactionAsync(ct);
+        if(!await Own(c,t,account.AccountId,character,ct)) return null;
+        var stigmas=new List<StigmaState>();
+        await using(var q=Query(c,t,"SELECT skill_id,level FROM game.character_stigmas WHERE character_id=$1 ORDER BY skill_id",character))
+        await using(var r=await q.ExecuteReaderAsync(ct))
+            while(await r.ReadAsync(ct)) stigmas.Add(new StigmaState(r.GetInt32(0),r.GetInt32(1)));
+        await t.CommitAsync(ct); return stigmas;
+    }
+
+    public async Task<bool> SetStigmaAsync(VerifiedAccount account, Guid character, int skillId, int level, CancellationToken ct=default)
+    {
+        if(skillId<=0 || level is <0 or >40) throw new GameplayException("invalid_stigma_level");
+        await using var c=await source.OpenConnectionAsync(ct); await using var t=await c.BeginTransactionAsync(ct);
+        if(!await Own(c,t,account.AccountId,character,ct)) return false;
+        if(level==0) await Execute(c,t,"DELETE FROM game.character_stigmas WHERE character_id=$1 AND skill_id=$2",ct,character,skillId);
+        else await Execute(c,t,"INSERT INTO game.character_stigmas(character_id,skill_id,level) VALUES($1,$2,$3) ON CONFLICT (character_id,skill_id) DO UPDATE SET level=EXCLUDED.level",ct,character,skillId,level);
+        await t.CommitAsync(ct); return true;
+    }
+
     public async Task<bool> SaveMasteryAsync(VerifiedAccount account, Guid character, string kind, int category, int level, long exp, CancellationToken ct=default)
     {
         if(kind is not ("craft" or "gather") || category is <0 or >5 || level is <1 or >100 || exp<0) throw new GameplayException("invalid_mastery");
@@ -261,6 +282,24 @@ public sealed class PostgresGameplayStore(NpgsqlDataSource source) : IGameplaySt
             """,character,quest.Code,quest.QuestId,(short)quest.Status,(short)quest.Step,quest.Goals))
             uid=(long)(await q.ExecuteScalarAsync(ct))!;
         await t.CommitAsync(ct); return quest with { Uid=uid };
+    }
+
+    public async Task<IReadOnlyList<QuestRecord>> SaveQuestsAsync(VerifiedAccount account, Guid character, IReadOnlyList<QuestRecord> quests, CancellationToken ct=default)
+    {
+        if(quests.Any(quest=>quest.Goals.Length!=6 || quest.Status is <1 or >4 || quest.Step is <1 or >64)) throw new GameplayException("invalid_quest");
+        await using var c=await source.OpenConnectionAsync(ct); await using var t=await c.BeginTransactionAsync(ct);
+        if(!await Own(c,t,account.AccountId,character,ct)) throw new GameplayException("character_unavailable");
+        var saved=new List<QuestRecord>(quests.Count);
+        foreach(var quest in quests)
+        {
+            await using var q=Query(c,t,"""
+                INSERT INTO game.character_quests(character_id,quest_code,quest_id,status,step,goals) VALUES($1,$2,$3,$4,$5,$6)
+                ON CONFLICT(character_id,quest_code) DO UPDATE SET status=EXCLUDED.status,step=EXCLUDED.step,goals=EXCLUDED.goals,updated_at=now()
+                RETURNING uid
+                """,character,quest.Code,quest.QuestId,(short)quest.Status,(short)quest.Step,quest.Goals);
+            saved.Add(quest with { Uid=(long)(await q.ExecuteScalarAsync(ct))! });
+        }
+        await t.CommitAsync(ct); return saved;
     }
 
     public async Task<bool> RemoveQuestAsync(VerifiedAccount account, Guid character, string code, CancellationToken ct=default)

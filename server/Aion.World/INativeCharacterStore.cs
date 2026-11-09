@@ -126,6 +126,10 @@ public interface INativeCharacterStore : IAsyncDisposable
     /// <summary>The stored skills with their levels (skill levels bought with skill points).</summary>
     Task<IReadOnlyList<SkillState>> SkillsAsync(Guid character, CancellationToken ct) => Task.FromResult<IReadOnlyList<SkillState>>([]);
     Task<bool> SetSkillLevelAsync(Guid character, int skillId, int level, CancellationToken ct) => Task.FromResult(false);
+    /// <summary>Learned stigmas with their stigma levels (docs/STIGMAS.md).</summary>
+    Task<IReadOnlyList<StigmaState>> StigmasAsync(Guid character, CancellationToken ct) => Task.FromResult<IReadOnlyList<StigmaState>>([]);
+    /// <summary>A stigma's level; 0 forgets it.</summary>
+    Task<bool> SetStigmaAsync(Guid character, int skillId, int level, CancellationToken ct) => Task.FromResult(false);
     /// <summary>Titles, skins and masteries (read at character selection).</summary>
     Task<CharacterExtras> ExtrasAsync(Guid character, CancellationToken ct) => Task.FromResult(CharacterExtras.None);
     Task<bool> GrantTitleAsync(Guid character, int titleId, CancellationToken ct) => Task.FromResult(false);
@@ -141,6 +145,13 @@ public interface INativeCharacterStore : IAsyncDisposable
         CancellationToken ct) => Task.FromResult(false);
     Task<IReadOnlyList<QuestRecord>> QuestsAsync(Guid character, CancellationToken ct);
     Task<QuestRecord> SaveQuestAsync(Guid character, QuestRecord quest, CancellationToken ct);
+    /// <summary>Several quests at once (Aion:Boost: one transaction where the store has one); the stored records in order.</summary>
+    async Task<IReadOnlyList<QuestRecord>> SaveQuestsAsync(Guid character, IReadOnlyList<QuestRecord> quests, CancellationToken ct)
+    {
+        var saved = new List<QuestRecord>();
+        foreach (var quest in quests) saved.Add(await SaveQuestAsync(character, quest, ct));
+        return saved;
+    }
     Task<bool> RemoveQuestAsync(Guid character, string code, CancellationToken ct);
     /// <summary>Pays a Complete quest once (experience and items); the new experience, or null when nothing was paid.</summary>
     Task<long?> RewardQuestAsync(Guid character, string code, long experience, IReadOnlyList<(int TemplateId, long Count)> items, CancellationToken ct);

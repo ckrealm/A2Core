@@ -27,7 +27,6 @@ public sealed partial class GameSession
         if (!granted) return (false, false);
         var stamp = JsonSerializer.SerializeToElement(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         if (skins) await store.SaveCharacterSettingAsync(character, UnlockOptions.SkinsGivenSetting, stamp, ct);
-        if (pets) await store.SaveCharacterSettingAsync(character, UnlockOptions.PetsGivenSetting, stamp, ct);
         if (wings) await store.SaveCharacterSettingAsync(character, UnlockOptions.WingsGivenSetting, stamp, ct);
         var given = new List<string>();
         if (skins) given.Add($"{Skins.All.Count} skins");
@@ -40,13 +39,17 @@ public sealed partial class GameSession
     /// <summary>Every creature board at its top level, its slots open (after the rides are loaded).</summary>
     async Task MaxBoardsAsync(INativeCharacterStore store, Guid character, CancellationToken ct)
     {
+        var all = true;
         foreach (var (type, board) in boards.ToList())
         {
             var top = Boxes.CreatureMaxLevel(type);
             if (board.Level >= top) continue;
             var maxed = WithOpenSlots(board with { Level = top, Exp = 0 });
             if (await store.SaveCreatureBoardAsync(character, ToRecord(maxed), new Dictionary<int, int>(), null, ct)) boards[type] = maxed;
+            else all = false;
         }
+        // The pets perk counts as given once the boards are raised too (a failure gives it again at the next entry).
+        if (all) await store.SaveCharacterSettingAsync(character, UnlockOptions.PetsGivenSetting, JsonSerializer.SerializeToElement(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()), ct);
     }
 
     /// <summary>

@@ -5,9 +5,10 @@ namespace Aion.World;
 // Small state messages the official world entry carries for a new character (capture 20261013-144836, entries #183-#463),
 // sent with their OBSERVED bytes in the observed order. Names from the catalogue runs (0x54ca / 0xdd07); the ones named
 // '?' sit in runs the catalogue does not align with. Each is a list or flag set that is empty or default for a character
-// with nothing yet: trade server info, the previous season's missions, godstones, Daevanion points and boards, contents
+// with nothing yet: trade server info, the previous season's missions, godstones, contents
 // control, the arena ranking (1500 points per type), subscriptions, account contents, admin feature flags, the shop
-// tutorial, message cards, the world-chat free chance (its time is now), dungeon kill records.
+// tutorial, message cards, the world-chat free chance (its time is now), dungeon kill records. The Daevanion points and boards
+// (OBSERVED here as 0xe22e `05 01 0000 .. 05 0000` and 0xe226 `00`) are the character's own: GameSession.Daevanion.cs.
 public sealed partial class GameSession
 {
     static byte[] Observed(ushort opcode, string hex) => [.. PacketWriter.Opcode(opcode).ToArray(), .. Convert.FromHexString(hex)];
@@ -18,8 +19,6 @@ public sealed partial class GameSession
         Observed(0xe263, "023f005300"),            // TradeServerInfo_NT
         Observed(0x5682, "00002300"),              // PrevSeasonMissionInfo_NT
         Observed(0x5633, "00"),                    // GodstoneList_NT
-        Observed(0xe22e, "05010000020000030000040000050000"),   // DaevanionPointUpdate_NT: five point types at 0
-        Observed(0xe226, "00"),                    // DaevanionBoardInfo_NT
         Observed(0xe224, "02010202"),              // ContentsControl_NT
         Observed(0xe32a, "0301dc05000000000000000000000002dc05000000000000000000000003dc050000000000000000000000"),   // ArenaRanking_NT: Single/Team/Strategy at 1500
         Observed(0xe33b, "00"),                    // SubscribeList_NT

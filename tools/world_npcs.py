@@ -32,6 +32,7 @@ Official NPC behaviour (research/local/npc-behaviour-20261017, capture 20261013-
   it reproduces the official patrol N_L0_R3_Legion_M_02_OnWay on L0_R4_Legion_Waypoints_1).
 """
 import argparse
+import math
 import json
 from functools import lru_cache
 from pathlib import Path
@@ -115,6 +116,8 @@ def companion_hp(row):
 # Official 0x3641 HP by NpcData level for Grade 3 NormalMonsters, in units of 133 (266 = 133 x 2, 399 = 133 x 3, ...).
 # OBSERVED 2026-10-13 and in the 2026-10-19 recording (levels 1, 6, 8 added; 45 from a Grade 1 monster's 26600 / 50 x 133).
 HP_BY_LEVEL = {1: 133, 3: 199, 4: 266, 5: 399, 6: 532, 7: 665, 8: 798, 9: 931, 10: 1064, 15: 2660, 16: 3059, 30: 9975, 45: 70756}
+# The last observed levelling point and the endgame point (the level-45 flight checkpoint, an official grade 1 NPC).
+LEVELLING_HP_LEVEL, ENDGAME_HP_LEVEL = 30, 45
 # HP per level unit by (NpcSubType, Grade), OBSERVED in the 2026-10-19 recording: Grade 1 NormalMonsters 50 per unit
 # (level 7: 250, level 8: 300, level 1: 50), Grade 2 75 (150, 225, 375, 450), Grade 3 133 (the curve); the Grade 1
 # EliteMonster 2290016 (level 6) 3200 = 800 x 4; the Grade 5 HeroMonster 2701034 (the lake cave boss, level 5) 3000 = 1000 x 3.
@@ -135,9 +138,14 @@ def hp_for(level, sub_type='NormalMonster', grade=3):
 
 
 def hp_for_level(level):
-    """Observed HP, linearly interpolated (and extrapolated) between observed levels."""
+    """Observed HP, linearly interpolated (and extrapolated) between observed levels, except from 31 to 44: there the
+    power law through 16 and 30 (the official growth up to 30, HP ~ level^1.88), not a line to the level-45 endgame
+    point, which made monsters ~3x too strong at 40. Mirrors Combat.HpForLevel."""
     if level in HP_BY_LEVEL:
         return HP_BY_LEVEL[level]
+    if LEVELLING_HP_LEVEL < level < ENDGAME_HP_LEVEL:
+        exponent = math.log(HP_BY_LEVEL[LEVELLING_HP_LEVEL] / HP_BY_LEVEL[16]) / math.log(LEVELLING_HP_LEVEL / 16)
+        return round(HP_BY_LEVEL[LEVELLING_HP_LEVEL] * (level / LEVELLING_HP_LEVEL) ** exponent)
     known = sorted(HP_BY_LEVEL)
     low = max([k for k in known if k < level], default=known[0])
     high = min([k for k in known if k > level], default=known[-1])

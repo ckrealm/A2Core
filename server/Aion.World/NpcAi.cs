@@ -107,6 +107,8 @@ public sealed class NpcAi(Random rng, GameData? data = null)
         public bool VictimIsNpc { get; set; }
         /// <summary>Sent into the fight by a map event (SetAggroNpc): fights wherever it is, then stands there.</summary>
         public bool Directed { get; set; }
+        /// <summary>A scripted boss's running fight (tools/data/boss-phases.json): phases, slam, frenzy, adds; null otherwise.</summary>
+        public BossFight? Fight { get; set; }
     }
 
     /// <summary>Scripted walks that reached their route's end since the last take: (NPC key, route name).</summary>
@@ -404,6 +406,71 @@ public sealed class NpcAi(Random rng, GameData? data = null)
         return StartChase(target, brain, now);
     }
 
+    /// <summary>
+    /// A taunt (skill-effects.json "taunt", OURS): the taunter's hate goes above the current top (plus a tenth of it), so the
+    /// monster turns on it at once and the taunter keeps it while it keeps hitting.
+    /// </summary>
+    public List<byte[]> Taunt(IReadOnlyDictionary<int, Target> targets, Target target, long now, int taunterKey)
+    {
+        Sync(targets);
+        if (!brains.TryGetValue(target.Key, out var brain) || target.Dead || target.RunSpeed == 0 || brain.Mode == Mode.Return) return [];
+        awake.Add(target.Key);
+        var top = brain.Hate.Count == 0 ? 0 : brain.Hate.Values.Max();
+        brain.Hate[taunterKey] = Math.Max(brain.Hate.GetValueOrDefault(taunterKey), top + Math.Max(1, top / 10));
+        brain.CandidateKey = taunterKey;
+        brain.VictimIsNpc = false;
+        return StartChase(target, brain, now);
+    }
+
+    /// <summary>
+    /// The special the NPC is winding up (a skill other than its basic attack whose hit has not landed yet), or null. A stun or
+    /// an interrupt in that window cancels it (<see cref="Interrupt"/>).
+    /// </summary>
+    public int? CastingSpecial(Target target)
+    {
+        if (!brains.TryGetValue(target.Key, out var brain) || brain.Pending is not { } hit) return null;
+        return Basic(target) is { } basic && basic.Id == hit.SkillId ? null : hit.SkillId;
+    }
+
+    /// <summary>
+    /// The reach of the area special the monster is winding up (a listed boss's, tools/data/boss-area-skills.json: its radius plus
+    /// the boss's own), or null. Players other than its victim within it when the hit lands take it too (<see cref="AreaHits"/>).
+    /// </summary>
+    public double? WindingArea(Target target)
+    {
+        if (TelegraphArea(target) is { } slam) return slam;   // a scripted boss's slam (BossTick) counts as an area special
+        if (CastingSpecial(target) is not { } special) return null;
+        return AreaSkills.Area(target.NpcId, special, Basic(target)?.Id ?? 0) is { } area ? area.Radius + target.Radius : null;
+    }
+
+    /// <summary>When the special this NPC winds up lands (ms), or null (no special pending).</summary>
+    public long? SpecialDueAt(Target target) =>
+        TelegraphDueAt(target) ?? (CastingSpecial(target) is not null && brains.TryGetValue(target.Key, out var brain) && brain.Pending is { } hit ? hit.DueMs : null);
+
+    /// <summary>Interrupts the special being wound up (OURS): its hit never lands and the NPC needs a moment before its next attack.</summary>
+    public bool Interrupt(Target target, long now)
+    {
+        if (CastingSpecial(target) is null) return false;
+        var brain = brains[target.Key];
+        brain.Pending = null;
+        brain.NextAttackMs = Math.Max(brain.NextAttackMs, now + InterruptRecoverMs);
+        Interrupts++;
+        return true;
+    }
+
+    /// <summary>A monster that died or went home forgets players' stuns, stagger and stun immunity.</summary>
+    static void ClearControl(Target target)
+    {
+        target.StunnedUntil = 0;
+        target.StunImmuneUntil = 0;
+        target.StaggerStuns = 0;
+    }
+
+    /// <summary>An interrupted NPC waits this long before it attacks again (OURS).</summary>
+    public const int InterruptRecoverMs = 1500;
+    /// <summary>Diagnostics: specials interrupted so far.</summary>
+    public int Interrupts { get; private set; }
+
     static int? TopHate(Brain brain) => brain.Hate.Count == 0 ? null : brain.Hate.MaxBy(h => h.Value).Key;
 
     /// <summary>The NPC died: it leaves combat (official 0x8d21 off after the kill) and drops a pending hit.</summary>
@@ -577,6 +644,8 @@ public sealed class NpcAi(Random rng, GameData? data = null)
         brain.VictimKey = 0;
         brain.Hate.Clear();
         brain.WanderAtMs = WanderDelay(now);
+        ClearControl(target);
+        replies.AddRange(EndFight(brain));   // a wipe: the boss is back home, its adds go and its phases start over
         return replies;
     }
 
@@ -600,6 +669,7 @@ public sealed class NpcAi(Random rng, GameData? data = null)
         foreach (var id in target.Skills)
         {
             if (data.NpcSkill(id) is not { } skill || basic is { } b && b.Id == id) continue;
+            if (brain.Fight is { } fight && fight.Script.SlamSkills.Contains(id)) continue;   // a scripted boss's slam comes telegraphed (BossTick)
             // A special first becomes ready one cooldown into the fight; the basic attack opens.
             if (!brain.Cooldowns.TryGetValue(id, out var readyAt))
             {
@@ -621,7 +691,8 @@ public sealed class NpcAi(Random rng, GameData? data = null)
         brain.ActionSeq = brain.ActionSeq % 255 + 1;
         var lands = now + skill.Skill.Cast + HitDelayMs;
         brain.Pending = new PendingHit(skill.Id, skill.Skill, brain.ActionSeq, lands);
-        brain.Cooldowns[skill.Id] = now + Math.Max(skill.Skill.Cooldown, skill.Skill.Cast + HitDelayMs);
+        var haste = brain.Fight?.Haste ?? 1.0;   // a boss phase's faster attacks (OURS)
+        brain.Cooldowns[skill.Id] = now + Math.Max((long)(skill.Skill.Cooldown * haste), skill.Skill.Cast + HitDelayMs);
         brain.NextAttackMs = lands;
         replies.Add(GamePackets.SkillStart(skill.Id, brain.ActionSeq, target.NoRotation ? brain.Heading : facing, target.Position,
             targetKey: Victim(brain), actorKey: target.Key, cooldown: skill.Skill.Cooldown));
@@ -639,7 +710,8 @@ public sealed class NpcAi(Random rng, GameData? data = null)
         // The NPC's level's Grade 3 HP, not its own HP: the recording of 2026-10-19 has the lake cave boss (hero, level 5, 3000 HP)
         // hitting 21-31 with its ordinary attacks (399 x 7.5 % = 30) and level-4 monsters 11-30; the skills' factors spread that,
         // and the rank scales it (Combat.DamageScale).
-        return Math.Max(1, (int)Math.Round(Combat.HpForLevel(target.Level) * DamagePerHp * target.DamageScale * factor));
+        var phase = brains.TryGetValue(target.Key, out var brain) && brain.Fight is { } fight ? fight.Damage * BossRules.DamageScale : 1.0;
+        return Math.Max(1, (int)Math.Round(Combat.HpForLevel(target.Level) * DamagePerHp * target.DamageScale * factor * phase));
     }
 
     /// <summary>A due hit lands when the player is still within reach plus the skill's follow range.</summary>
@@ -653,11 +725,18 @@ public sealed class NpcAi(Random rng, GameData? data = null)
         // The victim's defense reduces the hit (the CANDIDATE 1000/(1000+defense) used for players' hits).
         var defense = brain.VictimIsNpc && current?.GetValueOrDefault(victim) is { } prey ? prey.Defense : DefenseOf?.Invoke(victim) ?? 0;
         var damage = Math.Max(1, (int)Math.Round(Damage(target, hit.Skill) * 1000.0 / (1000 + Math.Max(0, defense))));
+        if (!brain.VictimIsNpc && Guard is { } guard) damage = guard(victim, damage, now, rng);
         LastAttacker = target.Key;
         List<byte[]> replies = [GamePackets.NpcSkillHit(victim, target.Key, hit.SkillId, hit.ActionSeq, hit.Skill.Effect, damage), .. hitPlayer(damage)];
-        if (!brain.VictimIsNpc) replies.AddRange(AreaHits(target, brain, hit));
+        if (!brain.VictimIsNpc) replies.AddRange(AreaHits(target, brain, hit, now));
         return replies;
     }
+
+    /// <summary>
+    /// A player's guard against a landing hit (player key, damage, now, this AI's rng for the rolls) → the damage taken: 0 for an evaded hit (a dodge in
+    /// progress or the evasion roll), less for a blocked one (GameSession.GuardHit, OURS). Null: every hit lands whole.
+    /// </summary>
+    public Func<int, int, long, Random, int>? Guard { get; set; }
 
     /// <summary>Named bosses' area specials (tools/data/boss-area-skills.json, OURS): every NPC skill hits one victim otherwise.</summary>
     public BossAreaSkills AreaSkills { get; set; } = BossAreaSkills.Embedded;
@@ -666,7 +745,7 @@ public sealed class NpcAi(Random rng, GameData? data = null)
     /// A listed boss's area special: the other players within its radius (nearest first, up to its target count with the
     /// victim) take their own roll of the hit, each through the same per-target hit message (0x3804) and the host's hit.
     /// </summary>
-    List<byte[]> AreaHits(Target target, Brain brain, PendingHit hit)
+    List<byte[]> AreaHits(Target target, Brain brain, PendingHit hit, long now)
     {
         if (tickPlayers is not { Count: > 1 } players || tickHit is null) return [];
         if (AreaSkills.Area(target.NpcId, hit.SkillId, Basic(target)?.Id ?? 0) is not { } area) return [];
@@ -677,8 +756,148 @@ public sealed class NpcAi(Random rng, GameData? data = null)
                      .Where(p => p.D <= reach).OrderBy(p => p.D).ThenBy(p => p.Key).Take(area.MaxTargets - 1))
         {
             var damage = Math.Max(1, (int)Math.Round(Damage(target, hit.Skill) * 1000.0 / (1000 + Math.Max(0, DefenseOf?.Invoke(key) ?? 0))));
+            if (Guard is { } guard) damage = guard(key, damage, now, rng);
             replies.Add(GamePackets.NpcSkillHit(key, target.Key, hit.SkillId, hit.ActionSeq, hit.Skill.Effect, damage));
             replies.AddRange(tickHit(key, damage));
+        }
+        return replies;
+    }
+
+    // ---------- Boss phases (tools/data/boss-phases.json, OURS) ----------
+
+    /// <summary>Boss scripts by NpcData id (phases, slams, frenzy).</summary>
+    public BossPhases Bosses { get; set; } = BossPhases.Embedded;
+    /// <summary>Aion:Bosses: phases on or off, the frenzy, a damage scale.</summary>
+    public BossOptions BossRules { get; set; } = BossOptions.Default;
+
+    /// <summary>A phase's call for adds, for the host to place (it owns the map's table): the boss, its fight, the adds, the victim to send them at.</summary>
+    public sealed record SummonRequest(Target Boss, BossFight Fight, BossAdds Adds, int VictimKey);
+    readonly List<SummonRequest> summons = [];
+
+    /// <summary>The adds called since the last take (the host spawns them with <see cref="Summons.Spawn"/> and sends them in).</summary>
+    public List<SummonRequest> TakeSummons()
+    {
+        var taken = summons.ToList();
+        summons.Clear();
+        return taken;
+    }
+
+    /// <summary>
+    /// The reach of the slam the boss is winding up (its radius plus the boss's own), or null. Every player inside it when it
+    /// lands is hit, the boss's victim too: a slam is dodged by walking out, not interrupted.
+    /// </summary>
+    public double? TelegraphArea(Target target) =>
+        brains.TryGetValue(target.Key, out var brain) && brain.Fight?.Winding is { } w ? w.Slam.Radius + target.Radius : null;
+
+    /// <summary>When the slam being wound up lands (Unix ms), or null.</summary>
+    public long? TelegraphDueAt(Target target) =>
+        brains.TryGetValue(target.Key, out var brain) && brain.Fight?.Winding is { } w ? w.DueMs : null;
+
+    /// <summary>The boss's running fight (diagnostics and checks), or null.</summary>
+    public BossFight? FightOf(Target target) => brains.TryGetValue(target.Key, out var brain) ? brain.Fight : null;
+
+    /// <summary>Slams landed so far on this map (diagnostics).</summary>
+    public int SlamsLanded { get; private set; }
+
+    /// <summary>
+    /// A scripted boss in a fight: the phases its HP has reached (in order, each once), the frenzy once its time is up, and its
+    /// slam (start, then the hit on everyone inside when the wind-up ends). Winding: the boss is busy with a slam this tick.
+    /// </summary>
+    (List<byte[]> Replies, bool Winding) BossTick(Target target, Brain brain, long now)
+    {
+        var replies = new List<byte[]>();
+        if (!BossRules.Phases || !target.Hostile) return (replies, false);
+        if (brain.Fight is null)
+        {
+            if (!brain.Engaged || brain.Mode != Mode.Chase || brain.VictimIsNpc || Bosses.Of(target.NpcId) is not { } script) return (replies, false);
+            brain.Fight = new BossFight(script, now) { NextSlamMs = now + (script.Telegraph?.EveryMs ?? 0) / 2 };
+        }
+        var fight = brain.Fight;
+        var percent = target.HpMax > 0 ? target.Hp * 100.0 / target.HpMax : 100;
+        while (fight.Reached < fight.Script.Ordered.Count && percent <= fight.Script.Ordered[fight.Reached].At)
+        {
+            var phase = fight.Script.Ordered[fight.Reached++];
+            fight.Damage = Math.Max(fight.Damage, phase.Damage);
+            fight.Haste = Math.Min(fight.Haste, phase.Haste);
+            if (phase.Telegraph is { } slam)
+            {
+                fight.Telegraph = slam;
+                fight.NextSlamMs = Math.Min(fight.NextSlamMs, now + slam.EveryMs / 2);
+            }
+            if (phase.Notice is { Length: > 0 } notice) replies.Add(GameSession.Notice(notice, 22, "FFB040"));
+            if (phase.Adds is { Count: > 0 } adds) summons.Add(new SummonRequest(target, fight, adds, Victim(brain)));
+        }
+        if (fight.Script.Frenzy is { } frenzy && BossRules.Frenzy && !fight.Frenzied
+            && now - fight.StartedMs >= (BossRules.FrenzySeconds > 0 ? BossRules.FrenzySeconds * 1000L : frenzy.AfterMs))
+        {
+            fight.Frenzied = true;
+            fight.Damage *= frenzy.Damage;
+            fight.Haste *= frenzy.Haste;
+            if (frenzy.Notice is { Length: > 0 } notice) replies.Add(GameSession.Notice(notice, 24, "FF4040"));
+        }
+        if (fight.Winding is { } winding)
+        {
+            if (now < winding.DueMs) return (replies, true);
+            fight.Winding = null;
+            replies.AddRange(SlamHits(target, brain, winding.Slam, winding.Seq, now));
+            brain.NextAttackMs = Math.Max(brain.NextAttackMs, now + SlamRecoverMs);
+            return (replies, false);
+        }
+        if (fight.Telegraph is { } next && now >= fight.NextSlamMs && brain.Pending is null && brain.VictimKey != 0 && !brain.VictimIsNpc && !target.Held)
+        {
+            var facing = brain.Heading;
+            if (!target.NoRotation) replies.AddRange(Stop(target, brain, facing, now));
+            else brain.Moving = false;
+            brain.ActionSeq = brain.ActionSeq % 255 + 1;
+            var due = now + Math.Max(next.WindUpMs, 500) + HitDelayMs;
+            fight.Winding = (next, due, brain.ActionSeq);
+            fight.NextSlamMs = due + next.EveryMs;
+            replies.Add(GamePackets.SkillStart(next.Skill, brain.ActionSeq, facing, target.Position, targetKey: Victim(brain), actorKey: target.Key, cooldown: next.EveryMs));
+            if (next.Warning is { Length: > 0 } warning) replies.Add(GameSession.Notice(warning, 22, "FF8040"));
+            return (replies, true);
+        }
+        return (replies, false);
+    }
+
+    /// <summary>A slam broken by a hold or stun is tried again this long after (OURS).</summary>
+    public const int SlamRetryMs = 4000;
+    /// <summary>After a slam the boss waits this long before its next attack (OURS).</summary>
+    public const int SlamRecoverMs = 800;
+
+    /// <summary>A slam lands: every player inside its radius (around the boss, the boss's own radius added) takes its own roll, the victim too.</summary>
+    List<byte[]> SlamHits(Target target, Brain brain, BossTelegraph slam, int seq, long now)
+    {
+        var replies = new List<byte[]>();
+        if (tickPlayers is not { Count: > 0 } players || tickHit is null || brain.Fight is not { } fight) return replies;
+        var skill = data?.NpcSkill(slam.Skill) ?? Basic(target)?.Skill ?? new NpcSkill(0, 0, slam.EveryMs, slam.WindUpMs, 0, 10000, 10000);
+        var reach = slam.Radius + target.Radius + PlayerRadius;
+        fight.Slams++;
+        SlamsLanded++;
+        foreach (var (key, _) in players.Select(p => (p.Key, D: Distance(target.Position, Flat(p.Position)))).Where(p => p.D <= reach).OrderBy(p => p.D).ThenBy(p => p.Key))
+        {
+            var damage = Math.Max(1, (int)Math.Round(Damage(target, skill) * slam.Damage * 1000.0 / (1000 + Math.Max(0, DefenseOf?.Invoke(key) ?? 0))));
+            if (Guard is { } guard) damage = guard(key, damage, now, rng);   // a block halves it, a Dodge's i-frames evade it
+            LastAttacker = target.Key;
+            replies.Add(GamePackets.NpcSkillHit(key, target.Key, slam.Skill, seq, skill.Effect, damage));
+            replies.AddRange(tickHit(key, damage));
+        }
+        return replies;
+    }
+
+    /// <summary>A boss's fight ends (a wipe sent it home, or it died): its living adds vanish (0x3642 flag 7) and the phases start over.</summary>
+    List<byte[]> EndFight(Brain brain)
+    {
+        if (brain.Fight is not { } fight) return [];
+        brain.Fight = null;
+        var replies = new List<byte[]>();
+        foreach (var key in fight.Adds)
+        {
+            if (current?.GetValueOrDefault(key) is not { } add || add.Dead && add.CorpseRemoved) continue;
+            add.Hp = 0;
+            add.CorpseRemoved = true;
+            replies.AddRange(Killed(add));
+            if (brains.TryGetValue(key, out var mind)) { mind.Mode = Mode.Dead; mind.Hate.Clear(); mind.VictimKey = 0; }
+            replies.Add(GamePackets.Death(key, 7));
         }
         return replies;
     }
@@ -692,9 +911,11 @@ public sealed class NpcAi(Random rng, GameData? data = null)
             if (brain.Mode != Mode.Dead)
             {
                 brain.Mode = Mode.Dead; brain.Moving = false; brain.Engaged = false; brain.Pending = null; brain.VictimKey = 0; brain.Hate.Clear();
+                ClearControl(target);
                 target.Position = brain.Home;   // the respawn (0x3641) uses the spawn point
                 target.Direction = brain.HomeHeading;
                 brain.Heading = brain.HomeHeading;
+                return EndFight(brain);   // a killed boss's adds go with it
             }
             return [];
         }
@@ -703,10 +924,16 @@ public sealed class NpcAi(Random rng, GameData? data = null)
             brain.Mode = Mode.Idle;
             brain.WanderAtMs = WanderDelay(now);
         }
-        // Held by a scripted abnormal (stun, hold, stone): it stops where it is and does nothing until released.
-        if (target.Held)
+        // Held by a scripted abnormal (stun, hold, stone) or a player's stun: it stops where it is and does nothing until released.
+        if (target.Held || target.Stunned(now))
         {
             brain.Pending = null;
+            // A hold or stun breaks a slam's wind-up (an interrupt skill does not); the slam comes again soon after.
+            if (brain.Fight is { Winding: not null } heldFight)
+            {
+                heldFight.Winding = null;
+                heldFight.NextSlamMs = now + SlamRetryMs;
+            }
             return brain.Moving ? Stop(target, brain, brain.Heading, now) : [];
         }
         // Directed by a map event: the walk, nothing else.
@@ -721,7 +948,11 @@ public sealed class NpcAi(Random rng, GameData? data = null)
             return engaged;
         }
         if (brain.Mode == Mode.Follow) return FollowStep(target, brain, player, now);
-        var replies = Resolve(target, brain, player, now, hitPlayer);
+        // A scripted boss: its phases, frenzy and slams; while a slam winds up it stands and does nothing else.
+        var (bossReplies, winding) = BossTick(target, brain, now);
+        if (winding) return bossReplies;
+        var replies = bossReplies;
+        replies.AddRange(Resolve(target, brain, player, now, hitPlayer));
         if (target.WalkSpeed == 0 && target.RunSpeed == 0) return replies;
         // Official: of 42 friendly NPCs in the recording only one moved, a patrol walking its MapData waypoint set;
         // townsfolk stand at their MapData spot and facing (their idle animation is in the appear). A friendly NPC

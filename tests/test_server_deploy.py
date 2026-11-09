@@ -70,7 +70,9 @@ class ServerEnvTests(unittest.TestCase):
             root = Path(temp)
             server_data(root / 'data')
             env = server_env.environment(self.args(root, dungeon_limits='on', dungeon_entries=2, dungeon_reset_hour=6,
-                                                   untracked_objective_seconds=90,
+                                                   untracked_objective_seconds=90, dungeon_level_gates='client',
+                                                   dungeon_global_level=50, korea_only_dungeons='on', korea_only_level=55,
+                                                   hard_mode_revives=0,
                                                    dungeon_entry=[('KraoCave_Hard', 1), ('600071', 0)]),
                                          {'aion_app': 'a', 'aion_auth': 'b'})
         self.assertEqual(env['Aion__Dungeons__EntryLimits'], 'true')
@@ -79,8 +81,15 @@ class ServerEnvTests(unittest.TestCase):
         self.assertEqual(env['Aion__Dungeons__UntrackedObjectiveSeconds'], 90)
         self.assertEqual(env['Aion__Dungeons__Entries__KraoCave_Hard'], 1)
         self.assertEqual(env['Aion__Dungeons__Entries__600071'], 0)
+        self.assertEqual(env['Aion__Dungeons__LevelGates'], 'client')
+        self.assertEqual(env['Aion__Dungeons__GlobalLevel'], 50)
+        self.assertEqual(env['Aion__Dungeons__KoreaOnly'], 'true')
+        self.assertEqual(env['Aion__Dungeons__KoreaOnlyLevel'], 55)
+        self.assertEqual(env['Aion__Dungeons__HardModeRevives'], 0)
         for argv in (['--dungeon-limits', 'yes'], ['--dungeon-entries', '-1'], ['--dungeon-reset-hour', '24'],
-                     ['--untracked-objective-seconds', '0'], ['--dungeon-entry', 'KraoCave'], ['--dungeon-entry', 'a b=1']):
+                     ['--untracked-objective-seconds', '0'], ['--dungeon-entry', 'KraoCave'], ['--dungeon-entry', 'a b=1'],
+                     ['--dungeon-level-gates', 'korea'], ['--dungeon-global-level', '100'], ['--korea-only-dungeons', 'yes'],
+                     ['--korea-only-level', '0'], ['--hard-mode-revives', '-1']):
             with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
                 server_env.main(['--public-address', '203.0.113.5', '--data', '.', '--state', '.', '--proxy', *argv])
 
@@ -112,6 +121,7 @@ class ServerEnvTests(unittest.TestCase):
         self.assertEqual(env['Aion__TimeGates__ReviveSeconds'], 3)
         self.assertEqual(env['Aion__Boost__Enabled'], 'true')
         self.assertEqual(env['Aion__Boost__Level'], 40)
+        self.assertEqual(env['Aion__Boost__RequiredLevel'], 40)
         self.assertEqual(env['Aion__Boost__Price'], 250000)
         for argv in (['--shop-limits', 'yes'], ['--gather-respawn-seconds', '-1'], ['--gather-respawn-seconds', '3601'],
                      ['--pet-soul-cost', '11'], ['--kinah-chance', '101'], ['--all-pets', 'maybe'], ['--revive-seconds', '0'],

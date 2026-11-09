@@ -82,7 +82,7 @@ while [[ $# -gt 0 ]]; do
       if ! [[ "$2" =~ ^[0-9]{1,3}$ ]] || ((10#$2 < 2 || 10#$2 > 100)); then echo "--boost-level must be 2-100" >&2; exit 2; fi
       GAME[Aion__Boost__Level]="$2"; GAME[Aion__Boost__RequiredLevel]="$2"; shift 2 ;;
     --boost-price)
-      [[ "$2" =~ ^[0-9]{1,11}$ ]] || { echo "--boost-price must be a whole number of Kinah" >&2; exit 2; }
+      if ! [[ "$2" =~ ^[0-9]{1,11}$ ]] || ((10#$2 > 10000000000)); then echo "--boost-price must be 0-10000000000 Kinah" >&2; exit 2; fi
       GAME[Aion__Boost__Price]="$2"; shift 2 ;;
     --craft-always-succeeds) switch "$1" "$2" Aion__Unlocks__CraftAlwaysSucceeds; shift 2 ;;
     --pet-soul-cost)

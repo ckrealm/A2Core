@@ -37,6 +37,10 @@ public sealed class Target
     public bool AirMonster { get; init; }
     /// <summary>NpcData NpcSubType (NormalMonster, EliteMonster, HeroMonster...); empty for the training dummy. Picks the generic loot and Kinah (MonsterRewards).</summary>
     public string SubType { get; init; } = "";
+    /// <summary>NpcData Grade (the field boss rules, FunFeatures.Rank).</summary>
+    public int Grade { get; init; } = 3;
+    /// <summary>When it died (ms; 0: never, or killed by something that does not set it): its corpse goes CorpseMs later.</summary>
+    public long KilledAtMs { get; set; }
     public const int AirPassiveAbnormal = 10000001;
     /// <summary>The permanent abnormals' expiry on the wire (2099-12-31 15:00 UTC, OBSERVED with 10000001).</summary>
     public const long PermanentExpiry = 0x3bb2ad57580;
@@ -59,6 +63,17 @@ public sealed class Target
     public long SlowUntil { get; set; }
     public int TakenBonus(long now) => now < DamageTakenUntil ? DamageTakenBonus : 0;
     public double SpeedScale(long now) => now < SlowUntil ? Math.Clamp(SlowRatio, 0, 10_000) / 10_000.0 : 1.0;
+    /// <summary>A player's stun (skill-effects.json "stun", OURS): neither moves nor attacks until then; a pending special is interrupted.</summary>
+    public long StunnedUntil { get; set; }
+    /// <summary>After a stun the NPC shrugs off new stuns until then (OURS diminishing return: a party cannot stun-lock it).</summary>
+    public long StunImmuneUntil { get; set; }
+    public bool Stunned(long now) => now < StunnedUntil;
+    /// <summary>A boss's stuns since its last stagger (GameSession.BossStaggerStuns).</summary>
+    public int StaggerStuns { get; set; }
+    /// <summary>An elite or a boss (NpcData NpcSubType EliteMonster / HeroMonster): bots spend their long cooldowns on these.</summary>
+    public bool Elite => SubType is "EliteMonster" or "HeroMonster";
+    /// <summary>A boss (HeroMonster): a stun only interrupts its special and fills its stagger (GameSession.BossStaggerStuns), OURS.</summary>
+    public bool Boss => SubType == "HeroMonster";
     /// <summary>The corpse was removed (0x3642) and the NPC waits for its respawn.</summary>
     public bool CorpseRemoved { get; set; }
 
@@ -89,7 +104,11 @@ public static class Combat
     // Entity keys: 1 is the player, 1000 the training dummy, map NPCs from 2000.
     public const int FirstNpcKey = 2000;
     // Official 0x3641 HP of ordinary NPCs by NpcData level; other levels interpolated.
-    /// <summary>Grade 3 NormalMonster HP by level (units of 133); OBSERVED 2026-10-13 and in the 2026-10-19 recording (tools/world_npcs.py HP_BY_LEVEL).</summary>
+    /// <summary>
+    /// Grade 3 NormalMonster HP by level (units of 133); OBSERVED 2026-10-13 and in the 2026-10-19 recording (tools/world_npcs.py
+    /// HP_BY_LEVEL). Level 45 is the endgame point (the Ascension Subspace flight checkpoint's official 26600 at grade 1, x 133 / 50);
+    /// nothing between 30 and 45 was observed (<see cref="HpForLevel"/>).
+    /// </summary>
     static readonly SortedDictionary<int, int> HpByLevel = new() { [1] = 133, [3] = 199, [4] = 266, [5] = 399, [6] = 532, [7] = 665, [8] = 798, [9] = 931, [10] = 1064, [15] = 2660, [16] = 3059, [30] = 9975, [45] = 70756 };
 
     static int Roll(int?[] pair, Random rng)
@@ -172,9 +191,26 @@ public static class Combat
     public static int HpFor(NpcSpawn spawn) => spawn.HpMax > 0 ? spawn.HpMax
         : Math.Max(1, (int)Math.Round(HpForLevel(spawn.Level) * (double)HpUnit(spawn.SubType, spawn.Grade) / HpBaseUnit));
 
+    /// <summary>The last observed levelling point and the level cap's endgame point of <see cref="HpByLevel"/>.</summary>
+    public const int LevellingHpLevel = 30, EndgameHpLevel = 45;
+
+    /// <summary>
+    /// The level's Grade 3 HP: observed levels exactly and linear between them, except from 31 to 44. There it follows the growth
+    /// the official curve shows from 16 to 30 (the power law through 16: 3059 and 30: 9975, HP ~ level^1.88; ~level² / 12 units
+    /// from 10 on), not a straight line to the endgame point: that line made HP, and the NPC hits that scale with it
+    /// (NpcAi.DamagePerHp), grow ~5x from 30 to 40 while a player's HP and defense in level gear grow ~1.3x, so level-40 monsters
+    /// killed a level-40 player in ~5 hits instead of the ~15 of levels 16-30 (CANDIDATE: no capture between 30 and 45).
+    /// The endgame point stays: level-45 monsters are tuned for the level-45 gear tier.
+    /// </summary>
     public static int HpForLevel(int level)
     {
         if (HpByLevel.TryGetValue(level, out var hp)) return hp;
+        if (level is > LevellingHpLevel and < EndgameHpLevel)
+        {
+            const int below = 16;
+            var exponent = Math.Log(HpByLevel[LevellingHpLevel] / (double)HpByLevel[below]) / Math.Log(LevellingHpLevel / (double)below);
+            return (int)Math.Round(HpByLevel[LevellingHpLevel] * Math.Pow(level / (double)LevellingHpLevel, exponent));
+        }
         var known = HpByLevel.Keys.ToList();
         var low = known.Where(k => k < level).DefaultIfEmpty(known[0]).Max();
         var high = known.Where(k => k > level).DefaultIfEmpty(known[^1]).Min();
@@ -211,7 +247,7 @@ public static class Combat
                 Function = spawn.Function, Aggro = spawn.Aggro, Skills = spawn.Skills ?? [], NoRotation = spawn.NoRotation,
                 UniqueKey = spawn.UniqueKey, SocialAction = spawn.SocialAction, SocialStart = spawn.SocialAction != 0 ? StartedAt : 0, Route = spawn.Route,
                 Air = spawn.Air, AirMonster = spawn.Air && spawn.SubType.EndsWith("Monster", StringComparison.Ordinal), DamageScale = DamageScale(spawn.SubType, spawn.Grade),
-                SubType = spawn.SubType,
+                SubType = spawn.SubType, Grade = spawn.Grade,
             };
         }
         return targets;

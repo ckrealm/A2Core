@@ -21,7 +21,9 @@ public sealed partial class GameSession
     /// <summary>Skill levels above 1 (bought with skill points), by skill id.</summary>
     readonly Dictionary<int, int> skillLevels = [];
 
-    public int SkillLevel(int skillId) => Math.Max(1, skillLevels.GetValueOrDefault(skillId, 1));
+    /// <summary>A skill's level for damage and heals; a stigma's on the same scale (<see cref="StigmaEquivalentLevel"/>).</summary>
+    public int SkillLevel(int skillId) => stigmas.TryGetValue(skillId, out var stigma) && StigmasOn
+        ? StigmaEquivalentLevel(stigma) : Math.Max(1, skillLevels.GetValueOrDefault(skillId, 1));
 
     /// <summary>The learned kit with the bought levels on top of the level-based ones.</summary>
     List<(int SkillId, int Level)> WithLevels(IReadOnlyList<(int SkillId, int Level)> kit) =>
@@ -47,8 +49,9 @@ public sealed partial class GameSession
     {
         if (plain.Length < 6) return [];
         var skillId = BitConverter.ToInt32(plain, 2);
+        if (IsOwnStigma(skillId)) return await StigmaLevelUpAsync(skillId, ct);
         byte[] Reply(int result) => PacketWriter.Opcode(SkillLevelUpRs).U16(result).I32(skillId).ToArray();
-        var next = SkillLevel(skillId) + 1;
+        var next = Math.Max(1, skillLevels.GetValueOrDefault(skillId, 1)) + 1;
         if (!learned.Contains(skillId) || data.SkillLevelCost(skillId, next) is not { } cost) return [Reply(1)];
         if (cost.NeedLevel > level || cost.Cost > SkillPointsLeft) return [Reply(2)];
         if (Store is { } store && CharacterId is { } character)
@@ -71,8 +74,9 @@ public sealed partial class GameSession
     {
         if (plain.Length < 6) return [];
         var skillId = BitConverter.ToInt32(plain, 2);
+        if (IsOwnStigma(skillId)) return await StigmaLevelDownAsync(skillId, ct);
         byte[] Reply(int result) => PacketWriter.Opcode(SkillLevelDownRs).U16(result).I32(skillId).ToArray();
-        var current = SkillLevel(skillId);
+        var current = Math.Max(1, skillLevels.GetValueOrDefault(skillId, 1));
         if (current <= 1 || !skillLevels.ContainsKey(skillId)) return [Reply(1)];
         var next = current - 1;
         if (!await SaveSkillLevelAsync(skillId, next, ct)) return [Reply(1)];
@@ -90,6 +94,7 @@ public sealed partial class GameSession
         if (plain.Length < 7) return [];
         var acquireType = plain[2];
         var skillId = BitConverter.ToInt32(plain, 3);
+        if (acquireType == SkillAcquireTypeStigma || IsOwnStigma(skillId)) return await StigmaResetAsync(acquireType, skillId, ct);
         var targets = (skillId == 0 ? skillLevels.Keys.ToList() : skillLevels.ContainsKey(skillId) ? [skillId] : []).ToList();
         byte[] Reply(int result, IReadOnlyList<int> reset)
         {

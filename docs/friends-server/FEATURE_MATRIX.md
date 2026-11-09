@@ -73,8 +73,8 @@ Takeaway: the wire protocol for login, movement, combat and other players' messa
 | Skills learned by level | Partial | `GameData.LearnedSkills` `GameData.cs:272`; class-skills.json | **Unlock data stops at character level 25 for every class**, while max level is 100. |
 | Skill levels / skill points | Implemented | `GameSession.SkillLevels.cs` (OBSERVED flow) | Points from Exp.dat (CANDIDATE). **Skill level doesn't change damage**: `Combat.SkillHits` (`Combat.cs:90`) ignores it. |
 | Passives | Partial | `PassiveAbnormals` at `GameSession.Buffs.cs:242` | Passive abnormals are sent (needed for weapon equip). Only the stats the server models apply. |
-| Stigmas | Missing | No "Stigma" anywhere | (AION2 has the Daevanion board instead.) |
-| Daevanion board | Stub | `GameSession.EntryConstants.cs:21-22` sends five zero point types and an empty board | — |
+| Stigmas | Partial (built, not tested in a client) | `GameSession.Stigmas.cs`, `tools/data/stigmas.json`, migration 043 | Global rules: 4 slots at 22/27/32/37, Stigma Shards from levelling, levels to 20, free reset, `/stigma`, bots slot their own. Stigma lists and costs recovered from the client; messages CANDIDATE; specialties not modelled. docs/STIGMAS.md |
+| Daevanion board | Implemented (data pending) | `GameSession.Daevanion.cs`: boards per class, node open/close/reset/open-all/route, points, stats, skill levels, passives; `docs/DAEVANION.md`. Real board data needs the client export (`tools/daevanion_data.py`) | Aion:Daevanion |
 | Creature boards | Implemented | `GameSession.Board.cs`, migration 020 | — |
 | Ascension | Implemented | `Ascend` at `GameSession.cs:1052`, migration 010 | — |
 
@@ -101,7 +101,7 @@ Takeaway: the wire protocol for login, movement, combat and other players' messa
 
 | System | Status | Evidence | Notes |
 |---|---|---|---|
-| Classes supported | Partial | class-skills.json `classes`: Gladiator, Templar, Assassin, Cleric, Ranger, Elementalist, Sorcerer, Chanter (plus Novice/Test/Tutorial) | 25–31 unlocks per class, all at **level ≤ 25**. Of 260 skills, only **89 have damage rows**. The skill schema has no heal/buff/debuff fields at all (keys: name, icon, type, target, weapons, cooldown_ms, casting_ms, cost, damage). |
+| Classes supported | Partial | class-skills.json `classes`: Gladiator, Templar, Assassin, Cleric, Ranger, Elementalist, Sorcerer, Chanter, Fighter (Brawler, by class change: BRAWLER.md) (plus Novice/Test/Tutorial) | 25–31 unlocks per class, all at **level ≤ 25**. Of 260 skills, only **89 have damage rows**. The skill schema has no heal/buff/debuff fields at all (keys: name, icon, type, target, weapons, cooldown_ms, casting_ms, cost, damage). |
 | Cast pipeline (cost, cooldown, weapon requirement, learned check) | Implemented | `CastReplies` `GameSession.cs:1913-2026` | Cooldowns are per skill. `NoCool` GM flag. |
 | Damage formula | Partial (CANDIDATE) | `Combat.cs:84-110` | raw = flat + (weapon roll + FixingDamage) × ratio / 10000. Crit = weapon Critical/1000, capped at 50%, ×1.5. Damage = raw × 1000/(1000 + def). PvP uses the PvP rows from Skill.dat. The source itself says this is "not recovered retail formulas". |
 | Defense | Partial | `Defense` `GameSession.cs:2284` | PcStatLevel Defense plus armour, enchant, buffs, board and titles. No other mitigation stats (block, parry, magic resist). |
@@ -239,7 +239,6 @@ There is no permanent rate setting: the only way to get one is an event with no 
   - ArenaRecord → zeros;
   - SeasonRanking, PushRewardInfo, AbyssArtifactEventInfo, SkinDecoInstanceList, MessageCardBlockList → empty;
   - PartyRecentMember → empty;
-  - Daevanion → zeros;
   - 0xe259 NCGuard deliberately unanswered.
 
 ## 11. Data tables (tools/data) — shape and coverage

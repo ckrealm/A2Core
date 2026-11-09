@@ -357,14 +357,23 @@ journalctl -u aion-backup                      # results
 echo 'AION_BACKUP_KEEP=30' | sudo tee /etc/aion/backup.env   # keep 30 instead of 14
 ```
 
-The backups live inside the WSL disk image. Keep copies outside it, for example a Windows scheduled task (daily,
-05:30) running:
+The backups live inside the WSL disk image: if that image is lost, so are they. Have `backup.sh` copy each verified
+backup to a Windows folder as well (`AION_BACKUP_COPY_DIR`; it keeps its own newest `AION_BACKUP_COPY_KEEP`, default
+the same as `AION_BACKUP_KEEP`). The backup unit is sandboxed, so after setting a folder run `backup-paths.sh`, which
+lets the unit write there (a systemd drop-in) and creates the folder. In Ubuntu (replace `<you>` with your Windows user
+name; a second drive such as `/mnt/d/a2core-backups` is better still):
 
-```powershell
-wsl.exe -d Ubuntu-24.04 -u root --exec /bin/sh -c "mkdir -p /mnt/d/a2core-backups && cp -u /var/lib/aion/backups/*.dump /mnt/d/a2core-backups/"
+```bash
+echo 'AION_BACKUP_COPY_DIR=/mnt/c/Users/<you>/A2Core-Backups' | sudo tee -a /etc/aion/backup.env
+echo 'AION_BACKUP_COPY_KEEP=7' | sudo tee -a /etc/aion/backup.env
+sudo /opt/aion/bin/backup-paths.sh
+sudo systemctl start aion-backup && journalctl -u aion-backup -n 20   # ends with "Copied to /mnt/c/..."
 ```
 
-(nothing prunes that folder: delete old copies yourself). **UNVERIFIED** on Windows; the copy command itself is plain.
+The copy is compared byte for byte before it counts; a failed copy keeps the backup inside WSL and marks the run failed
+(`journalctl -u aion-backup`). The same applies to `AION_BACKUP_DIR` if you move the backups themselves (e.g.
+`/mnt/d/aion-backups`): set it, then run `backup-paths.sh`, or the unit cannot write there. **UNVERIFIED** on Windows
+(a `/mnt/c` drvfs folder is writable by the `aion` service account with WSL's default mount options).
 
 **Restore test** (do this once after the first nightly backup, and now and then): restores the file into a
 disposable database, prints the counts, drops it; the live database is not touched.
@@ -394,6 +403,7 @@ Copy any backups you want to keep out of `/var/lib/aion/backups` first. In Ubunt
 sudo systemctl disable --now aion-backup.timer aion-host aion-postgres
 sudo rm /etc/systemd/system/aion-backup.timer /etc/systemd/system/aion-backup.service \
         /etc/systemd/system/aion-host.service /etc/systemd/system/aion-postgres.service
+sudo rm -rf /etc/systemd/system/aion-backup.service.d   # backup-paths.sh's drop-in, if any
 sudo systemctl daemon-reload
 sudo rm -rf /opt/aion /etc/aion /var/lib/aion     # program, configuration, database, data, backups
 sudo userdel aion

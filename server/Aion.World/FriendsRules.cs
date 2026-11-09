@@ -95,7 +95,7 @@ public sealed record UnlockOptions
 }
 
 /// <summary>
-/// Aion:Boost (OURS): an alt boost bought in game with "//boost" once any character of the account has reached
+/// Aion:Boost (OURS): an alt boost bought in game with "/boost" once any character of the account has reached
 /// <see cref="RequiredLevel"/>. The character it is used on (below <see cref="Level"/>) pays <see cref="Price"/> Kinah and
 /// gets: level <see cref="Level"/>; every released main story (Hero), regional (District) and exploration quest of its race,
 /// sealed dungeons included, up to recommended level <see cref="QuestLevel"/> marked done (no quest rewards paid); a gear set
@@ -124,5 +124,5 @@ public sealed record BoostOptions
     }
 
     public override string ToString() => !Enabled ? "boost off"
-        : $"//boost to level {Level} for {Price:N0} Kinah once an account has level {RequiredLevel}, quests to {QuestLevel}{(Gear ? ", gear set" : "")}";
+        : $"/boost to level {Level} for {Price:N0} Kinah once an account has level {RequiredLevel}, quests to {QuestLevel}{(Gear ? ", gear set" : "")}";
 }

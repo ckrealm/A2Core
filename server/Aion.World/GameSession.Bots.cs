@@ -22,7 +22,7 @@ public sealed partial class GameSession
     public bool Bot { get; init; }
 
     /// <summary>Whether the character knows the skill now (its class kit at its level).</summary>
-    public bool Knows(int skillId) => learned.Contains(skillId);
+    public bool Knows(int skillId) => learned.Contains(skillId) || StigmaCastable(skillId);
 
     /// <summary>When the skill is ready again (0: never used); the cast handler refuses it before (unless NoCool).</summary>
     public long CooldownUntil(int skillId) => noCool ? 0 : cooldowns.GetValueOrDefault(skillId);
@@ -31,6 +31,8 @@ public sealed partial class GameSession
 
     /// <summary>A playerbot's role (tank, dps, heal; null for players), set by its brain: a tank bot looks after the others first.</summary>
     public string? BotRole { get; set; }
+    /// <summary>When this player's hit on a monster last landed as a critical (0: never): the window of the crit-only skills.</summary>
+    public long LastCriticalAt { get; private set; }
 
     /// <summary>
     /// OURS: this player's hits count this many times in a monster's hate table (NpcAi.Engage). 1 for players; a tank bot's brain

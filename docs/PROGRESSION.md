@@ -17,7 +17,7 @@ point, stigma point or item) and need no earlier skill or ascension grade. These
 
 - No auto-learned row needs a level above 25, for any class.
 - The Mastery rows (skill levels 2 to 10, read without the auto-learn filter) exist only for the skills unlocked at
-  levels 1 to 25, plus the 22 skills of the unplayable Fighter class. A skill unlocked at 25 has all of its Mastery rows
+  levels 1 to 25, plus the 22 skills of the Fighter class (Brawler, made playable from this data: docs/friends-server/BRAWLER.md). A skill unlocked at 25 has all of its Mastery rows
   at level 25. No row of any kind names a later skill.
 - The filter does drop rows: those with costs, prerequisites or an ascension grade (stigma and ascension skills). The
   raw table is not in the repository, so the number of dropped rows cannot be counted here.
@@ -38,6 +38,10 @@ existing unlock mechanism:
 - the Python tools: `class_skills.learned_skills` and `class_skills.class_unlocks`.
 
 A character at the cap knows 56 to 62 skills, below the 127 that fit one 0x5100 skill list.
+
+**Stigmas.** With `Aion:Stigmas:Enabled` (the default) the developer-kit actives above are stigmas
+([STIGMAS.md](STIGMAS.md)): the server leaves them out of the level kit, and characters buy them with Stigma Shards
+instead. Only the passives among the OURS unlocks still come by level.
 
 ## Skill levels
 

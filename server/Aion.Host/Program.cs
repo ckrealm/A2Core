@@ -85,14 +85,29 @@ if (native.MaxPlayers is < 0) throw new InvalidOperationException("Aion:Native:M
 // Experience, Kinah, KinahChance, Drop, QuestExperience, GatherExperience, CraftExperience, PetExperience) and Aion:Rules (Pvp, RespawnSeconds, PartyLoot freeforall|roundrobin|killer, FallbackLoot). Scheduled dashboard events multiply on top of the rates.
 var rates = (builder.Configuration.GetSection("Aion:Rates").Get<Aion.World.RatesOptions>() ?? new Aion.World.RatesOptions()).Resolve();
 var rules = (builder.Configuration.GetSection("Aion:Rules").Get<Aion.World.WorldRules>() ?? Aion.World.WorldRules.Default).Validated();
+Aion.World.GameData.BrawlerOwnModel = rules.BrawlerOwnModel;
 // Aion:Dungeons (OURS): EntryLimits (default off), DailyEntries, Entries:<dungeon id or name> overrides, ResetHour (server
-// local time), UntrackedObjectiveSeconds (the map-event objectives the server cannot follow).
+// local time), UntrackedObjectiveSeconds (the map-event objectives the server cannot follow), LevelGates global|client,
+// GlobalLevel, GlobalDailyLevel, KoreaOnly, KoreaOnlyLevel, Command (/dungeon), HardModeRevives.
 var dungeonRules = (builder.Configuration.GetSection("Aion:Dungeons").Get<Aion.World.DungeonOptions>() ?? Aion.World.DungeonOptions.Default)
     .Validated(Aion.World.DungeonOptions.KnownDungeon);
+// Aion:Bosses (OURS, docs/friends-server/BOSSES.md): Phases, Frenzy, FrenzySeconds, DamageScale.
+var bossRules = (builder.Configuration.GetSection("Aion:Bosses").Get<Aion.World.BossOptions>() ?? Aion.World.BossOptions.Default).Validated();
+builder.Services.AddSingleton(bossRules);
 builder.Services.AddSingleton(rates);
 builder.Services.AddSingleton(rules);
 // Playerbots (OURS, docs/PLAYERBOTS.md): Aion:Bots (Enabled, PlayersMayUse, MaxPerAccount, MaxTotal, JoinParty, TeleportBeyond).
 var bots = (builder.Configuration.GetSection("Aion:Bots").Get<Aion.World.BotOptions>() ?? new Aion.World.BotOptions()).Validated();
+// Friends-server extras (OURS, docs/friends-server/FUN.md): Aion:Fun (FieldBosses with Boss/Named respawn windows,
+// BossAnnouncements, SharedBossLoot, BuffCommand/BuffMinutes/BuffSkills, HubCommand, DuelRestore). All on by default.
+var fun = (builder.Configuration.GetSection("Aion:Fun").Get<Aion.World.FunOptions>() ?? Aion.World.FunOptions.Default).Validated();
+// Market (OURS, docs/MARKET.md): Aion:Market (Enabled, ListingHours, SaleTaxPercent, CrossWorld, ...), Aion:Market:Seller and
+// Aion:Market:Buyer (the market bot). Needs the game database.
+var market = (builder.Configuration.GetSection("Aion:Market").Get<Aion.World.MarketOptions>() ?? new Aion.World.MarketOptions()).Validated();
+// Aion:Market:PriceFile: reference prices (docs/MARKET.md); a bad file stops the host here with the reason.
+var marketReferences = market.PriceFile is { Length: > 0 } priceFile ? Aion.World.MarketReferencePrices.Load(priceFile)
+    : market.BundledPrices ? Aion.World.MarketReferencePrices.Embedded()
+    : ((Dictionary<int, long> ById, Dictionary<string, long> ByName)?)null;
 
 builder.Services.AddSingleton(dungeonRules);
 // Aion:TimeGates (OURS, all off by default: ShopLimits, DungeonTimeLimits, CollectionRotation; GatherRespawnSeconds 10) and
@@ -101,9 +116,15 @@ var timeGates = (builder.Configuration.GetSection("Aion:TimeGates").Get<Aion.Wor
 var unlocks = (builder.Configuration.GetSection("Aion:Unlocks").Get<Aion.World.UnlockOptions>() ?? Aion.World.UnlockOptions.Default).Validated();
 builder.Services.AddSingleton(timeGates);
 builder.Services.AddSingleton(unlocks);
-// Aion:Boost (OURS): //boost raises an alt to Level (45) for Price Kinah (10000000) once the account has a character at RequiredLevel (45).
+// Aion:Boost (OURS): /boost raises an alt to Level (45) for Price Kinah (10000000) once the account has a character at RequiredLevel (45).
 var boost = (builder.Configuration.GetSection("Aion:Boost").Get<Aion.World.BoostOptions>() ?? Aion.World.BoostOptions.Default).Validated(Aion.World.GameData.Embedded.MaxLevel);
 builder.Services.AddSingleton(boost);
+// Aion:Stigmas (docs/STIGMAS.md): Enabled (default on, global's stigma rules), Slots (4 global, 6 Korea), ShardRate, MaxLevel,
+// RequireSlot.
+var stigmaOptions = (builder.Configuration.GetSection("Aion:Stigmas").Get<Aion.World.StigmaOptions>() ?? Aion.World.StigmaOptions.Default).Validated();
+builder.Services.AddSingleton(stigmaOptions);
+// Aion:Daevanion (OURS, docs/DAEVANION.md): PointRate, ExtraPoints, FreeReset, MaxBoardLevel, DisabledBoards, LevelPoints.
+builder.Services.AddSingleton((builder.Configuration.GetSection("Aion:Daevanion").Get<Aion.World.DaevanionOptions>() ?? Aion.World.DaevanionOptions.Default).Validated());
 if (native.LoginPort is not null || native.GamePort is not null)
 {
     if (!native.Development && !accountsReady)
@@ -141,10 +162,33 @@ if (native.LoginPort is not null || native.GamePort is not null)
             presence: provider.GetRequiredService<Aion.World.WorldPresence>()));
         builder.Services.AddHostedService<PlayerBotsService>();
     }
+    if (native.GamePort is not null)
+    {
+        builder.Services.AddSingleton(new Aion.World.FunFeatures(fun));
+        builder.Services.AddHostedService<Aion.Host.Native.FunNoticeService>();
+    }
+    if (market.Enabled && native.GamePort is not null && !string.IsNullOrWhiteSpace(connectionString))
+    {
+        builder.Services.AddSingleton(market);
+        builder.Services.AddSingleton<Aion.Application.Market.IMarketStore, PostgresMarketStore>();
+        builder.Services.AddSingleton(provider => new Aion.World.MarketCommands(provider.GetRequiredService<Aion.Application.Market.IMarketStore>(), market,
+            Aion.World.MarketPricing.Embedded, provider.GetRequiredService<Aion.World.SharedWorld>()));
+        builder.Services.AddSingleton(provider =>
+        {
+            var world = provider.GetRequiredService<Aion.World.SharedWorld>();
+            var log = provider.GetRequiredService<ILoggerFactory>().CreateLogger("Aion.Market");
+            return new Aion.World.MarketBot(provider.GetRequiredService<Aion.Application.Market.IMarketStore>(), market, Aion.World.MarketPricing.Embedded,
+                mailed: (seller, post) => world.FindOnline(seller)?.Send(Aion.World.GameSession.PostReceived(post)),
+                log: message => log.LogInformation("{Message}", message), references: marketReferences);
+        });
+        builder.Services.AddHostedService<MarketBotService>();
+    }
     builder.Services.AddSingleton<IChatCommandHandler>(provider =>
         new Aion.World.GmCommands(provider.GetRequiredService<Aion.World.WorldPresence>(), provider.GetRequiredService<Aion.World.BuilderCommands>())
         {
             Bots = provider.GetService<Aion.World.PlayerBots>(),
+            Market = provider.GetService<Aion.World.MarketCommands>(),
+            Fun = provider.GetService<Aion.World.FunFeatures>(),
             // "//report <text>" opens a ticket for the staff dashboard (accounts only).
             Report = provider.GetService<IStaffTools>() is { } staffTools ? async (sender, name, text, ct) =>
             {
@@ -266,6 +310,8 @@ var app = builder.Build();
 if (native.LoginPort is not null || native.GamePort is not null)
     app.Logger.LogInformation("World rates: {Rates} (scheduled events multiply on top, each 0.1-10). Rules: {Rules}. Players: {Players}. Dungeons: {Dungeons}. Time gates: {TimeGates}. Unlocks: {Unlocks}. Boost: {Boost}.",
         rates, rules, native.MaxPlayers is > 0 and var maxPlayers ? $"at most {maxPlayers}" : $"no cap beyond {native.MaxConnections} connections per port", dungeonRules, timeGates, unlocks, boost);
+    app.Logger.LogInformation("World rates: {Rates} (scheduled events multiply on top, each 0.1-10). Rules: {Rules}. Players: {Players}. Dungeons: {Dungeons}. Bosses: {Bosses}. Stigmas: {Stigmas}.",
+        rates, rules, native.MaxPlayers is > 0 and var maxPlayers ? $"at most {maxPlayers}" : $"no cap beyond {native.MaxConnections} connections per port", dungeonRules, bossRules, stigmaOptions);
 // Chat mutes and the chat log go through the staff tools when both exist.
 if (app.Services.GetService<Aion.Host.Authentication.ServerControl>() is { } serverControl && app.Services.GetService<ChatRelay>() is { } chatRelay)
     chatRelay.Moderation = serverControl;

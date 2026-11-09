@@ -5,11 +5,11 @@ using Aion.Protocol.Native;
 
 namespace Aion.World;
 
-// Aion:Boost (OURS, FriendsRules.cs): "//boost" in chat. Once any character of the account has reached the required level,
+// Aion:Boost (OURS, FriendsRules.cs): "/boost" in chat. Once any character of the account has reached the required level,
 // a character below the boost level pays the price in Kinah and is raised to it (the usual level-up messages), its race's
 // released main story, regional and exploration quests (sealed dungeons included) up to the quest level are marked
 // rewarded (no rewards paid), a gear set of the best items its class can wear at that level lands in its bag, and the map
-// is revealed. "//boost" alone says what it costs and whether this character may use it; "//boost confirm" buys it.
+// is revealed. "/boost" alone says what it costs and whether this character may use it; "/boost confirm" buys it.
 public sealed partial class GameSession
 {
     /// <summary>The setting that records a boost (per character).</summary>
@@ -44,13 +44,13 @@ public sealed partial class GameSession
         return gear;
     }
 
-    /// <summary>Whether //boost is on for this host (Aion:Boost:Enabled).</summary>
+    /// <summary>Whether /boost is on for this host (Aion:Boost:Enabled).</summary>
     public bool BoostEnabled => options.Boost.Enabled;
 
     /// <summary>A quest's status in this character's journal (EQuestStatus), or 0 when it is not there.</summary>
     public int QuestStatus(string code) => questLog?.Get(code)?.Status ?? 0;
 
-    /// <summary>"//boost [confirm]": the answer and the packets of a bought boost.</summary>
+    /// <summary>"/boost [confirm]": the answer and the packets of a bought boost.</summary>
     public async Task<(string Message, List<byte[]> Packets)> BoostCommandAsync(string args, CancellationToken ct)
     {
         var boost = options.Boost;
@@ -61,63 +61,90 @@ public sealed partial class GameSession
         var offer = $"The boost takes a character to level {boost.Level} with the main story, regional quests and sealed dungeons done"
             + (boost.Gear ? $" and a level-{boost.Level} gear set (item level about {BoostGear(data, className, profileRace, boost.Level).Sum(data.ItemLevel)})" : "")
             + $", for {price} Kinah.";
+        // A boost that was paid but did not finish (a save failed) is finished at no charge.
+        var settings = await store.CharacterSettingsAsync(character, ct);
+        var record = settings.TryGetValue(BoostedSetting, out var saved) && saved.ValueKind == JsonValueKind.Object ? saved : (JsonElement?)null;
+        if (record is { } r && (!r.TryGetProperty("done", out var d) || d.ValueKind != JsonValueKind.False))
+            return ($"{offer} This character has already been boosted.", []);
+        var pending = record is not null;
         var characters = await store.LobbyAsync(ct);
         var unlockedBy = characters.Where(c => c.Summary.Level >= boost.RequiredLevel).Select(c => c.Summary.Name).FirstOrDefault();
-        if (unlockedBy is null) return ($"{offer} It unlocks once a character of this account reaches level {boost.RequiredLevel}.", []);
-        if (level >= boost.Level) return ($"{offer} This character is already level {level}; use it on an alt below {boost.Level}.", []);
+        if (unlockedBy is null && !pending) return ($"{offer} It unlocks once a character of this account reaches level {boost.RequiredLevel}.", []);
+        if (level >= boost.Level && !pending) return ($"{offer} This character is already level {level}; use it on an alt below {boost.Level}.", []);
         var kinah = storedItems.Values.Where(i => i.TemplateId == KinaItemId && i.Location == "bag").Sum(i => i.Quantity);
         if (!string.Equals(args.Trim(), "confirm", StringComparison.OrdinalIgnoreCase))
-            return ($"{offer} Unlocked by {unlockedBy}. You have {kinah.ToString("N0", CultureInfo.InvariantCulture)} Kinah. Type //boost confirm to buy it for this character.", []);
+            return pending
+                ? ($"Your boost was paid but did not finish. Type /boost confirm to finish it (no charge).", [])
+                : ($"{offer} Unlocked by {unlockedBy}. You have {kinah.ToString("N0", CultureInfo.InvariantCulture)} Kinah. Type /boost confirm to buy it for this character.", []);
 
-        // Pay and take the gear in one transaction.
-        var costs = new List<(Guid, long, int)>();
-        if (boost.Price > 0)
-        {
-            if (CostStacks(KinaItemId, boost.Price) is not { } stacks) return ($"The boost costs {price} Kinah; you have {kinah.ToString("N0", CultureInfo.InvariantCulture)}.", []);
-            costs.AddRange(stacks);
-        }
-        var gear = boost.Gear ? BoostGear(data, className, profileRace, boost.Level).Select(id => (id, 1L)).ToList() : [];
-        if (costs.Count > 0 || gear.Count > 0)
-        {
-            var paid = await Stored(async () => await store.ShopBuyAsync(character, costs, gear, [], ct) ? [[]] : []);
-            if (paid.Count == 0) return ("The boost could not be paid: make room in your bag for the gear set and try again.", []);
-        }
         var replies = new List<byte[]>();
-        if (costs.Count > 0 || gear.Count > 0) replies.AddRange(await InventoryChangesAsync(ct, IncreaseShopBuy, DecreaseShopBuy));
+        var from = pending && record!.Value.TryGetProperty("from", out var f) && f.TryGetInt32(out var fromLevel) ? fromLevel : level;
+        var gear = boost.Gear ? BoostGear(data, className, profileRace, boost.Level).Select(id => (id, 1L)).ToList() : [];
+        const string unfinished = " Type /boost confirm again to finish it (no extra charge).";
+        if (!pending)
+        {
+            // Pay and take the gear in one transaction, then record the paid boost before anything else is saved.
+            var costs = new List<(Guid, long, int)>();
+            if (boost.Price > 0)
+            {
+                if (CostStacks(KinaItemId, boost.Price) is not { } stacks) return ($"The boost costs {price} Kinah; you have {kinah.ToString("N0", CultureInfo.InvariantCulture)}.", []);
+                costs.AddRange(stacks);
+            }
+            if (costs.Count > 0 || gear.Count > 0)
+            {
+                var paid = await Stored(async () => await store.ShopBuyAsync(character, costs, gear, [], ct) ? [[]] : []);
+                if (paid.Count == 0) return ("The boost could not be paid: make room in your bag for the gear set and try again.", []);
+                replies.AddRange(await InventoryChangesAsync(ct, IncreaseShopBuy, DecreaseShopBuy));
+            }
+            var noted = await SaveBoostedAsync(store, character, from, false, ct);
+            Note($"boost paid: {boost.Price} Kinah, {gear.Count} gear items" + (noted ? "" : " (the paid boost could not be recorded)"));
+            if (!noted) return ($"The boost was paid but could not be recorded; ask the staff to finish it (//report).", replies);
+        }
 
-        // Quests: rewarded (no rewards paid); the ones in the journal leave it.
+        // The level first: the experience up to the boost level, with the usual level-up messages.
+        var needed = 0L;
+        for (var l = level; l < boost.Level; l++) needed += data.NeedExp(l);
+        needed = Math.Max(0, needed - experience);
+        if (needed > 0 && level < boost.Level) replies.AddRange(await GainExperienceAsync(experience + needed, needed, ExpReasonQuest, ct));
+        if (level < boost.Level) return ($"The boost is paid but the new level could not be saved.{unfinished}", replies);
+
+        // Quests: rewarded (no rewards paid), in one save; the ones in the journal leave it.
         var unlockedBefore = QuestUnlockTypes().ToHashSet();
         var removed = new List<int>();
-        var done = 0;
+        var records = new List<QuestRecord>();
         foreach (var code in BoostQuests(questLog.Book, profileRace, boost.QuestLevel))
         {
             var existing = questLog.Get(code);
             if (existing is { Status: QuestLog.Rewarded }) continue;
             var definition = questLog.Book.Find(code)!;
-            var record = (existing ?? QuestLog.New(code, definition)) with { Status = QuestLog.Rewarded, Step = Math.Max(1, definition.Steps.Length) };
-            await Stored(async () => { await SaveQuestAsync(record, ct); return []; });
+            records.Add((existing ?? QuestLog.New(code, definition)) with { Status = QuestLog.Rewarded, Step = Math.Max(1, definition.Steps.Length) });
             if (existing is not null && existing.Uid != 0) removed.Add((int)existing.Uid);
-            done++;
+        }
+        if (records.Count > 0)
+        {
+            var questsSaved = await Stored(async () =>
+            {
+                foreach (var quest in await store.SaveQuestsAsync(character, records, ct)) questLog.Set(quest);
+                return [[]];
+            });
+            if (questsSaved.Count == 0) return ($"Level {level} is saved but the quests could not be.{unfinished}", replies);
         }
         if (removed.Count > 0) replies.Add(GamePackets.QuestRemove(removed, 1));
         var unlocked = QuestUnlockTypes().Where(t => !unlockedBefore.Contains(t)).ToArray();
         if (unlocked.Length > 0) replies.Add(GamePackets.ContentsUnlockUpdate(unlocked));
 
-        // The level: the experience up to the boost level, with the usual level-up messages.
-        var from = level;
-        var needed = 0L;
-        for (var l = level; l < boost.Level; l++) needed += data.NeedExp(l);
-        needed = Math.Max(0, needed - experience);
-        if (needed > 0) replies.AddRange(await GainExperienceAsync(experience + needed, needed, ExpReasonQuest, ct));
-
         replies.AddRange(await RevealMapAsync(ct));
-        await Stored(async () =>
-        {
-            await store.SaveCharacterSettingAsync(character, BoostedSetting, JsonSerializer.SerializeToElement(new { from, to = level, at = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }), ct);
-            return [];
-        });
-        Note($"boost: {from} -> {level}, {done} quests, {gear.Count} gear items, {boost.Price} Kinah");
-        return ($"Boosted to level {level}: {done} quests done" + (gear.Count > 0 ? $", the gear set ({gear.Count} items) is in your bag" : "")
+        await SaveBoostedAsync(store, character, from, true, ct);
+        Note($"boost: {from} -> {level}, {records.Count} quests" + (pending ? " (finished a paid boost)" : ""));
+        return ($"Boosted to level {level}: {records.Count} quests done" + (gear.Count > 0 && !pending ? $", the gear set ({gear.Count} items) is in your bag" : "")
             + ". Go back to character select and in again to refresh the quest journal.", replies);
     }
+
+    /// <summary>Records the boost (done false: paid, not finished yet); whether it was saved.</summary>
+    async Task<bool> SaveBoostedAsync(INativeCharacterStore store, Guid character, int from, bool done, CancellationToken ct) =>
+        (await Stored(async () =>
+        {
+            var value = JsonSerializer.SerializeToElement(new { from, to = options.Boost.Level, done, at = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() });
+            return await store.SaveCharacterSettingAsync(character, BoostedSetting, value, ct) ? [[]] : [];
+        })).Count > 0;
 }

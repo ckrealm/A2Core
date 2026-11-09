@@ -70,9 +70,9 @@ world entry, so new characters, existing ones and any feathers added by a data u
 what was given. Not modelled yet: the Monolith itself (Sync, Resonate and its 30 reward levels), whose tables
 (Monolith, MonolithLevel, RewardMonolith) are not extracted, so the Monolith's level and its stat rewards are not given.
 
-## Alt boost (`//boost`)
+## Alt boost (`/boost`)
 
-Type `//boost` in chat on any character to see the price and whether it is unlocked; `//boost confirm` buys it. It
+Type `/boost` in chat on any character to see the price and whether it is unlocked; `/boost confirm` buys it. It
 unlocks once any character of the account has reached level 45 (`Aion__Boost__RequiredLevel`). The character it is used
 on (below level 45) pays 10,000,000 Kinah (`Aion__Boost__Price`) and gets:
 
@@ -85,7 +85,8 @@ on (below level 45) pays 10,000,000 Kinah (`Aion__Boost__Price`) and gets:
   1,412 item level (`Aion__Boost__Gear`);
 - the whole world map revealed.
 
-Then go to character select and back in so the quest journal refreshes. `Aion__Boost__Enabled=false` turns it off. The
+If a save fails part way (the database drops out), the payment stays on record and `/boost confirm` finishes the boost
+without charging again; a character is boosted once. Then go to character select and back in so the quest journal refreshes. `Aion__Boost__Enabled=false` turns it off. The
 Kinah price is meant to be hard to earn even at 10x Kinah (our guess, not measured); change it freely.
 
 ## Not tested in the client yet

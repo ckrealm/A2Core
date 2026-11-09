@@ -97,7 +97,7 @@ Defaults are made for a small friends server (see docs/friends-server/RATES.md):
 and quest experience 5, Kinah 10, Kinah drop chance x2, drops 4, gathering/crafting/pet experience 10), no time gates
 (`Aion__TimeGates__*`: no shop purchase caps, no dungeon timers, every collection open, gather nodes back after 10 s, revive
 after 5 s; dungeon entry limits stay off), every pet maxed and every wing for every character, crafts always succeed and
-pets cost half the souls (`Aion__Unlocks__*`), the `//boost` alt boost (`Aion__Boost__*`), PvP on, monsters respawn
+pets cost half the souls (`Aion__Unlocks__*`), the `/boost` alt boost (`Aion__Boost__*`), PvP on, monsters respawn
 30 s after a kill, no player cap beyond 200 connections per port. `Aion__Rates__Profile=official` gives all rates 1. To change them, put the keys you want in `/etc/aion/game.env`
 (install.sh and update.sh rewrite `aion.env` but never touch this file; the service reads it last) and restart:
 
@@ -140,11 +140,16 @@ as options (`--rates-profile`, `--exp-rate`, `--quest-exp-rate`, `--kinah-rate`,
 Party loot and monster Kinah are our own rules (nothing observed). `Aion__Rules__PartyLoot` shares a party member's kill
 among the members on the same map within 100 m (the members who share its experience): `roundrobin` gives the items to
 them in turn, `freeforall` gives each item to one of them at random, `killer` keeps everything with the killer. The
-killer's part lies on the ground to pick up; the others' parts go straight to their bags. Every monster also pays Kinah
+killer's part lies on the ground to pick up; the others' parts go straight to their bags (a part their bag cannot
+take, because they died meanwhile or the bag is full, lies on the ground at the kill site for them instead). Every monster also pays Kinah
 (tools/data/kinah-drops.json, by level and rank, times the Kinah rate `Aion__Rates__Kinah`), split evenly among the
 same members (all to the killer with `killer`). `Aion__Rules__FallbackLoot=false` turns off the generic loot that monsters
 without a reward table in the client's data (about three in four) roll instead (tools/data/fallback-loot.json:
 equipment of the monster's level from tools/data/items.json, rebuilt by `tools/fallback_loot.py`).
+
+Stigmas follow global's rules by default (docs/STIGMAS.md): 4 slots at levels 22, 27, 32 and 37, Stigma Shards from
+levelling, stigma levels to 20. `Aion__Stigmas__Slots=6` opens Korea's 6 slots, `Aion__Stigmas__ShardRate=2` doubles
+the shards, and `Aion__Stigmas__Enabled=false` goes back to every kit skill unlocking by level.
 
 ## Playerbots
 
@@ -163,6 +168,23 @@ sudo systemctl restart aion-host
 journalctl -u aion-host | grep "Playerbots on"
 ```
 
+## Market (`//ah`)
+
+On by default: players list and buy items with `//ah` in chat, a seller bot keeps the market stocked and a buyer bot buys
+fairly priced player listings ([docs/MARKET.md](../../docs/MARKET.md) has every key).
+
+```bash
+sudo tee -a /etc/aion/game.env >/dev/null <<'ENV'
+Aion__Market__SaleTaxPercent=5
+# Light and Dark share one market
+Aion__Market__CrossWorld=true
+Aion__Market__Seller__Equipment=true
+Aion__Market__Buyer__BuyChancePercent=35
+ENV
+sudo systemctl restart aion-host
+journalctl -u aion-host | grep "Market:"
+```
+
 Dungeon entry limits are our own rule too and are off unless `Aion__Dungeons__EntryLimits=true`. Then each character may
 enter each expedition, awakening dungeon, daily dungeon and raid `Aion__Dungeons__DailyEntries` times a day (default 3;
 0 no limit); the day starts at `Aion__Dungeons__ResetHour` (server local time, default 9). `Aion__Dungeons__Entries__<id or
@@ -173,9 +195,23 @@ item level rules). Going back into the party copy already counted is free. Staff
 entry tickets or energy cost to apply, so there is none. `Aion__Dungeons__UntrackedObjectiveSeconds` (default 30) is how
 long a dungeon objective the server cannot follow yet (waves, puzzles, scores, collected items) waits before it counts as
 done; each one is logged. Some expedition and raid final bosses hit everyone within 5 m with their special attacks
-(tools/data/boss-area-skills.json, our own table until the skills' target shapes are extracted). `tools/server_env.py`
+(tools/data/boss-area-skills.json, our own table until the skills' target shapes are extracted). Boss phases, slams, adds and the hard modes' 4-minute frenzy are on by default
+(`Aion__Bosses__Phases`, `Aion__Bosses__Frenzy`, `Aion__Bosses__FrenzySeconds`, `Aion__Bosses__DamageScale`; see
+docs/friends-server/BOSSES.md). `tools/server_env.py`
 options: `--dungeon-limits on|off`, `--dungeon-entries`, `--dungeon-entry DUNGEON=N` (repeatable), `--dungeon-reset-hour`,
 `--untracked-objective-seconds`.
+
+Entry levels follow global Aion 2 by default (`Aion__Dungeons__LevelGates=global`). The client marks every Expedition hard
+mode, the Transcendence entries, the top Ascension Trial tiers and two daily dungeons with level 99, a placeholder for
+"not open yet"; the server reads that 99 as `Aion__Dungeons__GlobalLevel` (default 45, global's cap), or
+`Aion__Dungeons__GlobalDailyLevel` (default 30) for the daily dungeons. Item levels and quest steps stay as the client has
+them (Krao Cave hard still needs item level 2,400). `LevelGates=client` keeps the 99s. The dungeons global has not opened
+yet (Dramata's Nest, Cradle of Nihility, Hall of Illusion, Azure Breath Isle, Fallen Daeva Citadel, Sunken Temple, Mirror
+Heart, Fafnite Gully, and the raids Corroded Decontamination Facility and Chalice of Muspel) are closed unless
+`Aion__Dungeons__KoreaOnly=true`, which opens them at `Aion__Dungeons__KoreaOnlyLevel` (default 45). Players pick a dungeon
+and difficulty with `/dungeon` (lists them) and `/dungeon <name> [easy|normal|hard|stage]`, from anywhere in the open world;
+their party joins the same copy. `Aion__Dungeons__Command=false` turns the command off. In Expedition hard modes each player
+gets `Aion__Dungeons__HardModeRevives` revives (default 3, as on global; 0 no limit); after that the revive puts them outside.
 
 ## Updating
 
@@ -213,11 +249,29 @@ and the dashboard's `aion-*` backups in the same folder have their own retention
 systemctl list-timers aion-backup.timer
 sudo systemctl start aion-backup && journalctl -u aion-backup -n 20     # back up now
 echo 'AION_BACKUP_KEEP=30' | sudo tee /etc/aion/backup.env             # settings: AION_BACKUP_KEEP, AION_BACKUP_VERIFY=0
+echo 'AION_PG_TIMEOUT=7200' | sudo tee -a /etc/aion/backup.env        # pg_dump/verify limit in s (default 3600, 0 = none)
 sudo systemctl disable --now aion-backup.timer                          # no nightly backups
 sudo /opt/aion/bin/backup.sh --keep 30                                  # by hand (as root or aion)
 ```
 
-The unit may write only to `/var/lib/aion/backups`; keep copies elsewhere (another disk or machine) with your own job.
+**Other folders and an off-machine copy.** The unit is sandboxed (`ProtectSystem=strict`): it may write only to
+`/var/lib/aion/backups` and the folders `backup-paths.sh` lists for it. To back up elsewhere (`AION_BACKUP_DIR`), or to
+copy every verified backup to a second place such as another disk or a network mount (`AION_BACKUP_COPY_DIR`, with its
+own retention `AION_BACKUP_COPY_KEEP`, default the same as `AION_BACKUP_KEEP`), set them in `/etc/aion/backup.env` and
+run `backup-paths.sh` once; it creates the folders and writes the drop-in
+`/etc/systemd/system/aion-backup.service.d/10-backup-paths.conf` (install.sh, and so update.sh, runs it too):
+
+```bash
+echo 'AION_BACKUP_COPY_DIR=/mnt/backup-disk/a2core' | sudo tee -a /etc/aion/backup.env
+echo 'AION_BACKUP_COPY_KEEP=30' | sudo tee -a /etc/aion/backup.env
+sudo /opt/aion/bin/backup-paths.sh
+sudo systemctl start aion-backup && journalctl -u aion-backup -n 20     # "Copied to ..." at the end
+```
+
+The copy is written as `.partial`, compared byte for byte with the local backup, then renamed; only
+`<prefix>-<time>.dump` files are pruned there. A failed copy (say the disk is not mounted) keeps the local backup,
+prunes nothing in the copy folder and fails the unit (`systemctl --failed`, `journalctl -u aion-backup`). Folders under
+`/home`, `/root` or `/run/user` are refused (the unit cannot see them: `ProtectHome`).
 
 Restore:
 
